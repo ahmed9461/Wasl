@@ -131,19 +131,22 @@
   - JDK 17
   - Kotlin 2.3.21
   - Compose BOM 2026.06.01
-  - compileSdk 37 وtargetSdk 36
+  - AndroidX Core 1.18.0 وLifecycle 2.10.0
+  - compileSdk 36 وtargetSdk 36
   - minSdk 26
 - السبب:
-  - AGP 9.3 يدعم API 37 ويتطلب Gradle 9.5 وJDK 17.
-  - إصدارات AndroidX المعتمدة تتطلب compileSdk 37، ورفعه يتيح التجميع أمام الواجهات الجديدة دون تغيير سلوك التشغيل المستهدف.
-  - Android 17 ما زال Beta بتاريخ القرار، لذلك يبقى targetSdk 36 ولا يشترك MVP في سلوكيات منصة غير نهائية.
+  - AGP 9.3 يدعم API 37 ويتطلب Gradle 9.5 وJDK 17، لكن منصة android-37 غير متاحة عبر sdkmanager المستقر بتاريخ القرار.
+  - Core 1.19.0 وLifecycle 2.11.0 يتطلبان compileSdk 37؛ لذلك ثُبّت آخر إصدارين مستقرين متوافقين مع منصة 36 بدل إدخال SDK تجريبي.
+  - Android 17 ما زال Beta بتاريخ القرار، لذلك يبقى compileSdk وtargetSdk على 36 ولا يشترك MVP في منصة غير نهائية.
   - target 36 يطابق متطلبات 2026 ويمنح وقتًا لاختبار تغييرات Android 17 قبل رفعه.
   - min 26 يوفر java.time وNotification Channels مباشرة ويغطي أجهزة حديثة دون Desugaring إضافي.
 - البدائل:
-  - targetSdk 37 الآن: مرفوض مؤقتًا لأن Android 17 غير نهائي.
+  - compileSdk أو targetSdk 37 الآن: مرفوض مؤقتًا لأن Android 17 غير نهائي ولأن منصة 37 غير منشورة في قناة SDK المستقرة.
   - min 23: ممكن، لكنه يحتاج Desugaring ومسارات توافق إضافية؛ يعاد تقييمه إذا أثبتت بيانات المستخدمين حاجة حقيقية.
 - المصادر:
   - [AGP 9.3 compatibility](https://developer.android.com/build/releases/agp-9-3-0-release-notes)
+  - [AndroidX Core releases](https://developer.android.com/jetpack/androidx/releases/core)
+  - [AndroidX Lifecycle releases](https://developer.android.com/jetpack/androidx/releases/lifecycle)
   - [Android 17 release notes](https://developer.android.com/about/versions/17/release-notes)
   - [Target API requirements](https://developer.android.com/google/play/requirements/target-sdk)
 

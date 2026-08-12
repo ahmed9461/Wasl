@@ -23,8 +23,8 @@
 - Android Gradle Plugin 9.3.1
 - Gradle 9.5.0
 - Jetpack Compose عبر BOM 2026.06.01
-- compileSdk: 37
-- targetSdk: 36
+- AndroidX Core 1.18.0 وLifecycle 2.10.0
+- compileSdk وtargetSdk: 36
 - minSdk: 26
 - JDK 17
 
@@ -35,7 +35,7 @@
 المتطلبات:
 
 - JDK 17
-- Android SDK Platform 37
+- Android SDK Platform 36
 - Android SDK Build Tools 36.0.0
 
 الأوامر:

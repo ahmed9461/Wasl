@@ -17,6 +17,7 @@
 - إنشاء وحدة core:domain للمال وسجل الديون.
 - إضافة اختبارات قواعد الرصيد والسداد والعكس والعملات.
 - إضافة GitHub Actions للبناء والاختبار وLint.
+- تثبيت AndroidX Core 1.18.0 وLifecycle 2.10.0 للتوافق مع منصة Android 36 المستقرة.
 
 ## ما يعمل الآن
 
@@ -33,8 +34,9 @@
 
 - نجحت اختبارات core:domain محليًا: 16/16 بلا فشل.
 - نجح Gradle في تهيئة وحدة app وإظهار مهام Android، ما يتحقق من Build scripts وPlugins.
-- لم يُشغّل Android compile أو Lint محليًا لعدم وجود Android SDK 36 في البيئة.
-- نتيجة GitHub Actions الكاملة ما زالت Pending حتى رفع الفرع.
+- نجح [GitHub Actions run 31651111210](https://github.com/ahmed9461/Wasl/actions/runs/31651111210): اختبارات core:domain، واختبارات app، وLint، وتجميع Debug.
+- رُفع Artifact باسم `Wasl-debug` بحجم 11,103,520 بايت وبصمة SHA-256 موثقة من GitHub.
+- لا يتوفر Android SDK محليًا؛ لذلك يبقى GitHub Actions مصدر التحقق النظيف لتجميع Android وLint.
 
 ## غير منفذ
 
@@ -51,12 +53,13 @@
 - لا يوجد حفظ بيانات حتى الآن.
 - تعطيل Android Auto Backup مقصود حتى يتوفر Backup مشفر يتحقق من سلامته.
 - لا يوجد Release signing.
+- Core 1.19.0 وLifecycle 2.11.0 مؤجلان لأنهما يتطلبان compileSdk 37، بينما منصة 37 غير متاحة عبر sdkmanager المستقر بتاريخ هذا التحديث.
 
 ## المخاطر
 
-- يجب إثبات تكامل AGP 9.3.1 وKotlin 2.3.21 وCompose في CI.
 - اختيار Room 2.8.4 يحتاج تنفيذ Schema v1 واختبارات Migration قبل أي UI مالية.
 - PDF يحتاج نموذجًا عربيًا فعليًا قبل تثبيت تفاصيل القالب.
+- يجب إعادة تقييم إصدارات AndroidX وcompileSdk عند استقرار منصة Android 37، مع إبقاء targetSdk قرارًا مستقلًا.
 
 ## الخطوة التالية
 

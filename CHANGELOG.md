@@ -16,6 +16,14 @@
 - Unit tests لقواعد المال والسداد والعكس.
 - GitHub Actions للبناء والاختبارات وLint.
 
+### Changed
+
+- تثبيت AndroidX Core 1.18.0 وLifecycle 2.10.0 على compileSdk 36 بدل إدخال منصة Android 37 غير المستقرة.
+
+### Fixed
+
+- مواءمة إصدارات AndroidX مع منصة SDK المتاحة حتى تنجح اختبارات التطبيق وLint وتجميع APK في GitHub Actions.
+
 ### Security
 
 - تعطيل cleartext traffic.

@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.wasl.app"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.wasl.app"

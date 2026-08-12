@@ -131,15 +131,16 @@
   - JDK 17
   - Kotlin 2.3.21
   - Compose BOM 2026.06.01
-  - compileSdk 36 وtargetSdk 36
+  - compileSdk 37 وtargetSdk 36
   - minSdk 26
 - السبب:
-  - AGP 9.3 يدعم API 37 لكنه يعمل مع 36 ويتطلب Gradle 9.5 وJDK 17.
-  - Android 17 ما زال Beta بتاريخ القرار، لذلك لا يستهدف MVP منصة غير نهائية.
+  - AGP 9.3 يدعم API 37 ويتطلب Gradle 9.5 وJDK 17.
+  - إصدارات AndroidX المعتمدة تتطلب compileSdk 37، ورفعه يتيح التجميع أمام الواجهات الجديدة دون تغيير سلوك التشغيل المستهدف.
+  - Android 17 ما زال Beta بتاريخ القرار، لذلك يبقى targetSdk 36 ولا يشترك MVP في سلوكيات منصة غير نهائية.
   - target 36 يطابق متطلبات 2026 ويمنح وقتًا لاختبار تغييرات Android 17 قبل رفعه.
   - min 26 يوفر java.time وNotification Channels مباشرة ويغطي أجهزة حديثة دون Desugaring إضافي.
 - البدائل:
-  - target 37 الآن: مرفوض مؤقتًا لأن Android 17 غير نهائي.
+  - targetSdk 37 الآن: مرفوض مؤقتًا لأن Android 17 غير نهائي.
   - min 23: ممكن، لكنه يحتاج Desugaring ومسارات توافق إضافية؛ يعاد تقييمه إذا أثبتت بيانات المستخدمين حاجة حقيقية.
 - المصادر:
   - [AGP 9.3 compatibility](https://developer.android.com/build/releases/agp-9-3-0-release-notes)

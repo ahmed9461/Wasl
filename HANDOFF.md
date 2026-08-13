@@ -35,10 +35,11 @@
 
 - نجحت اختبارات core:domain محليًا: 19/19 بلا فشل.
 - نجحت اختبارات HomeViewModel محليًا: 3/3 بلا فشل.
-- نجح تجميع 9 اختبارات Android الخاصة بـRoom وMigration baseline.
+- نجحت 9/9 اختبارات Android الخاصة بـRoom وMigration baseline على Android Emulator API 35.
 - نجح محليًا: domain tests، app unit tests، Lint، Debug APK، وAndroidTest APK باستخدام JDK 17 وSDK 36.
 - Debug APK المحلي: 12,424,751 بايت، SHA-256: `a01ea613d9841e10c5e4ac695b8c64885a2c1661621c13f70069d5784222f4f1`.
-- تشغيل اختبارات الجهاز الفعلية على CI قيد التحقق بعد رفع هذا التغيير؛ لا تعتبر نتيجة Emulator ناجحة حتى يسجل رابط Run هنا.
+- نجح [GitHub Actions run #13](https://github.com/ahmed9461/Wasl/actions/runs/31657813817) كاملًا: Job البناء والاختبارات الوحدوية وLint وDebug APK، ثم Job اختبارات Room على المحاكي.
+- حُفظت أدلة التشغيل في Artifact باسم [Wasl-room-instrumentation-results](https://github.com/ahmed9461/Wasl/actions/runs/31657813817/artifacts/9165264665) ببصمة SHA-256: `86903cda3f68885d429261486cddfa9fe1da1974056b354ac1a7121ac18c8f9b`، وArtifact باسم [Wasl-debug](https://github.com/ahmed9461/Wasl/actions/runs/31657813817/artifacts/9165118777) ببصمة SHA-256: `d0b01f020543a4cf0ba9111fe22ea2555380d0e286b7f47094fbbf499d6a2e70`.
 
 ## غير منفذ
 
@@ -60,7 +61,6 @@
 
 ## المخاطر
 
-- اختبارات Room يجب أن تمر على Emulator فعلي في GitHub Actions قبل دمج هذه الشريحة.
 - البيانات المحلية ليست مشفرة في حالة السكون بعد؛ حماية Keystore/قفل التطبيق ضمن مرحلة الأمان قبل MVP.
 - أول Migration حقيقية ستكون v1 إلى v2، ويجب ألا يضاف أي جدول جديد دون Schema export واختبار انتقال.
 - شاشة النموذج تحتاج اختبارًا بصريًا على Compact وFont scale 200% قبل اعتبار تصميمها نهائيًا.

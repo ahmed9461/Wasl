@@ -66,7 +66,6 @@ class PaymentFlowUiInstrumentedTest {
         composeRule.onNodeWithTag("create-person-name").performTextInput("أحمد")
         composeRule.onNodeWithTag("create-debt-amount").performTextInput("100000")
         composeRule.onNodeWithTag("create-debt-save").performClick()
-        waitForText("أحمد")
         val debtId = runBlocking {
             withTimeout(10_000) {
                 repositoryState.value.observeAccounts()
@@ -76,6 +75,8 @@ class PaymentFlowUiInstrumentedTest {
             }
         }
 
+        waitForTagToDisappear("create-debt-save")
+        waitForTag("account-$debtId")
         composeRule.onNodeWithTag("account-$debtId").assertIsDisplayed().performClick()
         waitForTag("record-payment")
         composeRule.onNodeWithTag("record-payment").performClick()
@@ -94,8 +95,8 @@ class PaymentFlowUiInstrumentedTest {
             repositoryState.value = RoomWaslRepository(database!!)
             generation.intValue += 1
         }
-        waitForText("أحمد")
 
+        waitForTag("account-$debtId")
         composeRule.onNodeWithTag("account-$debtId").assertIsDisplayed().performClick()
         waitForText("دفعة مسجلة")
         composeRule.onNodeWithTag("account-remaining")
@@ -126,6 +127,14 @@ class PaymentFlowUiInstrumentedTest {
             runCatching {
                 composeRule.onNodeWithTag(tag).fetchSemanticsNode()
             }.isSuccess
+        }
+    }
+
+    private fun waitForTagToDisappear(tag: String) {
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            runCatching {
+                composeRule.onNodeWithTag(tag).fetchSemanticsNode()
+            }.isFailure
         }
     }
 }

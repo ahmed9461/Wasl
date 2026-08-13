@@ -102,7 +102,10 @@ class SearchUiInstrumentedTest {
             )
         }
         waitForTag("search-result-debt-reactive")
-        composeRule.onNodeWithTag("search-balance-debt-reactive")
+        composeRule.onNodeWithTag(
+            testTag = "search-balance-debt-reactive",
+            useUnmergedTree = true,
+        )
             .assertTextContains("100,000 YER", substring = true)
 
         runBlocking {
@@ -119,11 +122,17 @@ class SearchUiInstrumentedTest {
         }
         composeRule.waitUntil(timeoutMillis = 10_000) {
             runCatching {
-                composeRule.onNodeWithTag("search-balance-debt-reactive")
+                composeRule.onNodeWithTag(
+                    testTag = "search-balance-debt-reactive",
+                    useUnmergedTree = true,
+                )
                     .assertTextContains("80,000 YER", substring = true)
             }.isSuccess
         }
-        composeRule.onNodeWithTag("search-balance-debt-reactive")
+        composeRule.onNodeWithTag(
+            testTag = "search-balance-debt-reactive",
+            useUnmergedTree = true,
+        )
             .assertTextContains("80,000 YER", substring = true)
     }
 

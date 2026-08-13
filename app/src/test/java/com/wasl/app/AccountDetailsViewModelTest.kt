@@ -248,6 +248,51 @@ class AccountDetailsViewModelTest {
         assertEquals(1, scheduler.scheduled.size)
     }
 
+    @Test
+    fun retryOfOlderCancellationReconcilesPlatformToLatestPersistedSchedule() = runTest {
+        val repository = PaymentFakeRepository(
+            initialAccount = accountWithDueSchedule(),
+            dueScheduleFailuresAfterCommit = 1,
+        )
+        val scheduler = RecordingAccountReminderScheduler()
+        val ids = ArrayDeque(listOf("cancel-command", "cancel-audit"))
+        val viewModel = detailsViewModel(repository, ids, scheduler)
+        advanceUntilIdle()
+
+        viewModel.openDueScheduleDialog()
+        viewModel.updateDueScheduleDate(null)
+        viewModel.confirmDueSchedule()
+        advanceUntilIdle()
+        assertNotNull(viewModel.uiState.value.dueScheduleError)
+
+        val latestReminder = DueReminderRequest(
+            id = "due-reminder",
+            triggerAt = Instant.parse("2026-08-17T09:00:00Z"),
+            zoneId = ZoneOffset.UTC,
+        )
+        repository.updateDueSchedule(
+            UpdateDueScheduleCommand(
+                commandId = "newer-command",
+                auditEventId = "newer-audit",
+                debtId = DebtId("debt-1"),
+                dueDate = LocalDate.parse("2026-08-17"),
+                dueReminder = latestReminder,
+                updatedAt = Instant.parse("2026-08-13T00:06:00Z"),
+            ),
+        )
+
+        viewModel.confirmDueSchedule()
+        advanceUntilIdle()
+
+        assertEquals(listOf(latestReminder.triggerAt), scheduler.scheduled.map { it.triggerAt })
+        assertTrue(scheduler.cancelled.isEmpty())
+        val notice = assertIs<AccountOperationNotice.DueScheduleUpdatedNotice>(
+            viewModel.uiState.value.notice,
+        )
+        assertEquals(LocalDate.parse("2026-08-17"), notice.dueDate)
+        assertTrue(notice.reminderEnabled)
+    }
+
     private fun detailsViewModel(
         repository: PaymentFakeRepository,
         ids: ArrayDeque<String>,

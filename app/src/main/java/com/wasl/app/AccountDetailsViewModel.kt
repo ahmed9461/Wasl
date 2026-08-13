@@ -562,13 +562,18 @@ class AccountDetailsViewModel(
         viewModelScope.launch {
             try {
                 val updated = repository.updateDueSchedule(command)
-                val platformSyncFailed = if (command.dueReminder != null) {
-                    val reminder = requireNotNull(updated.dueReminder)
+                val persistedReminder = updated.dueReminder
+                val persistedReminderEnabled = persistedReminder
+                    ?.status
+                    ?.let { it != ReminderStatus.CANCELLED }
+                    ?: false
+                val platformSyncFailed = if (persistedReminderEnabled) {
+                    val reminder = requireNotNull(persistedReminder)
                     runCatching { reminderScheduler.schedule(reminder) }
                         .onFailure { runCatching { reminderScheduler.requestRecovery() } }
                         .isFailure
                 } else {
-                    account.dueReminder?.id?.let { reminderId ->
+                    (persistedReminder?.id ?: account.dueReminder?.id)?.let { reminderId ->
                         runCatching { reminderScheduler.cancel(reminderId) }.isFailure
                     } ?: false
                 }
@@ -581,8 +586,8 @@ class AccountDetailsViewModel(
                         dueScheduleError = null,
                         notice = AccountOperationNotice.DueScheduleUpdatedNotice(
                             personName = account.person.displayName,
-                            dueDate = command.dueDate,
-                            reminderEnabled = command.dueReminder != null,
+                            dueDate = updated.ledger.header.dueDate,
+                            reminderEnabled = persistedReminderEnabled,
                             platformSyncPending = platformSyncFailed,
                         ),
                     )

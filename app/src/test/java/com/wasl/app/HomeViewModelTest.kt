@@ -3,10 +3,13 @@ package com.wasl.app
 import com.wasl.app.data.AccountOverview
 import com.wasl.app.data.CreatePersonWithDebtCommand
 import com.wasl.app.data.DebtLifecycleState
+import com.wasl.app.data.ReminderRecord
+import com.wasl.app.data.ReminderStatus
 import com.wasl.app.data.PersonRecord
 import com.wasl.app.data.RecordPaymentCommand
 import com.wasl.app.data.ReversePaymentCommand
 import com.wasl.app.data.WaslRepository
+import com.wasl.app.reminder.ReminderScheduler
 import com.wasl.domain.CurrencyCode
 import com.wasl.domain.DebtHeader
 import com.wasl.domain.DebtId
@@ -14,6 +17,8 @@ import com.wasl.domain.DebtLedger
 import com.wasl.domain.Money
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -106,6 +111,58 @@ class HomeViewModelTest {
         assertEquals(repository.createCommands.first(), repository.createCommands.last())
         assertFalse(viewModel.uiState.value.isCreateDialogOpen)
     }
+
+    @Test
+    fun dueDateReminderIsPersistedWithStableCivilTimeThenScheduled() = runTest {
+        val repository = FakeWaslRepository()
+        val scheduler = RecordingReminderScheduler()
+        val ids = ArrayDeque(listOf("person-1", "debt-1", "reminder-1"))
+        val viewModel = HomeViewModel(
+            repository = repository,
+            clock = Clock.fixed(Instant.parse("2026-08-13T08:00:00Z"), ZoneOffset.UTC),
+            idFactory = { ids.removeFirst() },
+            zoneIdProvider = { ZoneId.of("Asia/Riyadh") },
+            reminderScheduler = scheduler,
+        )
+        advanceUntilIdle()
+
+        viewModel.openCreateDialog()
+        viewModel.updatePersonName("أحمد")
+        viewModel.updateAmount("1000")
+        viewModel.updateDueDate(LocalDate.parse("2026-08-14"))
+        viewModel.updateRemindOnDueDate(true)
+        viewModel.createPersonWithDebt()
+        advanceUntilIdle()
+
+        val command = assertNotNull(repository.lastCreateCommand)
+        assertEquals(LocalDate.parse("2026-08-14"), command.dueDate)
+        assertEquals("reminder-1", command.dueReminder?.id)
+        assertEquals(Instant.parse("2026-08-14T06:00:00Z"), command.dueReminder?.triggerAt)
+        assertEquals(ZoneId.of("Asia/Riyadh"), command.dueReminder?.zoneId)
+        assertEquals(listOf("reminder-1"), scheduler.scheduled.map { it.id })
+        assertEquals("تم حفظ الحساب وجدولة التذكير.", viewModel.uiState.value.successMessage)
+    }
+
+    @Test
+    fun pastDueDateIsRejectedBeforePersistence() = runTest {
+        val repository = FakeWaslRepository()
+        val viewModel = HomeViewModel(
+            repository = repository,
+            clock = Clock.fixed(Instant.parse("2026-08-13T08:00:00Z"), ZoneOffset.UTC),
+            zoneIdProvider = { ZoneOffset.UTC },
+        )
+        advanceUntilIdle()
+
+        viewModel.openCreateDialog()
+        viewModel.updatePersonName("أحمد")
+        viewModel.updateAmount("1000")
+        viewModel.updateDueDate(LocalDate.parse("2026-08-12"))
+        viewModel.createPersonWithDebt()
+        advanceUntilIdle()
+
+        assertNull(repository.lastCreateCommand)
+        assertEquals("اختر تاريخ استحقاق اليوم أو بعده.", viewModel.uiState.value.formError)
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -163,6 +220,17 @@ private class FakeWaslRepository(
                 ),
             ),
             lifecycleState = DebtLifecycleState.ACTIVE,
+            dueReminder = command.dueReminder?.let { reminder ->
+                ReminderRecord(
+                    id = reminder.id,
+                    debtId = command.debtId,
+                    triggerAt = reminder.triggerAt,
+                    zoneId = reminder.zoneId,
+                    status = ReminderStatus.SCHEDULED,
+                    createdAt = command.createdAt,
+                    updatedAt = command.createdAt,
+                )
+            },
         )
     }
 
@@ -176,4 +244,14 @@ private class FakeWaslRepository(
     override suspend fun reversePayment(command: ReversePaymentCommand): DebtLedger {
         error("Not used in this test.")
     }
+}
+
+private class RecordingReminderScheduler : ReminderScheduler {
+    val scheduled = mutableListOf<ReminderRecord>()
+
+    override fun schedule(reminder: ReminderRecord) {
+        scheduled += reminder
+    }
+
+    override fun requestRecovery() = Unit
 }

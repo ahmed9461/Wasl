@@ -7,9 +7,12 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.wasl.app.data.CommandConflictException
 import com.wasl.app.data.CreatePersonWithDebtCommand
+import com.wasl.app.data.DueReminderRequest
+import com.wasl.app.data.ReminderStatus
 import com.wasl.app.data.RecordPaymentCommand
 import com.wasl.app.data.ReversePaymentCommand
 import com.wasl.app.data.local.entity.DebtEntity
+import com.wasl.app.data.local.entity.ReminderEntity
 import com.wasl.domain.CurrencyCode
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtId
@@ -18,6 +21,9 @@ import com.wasl.domain.LedgerEntryId
 import com.wasl.domain.Money
 import com.wasl.domain.PersonId
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -81,6 +87,69 @@ class RoomWaslRepositoryInstrumentedTest {
 
         assertEquals(1, database!!.personDao().count())
         assertEquals(1, database!!.debtDao().count())
+    }
+
+    @Test
+    fun debtAndDueReminderAreAtomicIdempotentAndSurviveReopen() = runTest {
+        val command = baseCommand().copy(
+            dueDate = LocalDate.parse("2026-08-14"),
+            dueReminder = DueReminderRequest(
+                id = "reminder-1",
+                triggerAt = Instant.parse("2026-08-14T06:00:00Z"),
+                zoneId = ZoneId.of("Asia/Riyadh"),
+            ),
+        )
+
+        repository.createPersonWithDebt(command)
+        repository.createPersonWithDebt(command)
+        reopenDatabase()
+
+        val restored = assertNotNull(repository.getAccount(DebtId("debt-1")))
+        assertEquals(LocalDate.parse("2026-08-14"), restored.ledger.header.dueDate)
+        assertEquals("reminder-1", restored.dueReminder?.id)
+        assertEquals(Instant.parse("2026-08-14T06:00:00Z"), restored.dueReminder?.triggerAt)
+        assertEquals(ZoneId.of("Asia/Riyadh"), restored.dueReminder?.zoneId)
+        assertEquals(ReminderStatus.SCHEDULED, restored.dueReminder?.status)
+        assertEquals(1, database!!.reminderDao().count())
+    }
+
+    @Test
+    fun reminderInsertConflictRollsBackTheNewPersonAndDebt() = runTest {
+        val now = Instant.parse("2026-08-13T00:00:00Z")
+        database!!.reminderDao().insert(
+            ReminderEntity(
+                id = "taken-reminder-id",
+                subjectType = "DEBT",
+                subjectId = "different-debt",
+                reminderType = "DUE_DATE",
+                scheduleType = "WORK",
+                triggerAt = now.plusSeconds(3_600).toEpochMilli(),
+                zoneId = "UTC",
+                repeatRule = null,
+                status = "SCHEDULED",
+                platformRequestCode = null,
+                lastFailureCode = null,
+                deliveredAt = null,
+                createdAt = now.toEpochMilli(),
+                updatedAt = now.toEpochMilli(),
+            ),
+        )
+        val command = baseCommand().copy(
+            dueDate = LocalDate.parse("2026-08-14"),
+            dueReminder = DueReminderRequest(
+                id = "taken-reminder-id",
+                triggerAt = now.plusSeconds(3_600),
+                zoneId = ZoneOffset.UTC,
+            ),
+        )
+
+        assertFailsWith<SQLiteConstraintException> {
+            repository.createPersonWithDebt(command)
+        }
+
+        assertEquals(0, database!!.personDao().count())
+        assertEquals(0, database!!.debtDao().count())
+        assertEquals(1, database!!.reminderDao().count())
     }
 
     @Test

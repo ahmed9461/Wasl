@@ -1,5 +1,11 @@
 package com.wasl.app
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,31 +21,41 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -50,12 +66,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.content.ContextCompat
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.wasl.app.data.AccountOverview
 import com.wasl.app.data.WaslRepository
+import com.wasl.app.reminder.NoOpReminderScheduler
+import com.wasl.app.reminder.ReminderScheduler
 import com.wasl.app.ui.theme.WaslTheme
 import com.wasl.domain.CurrencyCode
 import com.wasl.domain.DebtDirection
@@ -64,6 +83,10 @@ import com.wasl.domain.Money
 import com.wasl.domain.MoneyInputParser
 import java.math.BigDecimal
 import java.text.NumberFormat
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.serialization.Serializable
 
@@ -81,12 +104,37 @@ private val supportedCurrencies = listOf(
     CurrencyCode.USD,
 )
 
+private val dueDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern(
+    "dd/MM/uuuu",
+    Locale.US,
+)
+
 @Composable
 fun WaslApp(
     repository: WaslRepository,
     instanceKey: String = "production",
+    reminderScheduler: ReminderScheduler = NoOpReminderScheduler,
+    requestedDebtId: String? = null,
+    onRequestedDebtHandled: () -> Unit = {},
 ) {
     val backStack = rememberNavBackStack(HomeRoute)
+    val context = LocalContext.current
+    var notificationPermissionGranted by remember {
+        mutableStateOf(hasNotificationPermission(context))
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        notificationPermissionGranted = granted
+        if (granted) reminderScheduler.requestRecovery()
+    }
+    LaunchedEffect(requestedDebtId) {
+        val debtId = requestedDebtId ?: return@LaunchedEffect
+        if (backStack.lastOrNull() != AccountDetailsRoute(debtId)) {
+            backStack.add(AccountDetailsRoute(debtId))
+        }
+        onRequestedDebtHandled()
+    }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         WaslTheme {
             Surface(modifier = Modifier.fillMaxSize()) {
@@ -99,7 +147,7 @@ fun WaslApp(
                         entry<HomeRoute> {
                             val homeViewModel: HomeViewModel = viewModel(
                                 key = "home:$instanceKey",
-                                factory = HomeViewModel.Factory(repository),
+                                factory = HomeViewModel.Factory(repository, reminderScheduler),
                             )
                             val state by homeViewModel.uiState.collectAsStateWithLifecycle()
                             WaslHomeScreen(
@@ -114,6 +162,17 @@ fun WaslApp(
                                 onCurrencyChange = homeViewModel::updateCurrency,
                                 onDirectionChange = homeViewModel::updateDirection,
                                 onDescriptionChange = homeViewModel::updateDescription,
+                                onDueDateChange = homeViewModel::updateDueDate,
+                                onReminderChange = { enabled ->
+                                    homeViewModel.updateRemindOnDueDate(enabled)
+                                    if (enabled &&
+                                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                        !notificationPermissionGranted
+                                    ) {
+                                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    }
+                                },
+                                notificationPermissionGranted = notificationPermissionGranted,
                                 onSave = homeViewModel::createPersonWithDebt,
                                 onSuccessShown = homeViewModel::clearSuccessMessage,
                             )
@@ -161,6 +220,9 @@ private fun WaslHomeScreen(
     onCurrencyChange: (CurrencyCode) -> Unit,
     onDirectionChange: (DebtDirection) -> Unit,
     onDescriptionChange: (String) -> Unit,
+    onDueDateChange: (LocalDate?) -> Unit,
+    onReminderChange: (Boolean) -> Unit,
+    notificationPermissionGranted: Boolean,
     onSave: () -> Unit,
     onSuccessShown: () -> Unit,
 ) {
@@ -279,12 +341,16 @@ private fun WaslHomeScreen(
             onCurrencyChange = onCurrencyChange,
             onDirectionChange = onDirectionChange,
             onDescriptionChange = onDescriptionChange,
+            onDueDateChange = onDueDateChange,
+            onReminderChange = onReminderChange,
+            notificationPermissionGranted = notificationPermissionGranted,
             onSave = onSave,
         )
     }
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun CreateDebtDialog(
     form: CreateDebtForm,
     isSaving: Boolean,
@@ -295,13 +361,20 @@ private fun CreateDebtDialog(
     onCurrencyChange: (CurrencyCode) -> Unit,
     onDirectionChange: (DebtDirection) -> Unit,
     onDescriptionChange: (String) -> Unit,
+    onDueDateChange: (LocalDate?) -> Unit,
+    onReminderChange: (Boolean) -> Unit,
+    notificationPermissionGranted: Boolean,
     onSave: () -> Unit,
 ) {
+    var showDatePicker by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("حساب جديد") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 OutlinedTextField(
                     value = form.personName,
                     onValueChange = onPersonNameChange,
@@ -312,6 +385,62 @@ private fun CreateDebtDialog(
                     singleLine = true,
                     enabled = !isSaving,
                 )
+
+                Text("تاريخ الاستحقاق", fontWeight = FontWeight.SemiBold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedButton(
+                        onClick = { showDatePicker = true },
+                        enabled = !isSaving,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("create-due-date"),
+                    ) {
+                        Text(
+                            form.dueDate?.format(dueDateFormatter)
+                                ?: "اختيار تاريخ — اختياري",
+                        )
+                    }
+                    if (form.dueDate != null) {
+                        TextButton(
+                            onClick = { onDueDateChange(null) },
+                            enabled = !isSaving,
+                        ) {
+                            Text("إزالة")
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("ذكرني يوم الاستحقاق", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "تذكير عادي قرابة 09:00 حسب توقيت الجهاز",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = form.remindOnDueDate,
+                        onCheckedChange = onReminderChange,
+                        enabled = !isSaving && form.dueDate != null,
+                        modifier = Modifier.testTag("create-due-reminder"),
+                    )
+                }
+                if (form.remindOnDueDate && !notificationPermissionGranted) {
+                    Text(
+                        "سيُحفظ التذكير، لكن لن يظهر الإشعار حتى تسمح بإشعارات وَصل.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
 
                 Text("اتجاه الدين", fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -394,6 +523,43 @@ private fun CreateDebtDialog(
             }
         },
     )
+
+    if (showDatePicker) {
+        val initialSelection = form.dueDate
+            ?.atStartOfDay(ZoneOffset.UTC)
+            ?.toInstant()
+            ?.toEpochMilli()
+        val pickerState = androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = initialSelection,
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pickerState.selectedDateMillis?.let { selected ->
+                            onDueDateChange(
+                                Instant.ofEpochMilli(selected)
+                                    .atZone(ZoneOffset.UTC)
+                                    .toLocalDate(),
+                            )
+                        }
+                        showDatePicker = false
+                    },
+                    enabled = pickerState.selectedDateMillis != null,
+                ) {
+                    Text("اختيار")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("إلغاء")
+                }
+            },
+        ) {
+            DatePicker(state = pickerState)
+        }
+    }
 }
 
 @Composable
@@ -527,6 +693,13 @@ private fun summaryRows(values: Map<CurrencyCode, Money>): List<String> =
         formatMoney(values[currency] ?: Money.zero(currency))
     }
 
+private fun hasNotificationPermission(context: Context): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+
 internal fun formatMoney(money: Money): String {
     val fractionDigits = MoneyInputParser.fractionDigits(money.currency)
     val major = BigDecimal.valueOf(money.minorUnits, fractionDigits)
@@ -553,6 +726,9 @@ private fun WaslHomeScreenPreview() {
                 onCurrencyChange = {},
                 onDirectionChange = {},
                 onDescriptionChange = {},
+                onDueDateChange = {},
+                onReminderChange = {},
+                notificationPermissionGranted = true,
                 onSave = {},
                 onSuccessShown = {},
             )

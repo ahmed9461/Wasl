@@ -8,6 +8,7 @@ import com.wasl.domain.Money
 import com.wasl.domain.PersonId
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 enum class DebtLifecycleState {
     ACTIVE,
@@ -37,7 +38,42 @@ data class AccountOverview(
     val lifecycleState: DebtLifecycleState,
     val notes: String? = null,
     val closedAt: Instant? = null,
+    val dueReminder: ReminderRecord? = null,
 )
+
+enum class ReminderStatus {
+    SCHEDULED,
+    DELIVERED,
+    BLOCKED_PERMISSION,
+    FAILED,
+    CANCELLED,
+}
+
+data class ReminderRecord(
+    val id: String,
+    val debtId: DebtId,
+    val triggerAt: Instant,
+    val zoneId: ZoneId,
+    val status: ReminderStatus,
+    val lastFailureCode: String? = null,
+    val deliveredAt: Instant? = null,
+    val createdAt: Instant,
+    val updatedAt: Instant,
+) {
+    init {
+        require(id.isNotBlank()) { "Reminder ID cannot be blank." }
+    }
+}
+
+data class DueReminderRequest(
+    val id: String,
+    val triggerAt: Instant,
+    val zoneId: ZoneId,
+) {
+    init {
+        require(id.isNotBlank()) { "Reminder ID cannot be blank." }
+    }
+}
 
 data class CreatePersonWithDebtCommand(
     val personId: PersonId,
@@ -51,6 +87,7 @@ data class CreatePersonWithDebtCommand(
     val description: String? = null,
     val personNotes: String? = null,
     val debtNotes: String? = null,
+    val dueReminder: DueReminderRequest? = null,
 ) {
     init {
         require(personName.isNotBlank()) { "Person name cannot be blank." }
@@ -63,6 +100,9 @@ data class CreatePersonWithDebtCommand(
         }
         require(debtNotes == null || debtNotes.isNotBlank()) {
             "Debt notes must be null or non-blank."
+        }
+        require(dueReminder == null || dueDate != null) {
+            "A due reminder requires a due date."
         }
     }
 }

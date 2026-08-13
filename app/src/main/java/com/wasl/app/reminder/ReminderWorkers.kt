@@ -1,0 +1,105 @@
+package com.wasl.app.reminder
+
+import android.content.Context
+import androidx.work.CoroutineWorker
+import androidx.work.WorkerParameters
+import com.wasl.app.WaslApplication
+import com.wasl.app.data.ReminderStatus
+import java.time.Instant
+import java.time.ZoneId
+
+class ReminderDeliveryWorker(
+    appContext: Context,
+    params: WorkerParameters,
+) : CoroutineWorker(appContext, params) {
+    override suspend fun doWork(): Result {
+        val application = applicationContext as? WaslApplication ?: return Result.failure()
+        val reminderId = inputData.getString(KEY_REMINDER_ID) ?: return Result.failure()
+        val reminder = application.reminderStore.getReminder(reminderId) ?: return Result.success()
+        if (reminder.status == ReminderStatus.DELIVERED ||
+            reminder.status == ReminderStatus.CANCELLED
+        ) {
+            return Result.success()
+        }
+
+        val now = Instant.now()
+        if (!application.reminderNotificationPublisher.canNotify()) {
+            application.reminderStore.markReminderBlockedByPermission(reminderId, now)
+            return Result.success()
+        }
+        val account = application.repository.getAccount(reminder.debtId)
+        if (account == null) {
+            application.reminderStore.markReminderFailed(
+                reminderId,
+                FAILURE_MISSING_DEBT,
+                now,
+            )
+            return Result.failure()
+        }
+        if (account.ledger.balance.isZero) {
+            application.reminderStore.markReminderCancelled(reminderId, now)
+            return Result.success()
+        }
+
+        return try {
+            application.reminderNotificationPublisher.publish(reminder, account)
+            application.reminderStore.markReminderDelivered(reminderId, now)
+            Result.success()
+        } catch (_: Exception) {
+            application.reminderStore.markReminderFailed(
+                reminderId,
+                FAILURE_NOTIFICATION_DELIVERY,
+                now,
+            )
+            Result.retry()
+        }
+    }
+
+    companion object {
+        const val KEY_REMINDER_ID = "reminder_id"
+        private const val FAILURE_MISSING_DEBT = "MISSING_DEBT"
+        private const val FAILURE_NOTIFICATION_DELIVERY = "NOTIFICATION_DELIVERY"
+    }
+}
+
+class ReminderRecoveryWorker(
+    appContext: Context,
+    params: WorkerParameters,
+) : CoroutineWorker(appContext, params) {
+    override suspend fun doWork(): Result {
+        val application = applicationContext as? WaslApplication ?: return Result.failure()
+        val now = Instant.now()
+        val currentZone = ZoneId.systemDefault()
+        return try {
+            application.reminderStore.getRecoverableReminders().forEach { stored ->
+                val reminder = if (stored.zoneId != currentZone) {
+                    val rebased = ReminderTime.rebaseToZone(
+                        triggerAt = stored.triggerAt,
+                        sourceZone = stored.zoneId,
+                        targetZone = currentZone,
+                        now = now,
+                    )
+                    application.reminderStore.updateReminderSchedule(
+                        reminderId = stored.id,
+                        triggerAt = rebased,
+                        zoneId = currentZone,
+                        updatedAt = now,
+                    )
+                    stored.copy(
+                        triggerAt = rebased,
+                        zoneId = currentZone,
+                        status = ReminderStatus.SCHEDULED,
+                        lastFailureCode = null,
+                        updatedAt = now,
+                    )
+                } else {
+                    stored
+                }
+                application.reminderScheduler.schedule(reminder)
+            }
+            Result.success()
+        } catch (_: Exception) {
+            Result.retry()
+        }
+    }
+}

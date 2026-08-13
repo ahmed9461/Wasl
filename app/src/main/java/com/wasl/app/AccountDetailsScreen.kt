@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wasl.app.data.AccountOverview
+import com.wasl.app.data.ReminderStatus
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtState
 import com.wasl.domain.LedgerEntryId
@@ -333,6 +334,19 @@ private fun AccountSummaryCard(account: AccountOverview) {
             MetadataRow("تاريخ الإنشاء", formatInstant(ledger.header.openedAt))
             ledger.header.dueDate?.let { dueDate ->
                 MetadataRow("تاريخ الاستحقاق", "\u2066$dueDate\u2069")
+            }
+            account.dueReminder?.let { reminder ->
+                MetadataRow("موعد التذكير", formatInstant(reminder.triggerAt))
+                MetadataRow(
+                    "حالة التذكير",
+                    when (reminder.status) {
+                        ReminderStatus.SCHEDULED -> "مجدول"
+                        ReminderStatus.DELIVERED -> "تم إظهاره"
+                        ReminderStatus.BLOCKED_PERMISSION -> "بانتظار إذن الإشعارات"
+                        ReminderStatus.FAILED -> "ستُعاد المحاولة"
+                        ReminderStatus.CANCELLED -> "ملغى"
+                    },
+                )
             }
             account.closedAt?.let { closedAt ->
                 MetadataRow("تاريخ الإغلاق", formatInstant(closedAt))

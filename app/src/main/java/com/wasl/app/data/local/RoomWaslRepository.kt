@@ -8,12 +8,16 @@ import com.wasl.app.data.DebtLifecycleState
 import com.wasl.app.data.PersonRecord
 import com.wasl.app.data.RecordNotFoundException
 import com.wasl.app.data.RecordPaymentCommand
+import com.wasl.app.data.ReminderRecord
+import com.wasl.app.data.ReminderStatus
+import com.wasl.app.data.ReminderStore
 import com.wasl.app.data.ReversePaymentCommand
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.data.local.entity.DebtAggregate
 import com.wasl.app.data.local.entity.DebtEntity
 import com.wasl.app.data.local.entity.LedgerEntryEntity
 import com.wasl.app.data.local.entity.PersonEntity
+import com.wasl.app.data.local.entity.ReminderEntity
 import com.wasl.domain.CurrencyCode
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtHeader
@@ -28,15 +32,17 @@ import com.wasl.domain.PaymentReversed
 import com.wasl.domain.PersonId
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 class RoomWaslRepository(
     private val database: WaslDatabase,
-) : WaslRepository {
+) : WaslRepository, ReminderStore {
     private val personDao = database.personDao()
     private val debtDao = database.debtDao()
     private val ledgerDao = database.ledgerDao()
+    private val reminderDao = database.reminderDao()
 
     override fun observeAccounts(): Flow<List<AccountOverview>> =
         debtDao.observeActiveAggregates().map { aggregates ->
@@ -95,6 +101,27 @@ class RoomWaslRepository(
             ),
         )
 
+        command.dueReminder?.let { reminder ->
+            reminderDao.insert(
+                ReminderEntity(
+                    id = reminder.id,
+                    subjectType = ReminderSubjectType.DEBT.name,
+                    subjectId = command.debtId.value,
+                    reminderType = ReminderType.DUE_DATE.name,
+                    scheduleType = ReminderScheduleType.WORK.name,
+                    triggerAt = reminder.triggerAt.toEpochMilli(),
+                    zoneId = reminder.zoneId.id,
+                    repeatRule = null,
+                    status = ReminderStatus.SCHEDULED.name,
+                    platformRequestCode = null,
+                    lastFailureCode = null,
+                    deliveredAt = null,
+                    createdAt = command.createdAt.toEpochMilli(),
+                    updatedAt = command.createdAt.toEpochMilli(),
+                ),
+            )
+        }
+
         toAccountOverview(
             requireNotNull(debtDao.findAggregateById(command.debtId.value)) {
                 "Created debt could not be read back."
@@ -104,6 +131,75 @@ class RoomWaslRepository(
 
     override suspend fun getAccount(debtId: DebtId): AccountOverview? =
         debtDao.findAggregateById(debtId.value)?.let(::toAccountOverview)
+
+    override suspend fun getReminder(reminderId: String): ReminderRecord? =
+        reminderDao.findById(reminderId)?.toRecord()
+
+    override suspend fun getRecoverableReminders(): List<ReminderRecord> =
+        reminderDao.findRecoverable().map { it.toRecord() }
+
+    override suspend fun updateReminderSchedule(
+        reminderId: String,
+        triggerAt: Instant,
+        zoneId: ZoneId,
+        updatedAt: Instant,
+    ) {
+        check(
+            reminderDao.updateSchedule(
+                id = reminderId,
+                triggerAt = triggerAt.toEpochMilli(),
+                zoneId = zoneId.id,
+                updatedAt = updatedAt.toEpochMilli(),
+            ) == 1,
+        ) { "Reminder $reminderId was not found." }
+    }
+
+    override suspend fun markReminderDelivered(reminderId: String, deliveredAt: Instant) {
+        updateReminderStatus(
+            reminderId = reminderId,
+            status = ReminderStatus.DELIVERED,
+            failureCode = null,
+            deliveredAt = deliveredAt,
+            updatedAt = deliveredAt,
+        )
+    }
+
+    override suspend fun markReminderBlockedByPermission(
+        reminderId: String,
+        updatedAt: Instant,
+    ) {
+        updateReminderStatus(
+            reminderId = reminderId,
+            status = ReminderStatus.BLOCKED_PERMISSION,
+            failureCode = FAILURE_NOTIFICATIONS_DISABLED,
+            deliveredAt = null,
+            updatedAt = updatedAt,
+        )
+    }
+
+    override suspend fun markReminderCancelled(reminderId: String, updatedAt: Instant) {
+        updateReminderStatus(
+            reminderId = reminderId,
+            status = ReminderStatus.CANCELLED,
+            failureCode = null,
+            deliveredAt = null,
+            updatedAt = updatedAt,
+        )
+    }
+
+    override suspend fun markReminderFailed(
+        reminderId: String,
+        failureCode: String,
+        updatedAt: Instant,
+    ) {
+        updateReminderStatus(
+            reminderId = reminderId,
+            status = ReminderStatus.FAILED,
+            failureCode = failureCode,
+            deliveredAt = null,
+            updatedAt = updatedAt,
+        )
+    }
 
     override suspend fun recordPayment(command: RecordPaymentCommand): DebtLedger =
         database.withTransaction {
@@ -206,6 +302,17 @@ class RoomWaslRepository(
         val expectedDescription = command.description?.trim()
         val expectedPersonNotes = command.personNotes?.trim()
         val expectedDebtNotes = command.debtNotes?.trim()
+        val expectedReminder = command.dueReminder
+        val persistedReminder = persisted.dueReminder
+        val reminderMatches = when {
+            expectedReminder == null -> persistedReminder == null
+            persistedReminder == null -> false
+            else -> persistedReminder.id == expectedReminder.id &&
+                persistedReminder.debtId == command.debtId &&
+                persistedReminder.triggerAt == expectedReminder.triggerAt &&
+                persistedReminder.zoneId == expectedReminder.zoneId &&
+                persistedReminder.createdAt == command.createdAt
+        }
         val matches = persisted.person.id == command.personId &&
             persisted.person.displayName == command.personName.trim() &&
             persisted.person.notes == expectedPersonNotes &&
@@ -216,7 +323,8 @@ class RoomWaslRepository(
             persisted.ledger.header.dueDate == command.dueDate &&
             persisted.ledger.header.description == expectedDescription &&
             persisted.notes == expectedDebtNotes &&
-            aggregate.debt.createdAt == command.createdAt.toEpochMilli()
+            aggregate.debt.createdAt == command.createdAt.toEpochMilli() &&
+            reminderMatches
         if (!matches) {
             throw CommandConflictException(
                 "Debt ID ${command.debtId.value} is already used by a different command.",
@@ -284,12 +392,60 @@ class RoomWaslRepository(
             "Debt closure projection does not match its ledger."
         }
 
+        val dueReminders = aggregate.reminders.filter {
+            it.subjectType == ReminderSubjectType.DEBT.name &&
+                it.reminderType == ReminderType.DUE_DATE.name
+        }
+        check(dueReminders.size <= 1) { "Debt contains duplicate due reminders." }
+
         return AccountOverview(
             person = aggregate.person.toRecord(),
             ledger = ledger,
             lifecycleState = DebtLifecycleState.valueOf(debt.lifecycleState),
             notes = debt.notes,
             closedAt = debt.closedAt?.let(Instant::ofEpochMilli),
+            dueReminder = dueReminders.singleOrNull()?.toRecord(),
+        )
+    }
+
+    private suspend fun updateReminderStatus(
+        reminderId: String,
+        status: ReminderStatus,
+        failureCode: String?,
+        deliveredAt: Instant?,
+        updatedAt: Instant,
+    ) {
+        check(
+            reminderDao.updateStatus(
+                id = reminderId,
+                status = status.name,
+                failureCode = failureCode,
+                deliveredAt = deliveredAt?.toEpochMilli(),
+                updatedAt = updatedAt.toEpochMilli(),
+            ) == 1,
+        ) { "Reminder $reminderId was not found." }
+    }
+
+    private fun ReminderEntity.toRecord(): ReminderRecord {
+        check(subjectType == ReminderSubjectType.DEBT.name) {
+            "Unsupported reminder subject type: $subjectType"
+        }
+        check(reminderType == ReminderType.DUE_DATE.name) {
+            "Unsupported reminder type: $reminderType"
+        }
+        check(scheduleType == ReminderScheduleType.WORK.name) {
+            "Unsupported reminder schedule type: $scheduleType"
+        }
+        return ReminderRecord(
+            id = id,
+            debtId = DebtId(subjectId),
+            triggerAt = Instant.ofEpochMilli(triggerAt),
+            zoneId = ZoneId.of(zoneId),
+            status = ReminderStatus.valueOf(status),
+            lastFailureCode = lastFailureCode,
+            deliveredAt = deliveredAt?.let(Instant::ofEpochMilli),
+            createdAt = Instant.ofEpochMilli(createdAt),
+            updatedAt = Instant.ofEpochMilli(updatedAt),
         )
     }
 
@@ -342,5 +498,15 @@ class RoomWaslRepository(
     private enum class LedgerKind {
         PAYMENT,
         PAYMENT_REVERSAL,
+    }
+
+    private enum class ReminderSubjectType { DEBT }
+
+    private enum class ReminderType { DUE_DATE }
+
+    private enum class ReminderScheduleType { WORK }
+
+    private companion object {
+        const val FAILURE_NOTIFICATIONS_DISABLED = "NOTIFICATIONS_DISABLED"
     }
 }

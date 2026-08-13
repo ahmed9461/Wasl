@@ -16,6 +16,7 @@ import com.wasl.domain.PersonId
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -162,6 +163,8 @@ class HomeViewModel(
                         successMessage = "تم حفظ الحساب والدين بنجاح.",
                     )
                 }
+            } catch (error: CancellationException) {
+                throw error
             } catch (_: Exception) {
                 _uiState.update {
                     it.copy(

@@ -78,10 +78,14 @@
 | BalanceSummaryTest | فصل الاتجاهات والعملات |
 | MoneyInputParserTest | Parsing دقيق للأرقام العربية والفواصل ودقة YER/SAR/USD دون Double |
 | HomeViewModelTest | المسار السريع، أخطاء المبلغ، وثبات IDs عبر إعادة محاولة غير مؤكدة |
+| ReminderTimeTest | 09:00 مدنيًا، الاستحقاق في اليوم نفسه، رفض الماضي، وإعادة بناء اللحظة عند تغير المنطقة |
 | AccountDetailsViewModelTest | مراجعة الدفع، Overpayment قابل للتصحيح، العكس بسبب، وثبات Command عبر نتيجة غير مؤكدة |
 | RoomWaslRepositoryInstrumentedTest | Restart، الذرية، Idempotency، Overpayment، التزامن، Foreign keys، الإغلاق والعكس |
-| WaslDatabaseBaselineTest | فتح Schema v1 المصدّر والتحقق منه بواسطة Room |
+| WaslDatabaseBaselineTest | Migration فعلية من Schema v1 إلى v2، حفظ بيانات الدين، وإنشاء reminders فارغة |
 | PaymentFlowUiInstrumentedTest | إنشاء دين → دفع جزئي → إعادة فتح Room → بقاء المتبقي والدفعة في Timeline |
+| DueDateUiInstrumentedTest | فتح تفاصيل الدين بـDeep link وعرض تاريخ الاستحقاق وموعد التذكير وحالته |
+| WorkManagerReminderSchedulerInstrumentedTest | تكرار الجدولة يترك Work delivery نشطًا واحدًا فقط |
+| ReminderNotificationPublisherInstrumentedTest | إذن الإشعار وقناته وظهور Notification فعلية ذات tag ثابت وPendingIntent |
 
 ## CI
 

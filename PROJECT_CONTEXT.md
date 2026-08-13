@@ -22,7 +22,7 @@
 
 ## المرحلة الحالية
 
-MVP Phase 1 / Core debt-payment flow فوق Persistence موثوق.
+MVP Phase 1 / Core debt-payment + due reminder فوق Persistence موثوق.
 
 ما يعمل الآن:
 
@@ -32,7 +32,7 @@ MVP Phase 1 / Core debt-payment flow فوق Persistence موثوق.
 - Debt ledger يحتفظ بالأصل ويضيف PaymentRecorded وPaymentReversed.
 - اشتقاق الرصيد وحالة الدين والاستحقاق من Domain واحد.
 - تجميع الأرصدة حسب الاتجاه والعملة دون خلط العملات.
-- Room 2.8.4 Schema v1 للجداول persons وdebts وledger_entries مع Schema JSON مصدّر.
+- Room 2.8.4 Schema v2 للجداول persons وdebts وledger_entries وreminders مع Migration v1→v2 مختبرة.
 - Repository ذري لإنشاء شخص ودين وتسجيل دفعة وعكسها مع Idempotency وReplay بعد القراءة.
 - أول مسار UI يحفظ شخصًا ودينًا ويعرض الحسابات والإجماليات حسب العملة.
 - شاشة تفاصيل حساب تفاعلية تعرض الأصل والمدفوع والمتبقي والحالة والسجل المالي كاملًا.
@@ -41,12 +41,15 @@ MVP Phase 1 / Core debt-payment flow فوق Persistence موثوق.
 - Navigation 3 بمفاتيح Serializable صريحة بين الرئيسية وتفاصيل الحساب، وقراءة التفاصيل Reactive من Room.
 - Unit tests واختبارات Room على Emulator للإغلاق وإعادة الفتح والتزامن والقيود.
 - اختبار UI End-to-End ينشئ دينًا، يسجل دفعة جزئية، يعيد فتح قاعدة البيانات، ويتحقق من بقاء المتبقي والسجل.
+- تاريخ استحقاق اختياري في إنشاء الدين وتفاصيله، مع تذكير اختياري قرابة 09:00 حسب المنطقة الزمنية المدنية.
+- تذكير WorkManager فريد وقابل للاسترداد، وقناة إشعار مستقلة وإذن Android 13+ وحالة واضحة عند رفضه.
+- إعادة جدولة Idempotent عند بدء التطبيق وتغيّر الوقت أو المنطقة الزمنية، وفتح الحساب مباشرة من الإشعار.
 - CI للبناء والاختبارات وLint واختبارات الجهاز.
 
 ما لا يعمل بعد:
 
 - اختيار شخص موجود وإنشاء أكثر من دين له من الواجهة.
-- التذكيرات والمنبهات.
+- أنواع التذكير المتقدمة والتكرار وAlarmManager القوي/الدقيق.
 - المستندات وPDF.
 - النسخ الاحتياطي والاستعادة.
 - PIN والبصمة.
@@ -60,10 +63,10 @@ MVP Phase 1 / Core debt-payment flow فوق Persistence موثوق.
 | UI | Jetpack Compose + Material 3 |
 | المعمارية | UI / Domain / Data مع UDF وRepositories |
 | المنطق المالي | وحدة JVM مستقلة core:domain |
-| قاعدة البيانات | Room 2.8.4 + KSP 2.3.11، Schema v1 مصدّر واختبار baseline |
+| قاعدة البيانات | Room 2.8.4 + KSP 2.3.11، Schema v2 وMigration v1→v2 |
 | الإعدادات | DataStore عند الحاجة |
 | التنقل | Navigation 3 1.1.6 بمفاتيح Serializable وBack stack مملوك للتطبيق |
-| الأعمال المؤجلة | WorkManager |
+| الأعمال المؤجلة | WorkManager 2.11.2 مع Unique Work بحسب reminder id |
 | التذكير المحدد | AlarmManager غير دقيق افتراضيًا، Exact فقط بطلب مستخدم صريح |
 | مفاتيح التشفير | Android Keystore |
 | المصادقة المحلية | BiometricPrompt + Device Credential عند التنفيذ |
@@ -87,7 +90,7 @@ MVP Phase 1 / Core debt-payment flow فوق Persistence موثوق.
 
 ## نموذج البيانات
 
-التفاصيل في docs/DATABASE_SCHEMA.md. نُفذت persons وdebts وledger_entries في Schema v1. تبقى promises وreminders وinstallments وattachments وdocument_identities وdocuments وaudit_events مخططة لشرائحها، ولا تضاف كجداول فارغة قبل وجود سلوك واختبارات.
+التفاصيل في docs/DATABASE_SCHEMA.md. نُفذت persons وdebts وledger_entries وreminders في Schema v2. يبقى من reminders حاليًا النوع DUE_DATE بجدولة WORK فقط؛ وتبقى promises وinstallments وattachments وdocument_identities وdocuments وaudit_events مخططة لشرائحها، ولا تضاف كجداول فارغة قبل وجود سلوك واختبارات.
 
 ## التشغيل
 

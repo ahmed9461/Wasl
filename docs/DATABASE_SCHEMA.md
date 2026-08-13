@@ -1,6 +1,6 @@
 # تصميم قاعدة البيانات
 
-الحالة: Schema v1 منفذ ومصدّر للجداول المالية الأساسية
+الحالة: Schema v2 منفذ للجداول المالية الأساسية وأول تذكير محلي
 المحرك: Room 2.8.4 فوق SQLite، وتوليد الكود عبر KSP 2.3.11
 المبدأ: Ledger هو مصدر الحقيقة، والجداول المشتقة Projections فقط.
 
@@ -14,8 +14,8 @@
 - لا Cascade delete لسجل مالي.
 - كل Migration تصدر Schema JSON وتملك اختبارًا.
 - لا تخزن صور أو PDF كبيرة داخل BLOB؛ تخزن ملفات خاصة بالتطبيق وMetadata في DB.
-- ملف Schema المصدّر: `app/schemas/com.wasl.app.data.local.WaslDatabase/1.json`.
-- لا توجد Migration إلى v1 لأنه Baseline. Registry الحالية فارغة عمدًا، وأي v2 يحتاج Migration واختبارًا قبل الدمج.
+- ملفات Schema المصدّرة تحفظ تحت `app/schemas/com.wasl.app.data.local.WaslDatabase/`.
+- v1 هو Baseline، و`MIGRATION_1_2` اليدوية تضيف reminders دون تغيير الأشخاص أو الديون أو Ledger.
 
 ## persons
 
@@ -91,7 +91,7 @@ Constraints منطقية داخل Transaction وDomain:
 
 ## Idempotency في المسار المركب
 
-- `debt_id` هو مفتاح Idempotency لإنشاء الشخص والدين معًا في v1، ويولد قبل الكتابة ويبقى ثابتًا عبر Retry.
+- `debt_id` هو مفتاح Idempotency لإنشاء الشخص والدين والتذكير الاختياري معًا، ويولد قبل الكتابة ويبقى ثابتًا عبر Retry.
 - تكرار الأمر نفسه يعيد الحساب الموجود، واستخدام `debt_id` نفسه مع Payload مختلف يفشل بـCommandConflict.
 - `command_id` الفريد هو مفتاح دفعات وعكس الدفعات.
 - لا تعرض DAOs أي Update أو Delete لـledger_entries.
@@ -128,20 +128,33 @@ Index: debt_id مع sequence_number فريد.
 
 ## reminders
 
+منفذ في Schema v2 لأول تذكير DUE_DATE غير متكرر. صُممت أعمدة subject وschedule لتوسعة الأنواع لاحقًا دون ادعاء تنفيذها الآن.
+
 | العمود | النوع | الوصف |
 |---|---|---|
 | id | TEXT | Primary key |
-| subject_type | TEXT | DEBT، PROMISE، INSTALLMENT، CLAIM |
-| subject_id | TEXT | معرف الهدف |
-| schedule_type | TEXT | WORK، INEXACT، EXACT |
+| subject_type | TEXT | DEBT حاليًا؛ الأنواع الأخرى لاحقًا |
+| subject_id | TEXT | debt id في التنفيذ الحالي |
+| reminder_type | TEXT | DUE_DATE حاليًا |
+| schedule_type | TEXT | WORK حاليًا؛ INEXACT وEXACT لاحقًا |
 | trigger_at | INTEGER | Instant |
 | zone_id | TEXT | Timezone IANA |
 | repeat_rule | TEXT | صيغة موثقة أو null |
-| status | TEXT | SCHEDULED، DELIVERED، SNOOZED، CANCELLED، FAILED |
-| platform_request_code | INTEGER | Unique عند الحاجة |
+| status | TEXT | SCHEDULED، DELIVERED، BLOCKED_PERMISSION، CANCELLED، FAILED |
+| platform_request_code | INTEGER | Unique اختياري لمسارات AlarmManager اللاحقة |
+| last_failure_code | TEXT | رمز تقني محدود بلا بيانات مالية |
+| delivered_at | INTEGER | Instant اختياري |
+| created_at | INTEGER | مطلوب |
 | updated_at | INTEGER | مطلوب |
 
-إعادة الجدولة Idempotent بحسب reminder id.
+قيود وفهارس:
+
+- Unique على subject_type + subject_id + reminder_type يمنع تذكير استحقاق مكرر للدين نفسه.
+- Index على status + trigger_at للاسترداد وإعادة الجدولة.
+- Index على subject_id لقراءة علاقة الدين بالتذكير بكفاءة.
+- جدولة WorkManager فريدة باسم مشتق من reminder id وتستبدل العمل السابق فقط.
+- إنشاء الدين وصف reminder يتمان داخل Transaction واحدة؛ جدولة المنصة تحصل بعد Commit، وأي فشل يبقي السجل قابلًا للاسترداد ولا يلغي الدين.
+- trigger_at هو Instant تنفيذي، وzone_id يحفظ المعنى المدني. عند تغيير المنطقة الزمنية يعاد بناء اللحظة من التاريخ/الوقت المدني ثم تحفظ وتجدول Idempotently.
 
 ## installments
 
@@ -219,7 +232,7 @@ Snapshots Versioned ولا تعاد قراءتها من الهوية الحال�
 
 ## Transactions المطلوبة
 
-- إنشاء شخص ودين عند المسار المركب.
+- إنشاء شخص ودين وتذكير استحقاق اختياري عند المسار المركب.
 - تسجيل دفعة وإغلاق Projection.
 - عكس دفعة وإعادة فتح Projection.
 - إصدار رقم مستند وحفظ Snapshot.
@@ -236,4 +249,4 @@ Snapshots Versioned ولا تعاد قراءتها من الهوية الحال�
 
 ## نطاق التنفيذ الحالي
 
-نُفذت persons وdebts وledger_entries لأنها تكفي لمسار الدين والسداد الموثوق. بقية الجداول في هذه الوثيقة تصميم معتمد لشرائح لاحقة، وليست جزءًا من Schema v1 الفعلية حتى الآن.
+نُفذت persons وdebts وledger_entries وreminders في Schema v2 لمسار الدين والسداد وتذكير الاستحقاق الأول. بقية الجداول في هذه الوثيقة تصميم معتمد لشرائح لاحقة وليست جزءًا من Schema الفعلية حتى الآن.

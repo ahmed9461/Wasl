@@ -7,6 +7,7 @@ import com.wasl.app.WaslApplication
 import com.wasl.app.data.ReminderStatus
 import java.time.Instant
 import java.time.ZoneId
+import kotlinx.coroutines.CancellationException
 
 class ReminderDeliveryWorker(
     appContext: Context,
@@ -45,6 +46,8 @@ class ReminderDeliveryWorker(
             application.reminderNotificationPublisher.publish(reminder, account)
             application.reminderStore.markReminderDelivered(reminderId, now)
             Result.success()
+        } catch (error: CancellationException) {
+            throw error
         } catch (_: Exception) {
             application.reminderStore.markReminderFailed(
                 reminderId,
@@ -98,6 +101,8 @@ class ReminderRecoveryWorker(
                 application.reminderScheduler.schedule(reminder)
             }
             Result.success()
+        } catch (error: CancellationException) {
+            throw error
         } catch (_: Exception) {
             Result.retry()
         }

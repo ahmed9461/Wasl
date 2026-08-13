@@ -8,6 +8,7 @@
 - `AccountDetailsRoute(debtId)`: يحمل Debt ID فقط، ثم يقرأ البيانات Reactive من Repository.
 - يملك `WaslApp` Back stack واحدًا عبر `rememberNavBackStack`، والمفاتيح `NavKey` قابلة للتسلسل.
 - يعيد Back من التفاصيل إلى القائمة الموجودة في المكدس؛ System back يمر عبر `NavDisplay`.
+- إشعار موعد الدين يرسل `debtId` فقط إلى MainActivity ذات `singleTop`، ويضيف AccountDetailsRoute بعد التحقق عبر Repository.
 
 ## الوجهات العليا
 

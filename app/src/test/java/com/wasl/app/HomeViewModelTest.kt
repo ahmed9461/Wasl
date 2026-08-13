@@ -163,6 +163,35 @@ class HomeViewModelTest {
         assertNull(repository.lastCreateCommand)
         assertEquals("اختر تاريخ استحقاق اليوم أو بعده.", viewModel.uiState.value.formError)
     }
+
+    @Test
+    fun platformSchedulingFailureDoesNotUndoPersistedDebtOrReminder() = runTest {
+        val repository = FakeWaslRepository()
+        val ids = ArrayDeque(listOf("person-1", "debt-1", "reminder-1"))
+        val viewModel = HomeViewModel(
+            repository = repository,
+            clock = Clock.fixed(Instant.parse("2026-08-13T08:00:00Z"), ZoneOffset.UTC),
+            idFactory = { ids.removeFirst() },
+            zoneIdProvider = { ZoneOffset.UTC },
+            reminderScheduler = FailingReminderScheduler(),
+        )
+        advanceUntilIdle()
+
+        viewModel.openCreateDialog()
+        viewModel.updatePersonName("أحمد")
+        viewModel.updateAmount("1000")
+        viewModel.updateDueDate(LocalDate.parse("2026-08-14"))
+        viewModel.updateRemindOnDueDate(true)
+        viewModel.createPersonWithDebt()
+        advanceUntilIdle()
+
+        assertNotNull(repository.lastCreateCommand?.dueReminder)
+        assertFalse(viewModel.uiState.value.isCreateDialogOpen)
+        assertEquals(
+            "تم حفظ الحساب والتذكير، وستُعاد محاولة الجدولة تلقائيًا.",
+            viewModel.uiState.value.successMessage,
+        )
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -251,6 +280,14 @@ private class RecordingReminderScheduler : ReminderScheduler {
 
     override fun schedule(reminder: ReminderRecord) {
         scheduled += reminder
+    }
+
+    override fun requestRecovery() = Unit
+}
+
+private class FailingReminderScheduler : ReminderScheduler {
+    override fun schedule(reminder: ReminderRecord) {
+        error("Simulated platform scheduler failure.")
     }
 
     override fun requestRecovery() = Unit

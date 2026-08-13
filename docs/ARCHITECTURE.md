@@ -89,8 +89,9 @@ Notifications وAlarmManager وWorkManager وBiometrics وKeystore وFileProvide
 - `com.wasl.app`: Application entry وComposition root وHome/Account details ViewModels وشاشات Compose وNavigation keys.
 - `com.wasl.app.data`: عقود Repository وRead/Command models.
 - `com.wasl.app.data.local`: Room database وRepository الذري وMappers الداخلية.
-- `com.wasl.app.data.local.entity`: persons وdebts وledger_entries وعلاقات القراءة.
-- `com.wasl.app.data.local.dao`: واجهات الإدخال والاستعلام بلا Update/Delete للسجل المالي.
+- `com.wasl.app.data.local.entity`: persons وdebts وledger_entries وreminders وعلاقات القراءة.
+- `com.wasl.app.data.local.dao`: واجهات الإدخال والاستعلام بلا Update/Delete للسجل المالي، مع انتقالات حالة محدودة للتذكير.
+- `com.wasl.app.reminder`: حساب الزمن المدني، WorkManager scheduler/workers، القناة وناشر الإشعار وRecovery receiver.
 - `com.wasl.app.ui`: Theme، وتستقبل الشاشات الجديدة عند توسعها.
 
 لا تنشأ وحدة Gradle جديدة قبل وجود سبب مثل زمن بناء أو إعادة استخدام أو فصل Platform واضح.

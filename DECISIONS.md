@@ -58,10 +58,10 @@
   - حذف الدفعة: مرفوض لأنه يمحو أثرًا ماليًا.
 - النتيجة: Repository يحفظ إضافة الحدث وتحديث Projection داخل Transaction واحدة، والواجهة تعرض العكس كحدث مستقل ولا توفر حذفًا ماليًا.
 
-## ADR-006 — Room 2.8.4 لـSchema v1
+## ADR-006 — Room 2.8.4 وMigrations صريحة
 
-- الحالة: معتمد ومنفذ للجداول المالية الأساسية
-- القرار: استخدام Room 2.8.4 مع KSP 2.3.11 وتصدير Schema واختبارات Migration. يبدأ v1 بـpersons وdebts وledger_entries فقط؛ تضاف الجداول اللاحقة مع سلوكها الفعلي وMigration صريحة.
+- الحالة: معتمد ومنفذ حتى Schema v2
+- القرار: استخدام Room 2.8.4 مع KSP 2.3.11 وتصدير Schema واختبارات Migration. بدأ v1 بـpersons وdebts وledger_entries، وتضيف Migration v1→v2 جدول reminders مع سلوكه الفعلي واختبار انتقال يحفظ بيانات الدين القديمة.
 - السبب: Android-only يحتاج حلًا مستقرًا ومجربًا، والتحقق وقت الترجمة من SQL ومسار Migrations. Room موصى به رسميًا بدل SQLite المباشر.
 - البدائل:
   - SQLite API مباشرة: مرفوضة لكثرة Boilerplate وضعف التحقق وقت البناء.
@@ -76,7 +76,7 @@
   - `app/schemas/com.wasl.app.data.local.WaslDatabase/1.json` جزء دائم من المستودع.
   - لا يوجد `fallbackToDestructiveMigration` في Production.
   - يُحاذى kotlinx-serialization Core وJSON معًا عبر BOM 1.9.0؛ Navigation 3 يحتاج Serialization للمفاتيح المحفوظة، وفرض BOM يمنع خلط Room JSON 1.8.1 مع Core مختلف في AndroidTest runtime.
-  - Version 1 هو Baseline ولا يحتاج Migration سابقة؛ كل Version تالٍ يضاف إلى `ALL_MIGRATIONS` ويختبر من أقدم إصدار مدعوم.
+  - Version 1 هو Baseline؛ `MIGRATION_1_2` أول انتقال فعلي ومسجل في `ALL_MIGRATIONS`.
 
 ## ADR-007 — Compose وMaterial 3 وNavigation 3
 
@@ -95,20 +95,25 @@
 
 ## ADR-008 — سياسة التذكيرات والمنبهات
 
-- الحالة: معتمد للتنفيذ اللاحق
+- الحالة: معتمد ومنفذ لأول تذكير DUE_DATE
 - القرار:
-  - WorkManager للعمل المؤجل أو الدوري غير الدقيق.
+  - WorkManager 2.11.2 للتذكير العادي المؤجل الذي يقبل نافذة تنفيذ النظام؛ كل تذكير OneTimeWork فريد باسم مشتق من reminder id.
   - AlarmManager غير الدقيق لتذكير مستخدم بوقت يمكن أن يتحمل نافذة.
   - Exact Alarm فقط لمنبه قوي فعّله المستخدم صراحة ويحتاج لحظة دقيقة.
   - التحقق من صلاحية Exact Alarm وتقديم Fallback واضح.
-  - إعادة الجدولة بعد Boot أو تغيير الوقت عندما يتطلب التنفيذ ذلك.
+  - WorkManager يتولى بقاء العمل عبر إعادة التشغيل. يشغّل التطبيق Recovery idempotent عند بدء العملية وبعد تغيير الوقت أو المنطقة الزمنية، ويعيد بناء Instant من الوقت المدني المحفوظ عند تغير المنطقة.
+  - إذن POST_NOTIFICATIONS يطلب عند تفعيل التذكير على Android 13+؛ رفضه لا يلغي الدين أو التذكير، بل يسجل BLOCKED_PERMISSION ويعاد الاسترداد بعد السماح.
+  - قناة `wasl_due_accounts` مستقلة، والإشعار الخاص يملك نسخة عامة لا تكشف الشخص أو المبلغ على شاشة القفل ويفتح الحساب المقصود.
 - السبب: Exact alarms مكلفة ومقيدة، ووثائق Android توصي بعدم استخدامها للأعمال الدورية.
 - البدائل:
   - Exact لكل تذكير: مرفوض بسبب البطارية والصلاحيات والرفض الافتراضي.
   - WorkManager لكل موعد دقيق: مرفوض لأنه لا يضمن لحظة دقيقة.
 - المصادر:
   - [Schedule alarms](https://developer.android.com/develop/background-work/services/alarms)
-  - [Task scheduling](https://developer.android.com/develop/background-work/background-tasks/persistent)
+  - [Getting started with WorkManager](https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started)
+  - [Unique Work](https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/manage-work#unique-work)
+  - [Notification runtime permission](https://developer.android.com/develop/ui/compose/notifications/notification-permission)
+  - [Implicit broadcast exceptions for time and timezone changes](https://developer.android.com/develop/background-work/background-tasks/broadcasts/broadcast-exceptions)
 
 ## ADR-009 — الأمان Local-first
 
@@ -168,7 +173,7 @@
   - مكتبة PDF خارجية كبيرة: تؤجل حتى يثبت أن Platform لا يحقق Arabic shaping أو الطباعة.
 - النتيجة: إذا فشل Prototype، يوثق قرار بديل بمقارنة الترخيص والحجم والتشكيل والأمان.
 
-## ADR-012 — عدم إدخال Hilt في أول Slice
+## ADR-012 — إبقاء Composition root اليدوي ما دام صغيرًا
 
 - الحالة: معتمد ومطبق مؤقتًا
 - القرار: Constructor injection يدوي في البداية. يضاف Hilt فقط عندما توجد عدة Implementations أو Workers أو ViewModels تجعل Composition root اليدوي عبئًا حقيقيًا.
@@ -176,4 +181,4 @@
 - البدائل:
   - Service locator عالمي: مرفوض.
   - Hilt من أول ملف: غير ضروري في هذه المرحلة.
-- النتيجة: `WaslApplication` هو Composition root الصغير، و`RoomWaslRepository` و`HomeViewModel` و`AccountDetailsViewModel` تقبل Dependencies من Constructors. يعاد تقييم Hilt عند دخول Workers أو تعدد Implementations.
+- النتيجة: `WaslApplication` هو Composition root الصغير، و`RoomWaslRepository` وViewModels وReminder workers تصل إلى واجهات صريحة منه. دخول Workerين لم يجعل الرسم اليدوي غامضًا بعد؛ يعاد تقييم Hilt عند تعدد Implementations أو الحاجة إلى WorkerFactory مخصص.

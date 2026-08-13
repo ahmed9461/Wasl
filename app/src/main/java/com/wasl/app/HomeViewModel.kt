@@ -205,6 +205,9 @@ class HomeViewModel(
                 val schedulingFailed = created.dueReminder?.let { dueReminder ->
                     runCatching { reminderScheduler.schedule(dueReminder) }.isFailure
                 } ?: false
+                if (schedulingFailed) {
+                    runCatching { reminderScheduler.requestRecovery() }
+                }
                 pendingCreateIdentity = null
                 _uiState.update {
                     it.copy(

@@ -13,6 +13,7 @@ import androidx.room.PrimaryKey
             unique = true,
         ),
         Index(value = ["status", "trigger_at"]),
+        Index(value = ["subject_id"]),
         Index(value = ["platform_request_code"], unique = true),
     ],
 )

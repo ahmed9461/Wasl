@@ -37,8 +37,8 @@ abstract class WaslDatabase : RoomDatabase() {
         const val DATABASE_NAME = "wasl.db"
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
-            override fun migrate(database: androidx.sqlite.db.SupportSQLiteDatabase) {
-                database.execSQL(
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS `reminders` (
                         `id` TEXT NOT NULL,
@@ -59,13 +59,16 @@ abstract class WaslDatabase : RoomDatabase() {
                     )
                     """.trimIndent(),
                 )
-                database.execSQL(
+                db.execSQL(
                     "CREATE UNIQUE INDEX IF NOT EXISTS `index_reminders_subject_type_subject_id_reminder_type` ON `reminders` (`subject_type`, `subject_id`, `reminder_type`)",
                 )
-                database.execSQL(
+                db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_reminders_status_trigger_at` ON `reminders` (`status`, `trigger_at`)",
                 )
-                database.execSQL(
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_reminders_subject_id` ON `reminders` (`subject_id`)",
+                )
+                db.execSQL(
                     "CREATE UNIQUE INDEX IF NOT EXISTS `index_reminders_platform_request_code` ON `reminders` (`platform_request_code`)",
                 )
             }

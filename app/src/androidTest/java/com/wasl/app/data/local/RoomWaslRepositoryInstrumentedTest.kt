@@ -153,6 +153,40 @@ class RoomWaslRepositoryInstrumentedTest {
     }
 
     @Test
+    fun blockedReminderStateSurvivesAndCanReturnToScheduled() = runTest {
+        val now = Instant.parse("2026-08-13T00:00:00Z")
+        repository.createPersonWithDebt(
+            baseCommand().copy(
+                dueDate = LocalDate.parse("2026-08-14"),
+                dueReminder = DueReminderRequest(
+                    id = "reminder-permission",
+                    triggerAt = Instant.parse("2026-08-14T06:00:00Z"),
+                    zoneId = ZoneId.of("Asia/Riyadh"),
+                ),
+            ),
+        )
+
+        repository.markReminderBlockedByPermission("reminder-permission", now.plusSeconds(1))
+        reopenDatabase()
+
+        val blocked = assertNotNull(repository.getReminder("reminder-permission"))
+        assertEquals(ReminderStatus.BLOCKED_PERMISSION, blocked.status)
+        assertEquals("NOTIFICATIONS_DISABLED", blocked.lastFailureCode)
+        assertEquals(listOf("reminder-permission"), repository.getRecoverableReminders().map { it.id })
+
+        repository.updateReminderSchedule(
+            reminderId = "reminder-permission",
+            triggerAt = Instant.parse("2026-08-14T08:00:00Z"),
+            zoneId = ZoneId.of("Europe/London"),
+            updatedAt = now.plusSeconds(2),
+        )
+        val rescheduled = assertNotNull(repository.getReminder("reminder-permission"))
+        assertEquals(ReminderStatus.SCHEDULED, rescheduled.status)
+        assertNull(rescheduled.lastFailureCode)
+        assertEquals(ZoneId.of("Europe/London"), rescheduled.zoneId)
+    }
+
+    @Test
     fun duplicatePaymentCommandIsIdempotentAndPayloadConflictIsRejected() = runTest {
         repository.createPersonWithDebt(baseCommand())
         val command = paymentCommand("same-command", "payment-1", 20_000L, 1)

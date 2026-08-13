@@ -21,6 +21,8 @@ import java.util.UUID
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.runner.RunWith
 
@@ -64,8 +66,11 @@ class PaymentFlowUiInstrumentedTest {
         composeRule.onNodeWithTag("create-debt-amount").performTextInput("100000")
         composeRule.onNodeWithTag("create-debt-save").performClick()
         waitForText("أحمد")
+        val debtId = runBlocking {
+            repositoryState.value.observeAccounts().first().single().ledger.header.id.value
+        }
 
-        composeRule.onNodeWithText("أحمد").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("account-$debtId").assertIsDisplayed().performClick()
         waitForTag("record-payment")
         composeRule.onNodeWithTag("record-payment").performClick()
         composeRule.onNodeWithTag("payment-amount").performTextInput("20000")
@@ -85,7 +90,7 @@ class PaymentFlowUiInstrumentedTest {
         }
         waitForText("أحمد")
 
-        composeRule.onNodeWithText("أحمد").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("account-$debtId").assertIsDisplayed().performClick()
         waitForText("دفعة مسجلة")
         composeRule.onNodeWithTag("account-remaining")
             .assertTextContains("80,000 YER", substring = true)

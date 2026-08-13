@@ -2,6 +2,7 @@ package com.wasl.app
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
@@ -41,7 +42,7 @@ internal fun WaslTopLevelNavigation(
 }
 
 @Composable
-private fun WaslNavigationItem(
+private fun RowScope.WaslNavigationItem(
     selected: Boolean,
     label: String,
     testTag: String,

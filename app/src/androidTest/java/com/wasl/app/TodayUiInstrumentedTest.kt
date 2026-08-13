@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -117,7 +118,9 @@ class TodayUiInstrumentedTest {
             "التذكير متوقف حتى تسمح بإشعارات وَصل.",
         ).assertIsDisplayed()
 
-        composeRule.onNodeWithTag("today-open-debt-today").performClick()
+        composeRule.onNodeWithTag("today-open-debt-today")
+            .performScrollTo()
+            .performClick()
         waitForText("سجل العمليات")
         composeRule.onNodeWithText("شخص اليوم").assertIsDisplayed()
     }
@@ -147,8 +150,12 @@ class TodayUiInstrumentedTest {
             )
         }
 
-        composeRule.onNodeWithTag("today-enable-notifications-debt-blocked").performClick()
-        composeRule.onNodeWithTag("today-retry-reminder-debt-failed").performClick()
+        composeRule.onNodeWithTag("today-enable-notifications-debt-blocked")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("today-retry-reminder-debt-failed")
+            .performScrollTo()
+            .performClick()
 
         composeRule.runOnIdle {
             assertEquals(1, permissionActions)

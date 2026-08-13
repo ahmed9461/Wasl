@@ -140,6 +140,7 @@ class TodayUiInstrumentedTest {
                 ),
                 notificationsAvailable = false,
                 onOpenHome = {},
+                onOpenSearch = {},
                 onOpenAccount = {},
                 onRefreshDate = {},
                 onRetryLoad = {},

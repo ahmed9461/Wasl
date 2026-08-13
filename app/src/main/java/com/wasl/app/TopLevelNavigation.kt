@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 internal enum class WaslTopLevelDestination {
     HOME,
     TODAY,
+    SEARCH,
 }
 
 @Composable
@@ -24,6 +25,7 @@ internal fun WaslTopLevelNavigation(
     selected: WaslTopLevelDestination,
     onOpenHome: () -> Unit,
     onOpenToday: () -> Unit,
+    onOpenSearch: () -> Unit,
 ) {
     NavigationBar {
         WaslNavigationItem(
@@ -37,6 +39,12 @@ internal fun WaslTopLevelNavigation(
             label = "اليوم",
             testTag = "nav-today",
             onClick = onOpenToday,
+        )
+        WaslNavigationItem(
+            selected = selected == WaslTopLevelDestination.SEARCH,
+            label = "البحث",
+            testTag = "nav-search",
+            onClick = onOpenSearch,
         )
     }
 }

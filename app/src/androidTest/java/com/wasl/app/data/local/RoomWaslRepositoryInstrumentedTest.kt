@@ -34,6 +34,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -225,6 +226,78 @@ class RoomWaslRepositoryInstrumentedTest {
     }
 
     @Test
+    fun searchMatchesPersonOrDescriptionAndTreatsWildcardsAsLiteralText() = runTest {
+        repository.createPersonWithDebt(
+            searchCommand("name", "ALPHA Store", "فاتورة عادية", 10),
+        )
+        repository.createPersonWithDebt(
+            searchCommand("description", "خالد", "رسوم Alpha الشهرية", 11),
+        )
+        repository.createPersonWithDebt(
+            searchCommand("literal", "سالم", "خصم 100%_خاص", 12),
+        )
+        repository.createPersonWithDebt(
+            searchCommand("wildcard-decoy", "علي", "خصم 100Xخاص", 13),
+        )
+
+        assertEquals(
+            listOf("debt-name", "debt-description"),
+            repository.observeSearchAccounts("alpha", 10).first()
+                .map { it.ledger.header.id.value },
+        )
+        assertEquals(
+            listOf("debt-literal"),
+            repository.observeSearchAccounts("%_", 10).first()
+                .map { it.ledger.header.id.value },
+        )
+        assertEquals(emptyList(), repository.observeSearchAccounts("   ", 10).first())
+    }
+
+    @Test
+    fun searchHasAnExplicitLimitAndReactsToDebtAndPaymentWrites() = runTest {
+        repository.createPersonWithDebt(
+            searchCommand("first", "أحمد", "حساب مشترك", 20),
+        )
+
+        val observesAddedDebt = async(start = CoroutineStart.UNDISPATCHED) {
+            repository.observeSearchAccounts("مشترك", 3).first { it.size == 2 }
+        }
+        repository.createPersonWithDebt(
+            searchCommand("second", "خالد", "دين مشترك", 21),
+        )
+        assertEquals(
+            setOf("debt-first", "debt-second"),
+            observesAddedDebt.await().map { it.ledger.header.id.value }.toSet(),
+        )
+
+        val observesPayment = async(start = CoroutineStart.UNDISPATCHED) {
+            repository.observeSearchAccounts("مشترك", 3).first { accounts ->
+                accounts.firstOrNull { it.ledger.header.id == DebtId("debt-first") }
+                    ?.ledger?.balance == Money(80_000L, CurrencyCode.YER)
+            }
+        }
+        repository.recordPayment(
+            paymentCommandForDebt(
+                debtId = "debt-first",
+                commandId = "search-payment-command",
+                paymentId = "search-payment",
+                amount = 20_000L,
+                minute = 22,
+            ),
+        )
+        assertEquals(
+            Money(80_000L, CurrencyCode.YER),
+            observesPayment.await().first { it.ledger.header.id == DebtId("debt-first") }
+                .ledger.balance,
+        )
+
+        repository.createPersonWithDebt(
+            searchCommand("third", "سالم", "التزام مشترك", 23),
+        )
+        assertEquals(2, repository.observeSearchAccounts("مشترك", 2).first().size)
+    }
+
+    @Test
     fun duplicatePaymentCommandIsIdempotentAndPayloadConflictIsRejected() = runTest {
         repository.createPersonWithDebt(baseCommand())
         val command = paymentCommand("same-command", "payment-1", 20_000L, 1)
@@ -402,6 +475,25 @@ class RoomWaslRepositoryInstrumentedTest {
         )
     }
 
+    private fun searchCommand(
+        suffix: String,
+        personName: String,
+        description: String,
+        minute: Int,
+    ): CreatePersonWithDebtCommand {
+        val timestamp = Instant.parse(
+            "2026-08-13T00:${minute.toString().padStart(2, '0')}:00Z",
+        )
+        return baseCommand().copy(
+            personId = PersonId("person-$suffix"),
+            debtId = DebtId("debt-$suffix"),
+            personName = personName,
+            openedAt = timestamp,
+            createdAt = timestamp,
+            description = description,
+        )
+    }
+
     private fun paymentCommand(
         commandId: String,
         paymentId: String,
@@ -411,6 +503,21 @@ class RoomWaslRepositoryInstrumentedTest {
         commandId = commandId,
         entryId = LedgerEntryId(paymentId),
         debtId = DebtId("debt-1"),
+        amount = Money(amount, CurrencyCode.YER),
+        paidAt = Instant.parse("2026-08-13T00:${minute.toString().padStart(2, '0')}:00Z"),
+        recordedAt = Instant.parse("2026-08-13T00:${minute.toString().padStart(2, '0')}:00Z"),
+    )
+
+    private fun paymentCommandForDebt(
+        debtId: String,
+        commandId: String,
+        paymentId: String,
+        amount: Long,
+        minute: Int,
+    ) = RecordPaymentCommand(
+        commandId = commandId,
+        entryId = LedgerEntryId(paymentId),
+        debtId = DebtId(debtId),
         amount = Money(amount, CurrencyCode.YER),
         paidAt = Instant.parse("2026-08-13T00:${minute.toString().padStart(2, '0')}:00Z"),
         recordedAt = Instant.parse("2026-08-13T00:${minute.toString().padStart(2, '0')}:00Z"),

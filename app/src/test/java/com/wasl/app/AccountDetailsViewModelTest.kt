@@ -241,6 +241,18 @@ private class PaymentFakeRepository(
             )
         }
 
+    override fun observeSearchAccounts(
+        query: String,
+        limit: Int,
+    ): Flow<List<AccountOverview>> = accountState.map { account ->
+        listOfNotNull(
+            account.takeIf {
+                it.person.displayName.contains(query, ignoreCase = true) ||
+                    it.ledger.header.description?.contains(query, ignoreCase = true) == true
+            },
+        ).take(limit)
+    }
+
     override fun observeAccount(debtId: DebtId): Flow<AccountOverview?> = accountState.map {
         it.takeIf { account -> account.ledger.header.id == debtId }
     }

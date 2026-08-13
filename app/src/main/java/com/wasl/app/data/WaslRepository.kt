@@ -10,6 +10,8 @@ interface WaslRepository {
 
     fun observeDueAccounts(onOrBefore: LocalDate): Flow<List<AccountOverview>>
 
+    fun observeSearchAccounts(query: String, limit: Int): Flow<List<AccountOverview>>
+
     fun observeAccount(debtId: DebtId): Flow<AccountOverview?>
 
     suspend fun createPersonWithDebt(command: CreatePersonWithDebtCommand): AccountOverview

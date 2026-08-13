@@ -5,6 +5,7 @@ import com.wasl.app.data.AccountOverview
 import com.wasl.app.data.CommandConflictException
 import com.wasl.app.data.CreatePersonWithDebtCommand
 import com.wasl.app.data.DebtLifecycleState
+import com.wasl.app.data.LocalSearchQuery
 import com.wasl.app.data.PersonRecord
 import com.wasl.app.data.RecordNotFoundException
 import com.wasl.app.data.RecordPaymentCommand
@@ -34,6 +35,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 class RoomWaslRepository(
@@ -53,6 +55,17 @@ class RoomWaslRepository(
         debtDao.observeDueAggregates(onOrBefore.toEpochDay()).map { aggregates ->
             aggregates.map(::toAccountOverview)
         }
+
+    override fun observeSearchAccounts(
+        query: String,
+        limit: Int,
+    ): Flow<List<AccountOverview>> {
+        require(limit > 0) { "Search limit must be positive." }
+        val pattern = LocalSearchQuery.toSqlLikePattern(query) ?: return flowOf(emptyList())
+        return debtDao.observeSearchAggregates(pattern, limit).map { aggregates ->
+            aggregates.map(::toAccountOverview)
+        }
+    }
 
     override fun observeAccount(debtId: DebtId): Flow<AccountOverview?> =
         debtDao.observeAggregateById(debtId.value).map { aggregate ->

@@ -38,6 +38,32 @@ interface DebtDao {
     fun observeDueAggregates(onOrBeforeEpochDay: Long): Flow<List<DebtAggregate>>
 
     @Transaction
+    @Query(
+        """
+        SELECT debts.* FROM debts
+        INNER JOIN persons ON persons.id = debts.person_id
+        WHERE debts.lifecycle_state = 'ACTIVE'
+          AND (
+            persons.display_name LIKE :queryPattern ESCAPE '\' COLLATE NOCASE
+            OR COALESCE(debts.description, '') LIKE :queryPattern ESCAPE '\' COLLATE NOCASE
+          )
+        ORDER BY
+          CASE
+            WHEN persons.display_name LIKE :queryPattern ESCAPE '\' COLLATE NOCASE THEN 0
+            ELSE 1
+          END,
+          debts.updated_at DESC,
+          debts.opened_at DESC,
+          debts.id DESC
+        LIMIT :limit
+        """,
+    )
+    fun observeSearchAggregates(
+        queryPattern: String,
+        limit: Int,
+    ): Flow<List<DebtAggregate>>
+
+    @Transaction
     @Query("SELECT * FROM debts WHERE id = :id")
     fun observeAggregateById(id: String): Flow<DebtAggregate?>
 

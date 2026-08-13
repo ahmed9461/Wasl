@@ -79,14 +79,17 @@
 | MoneyInputParserTest | Parsing دقيق للأرقام العربية والفواصل ودقة YER/SAR/USD دون Double |
 | HomeViewModelTest | المسار السريع، أخطاء المبلغ، وثبات IDs عبر إعادة محاولة غير مؤكدة |
 | TodayViewModelTest | LocalDate حسب ZoneId، الفصل والترتيب، عبور منتصف الليل، خطأ القراءة، ونتيجة Recovery |
+| LocalSearchQueryTest | تطبيع المسافات، منع بحث فارغ غير محدود، ومعاملة محارف LIKE كنصوص حرفية |
+| SearchViewModelTest | حد 50، وجود نتائج إضافية، خطأ القراءة وRetry، والتحديث Reactive بعد دين أو دفعة |
 | ReminderTimeTest | 09:00 مدنيًا، الاستحقاق في اليوم نفسه، رفض الماضي، وإعادة بناء اللحظة عند تغير المنطقة |
 | ReminderRecoveryPolicyTest | إبقاء BLOCKED دون إذن، وإعادة BLOCKED/FAILED إلى SCHEDULED، وتغير المنطقة |
 | AccountDetailsViewModelTest | مراجعة الدفع، Overpayment قابل للتصحيح، العكس بسبب، وثبات Command عبر نتيجة غير مؤكدة |
-| RoomWaslRepositoryInstrumentedTest | Restart، الذرية، Idempotency، Overpayment، التزامن، Foreign keys، الإغلاق والعكس، واستعلام Today |
+| RoomWaslRepositoryInstrumentedTest | Restart، الذرية، Idempotency، Overpayment، التزامن، Foreign keys، الإغلاق والعكس، واستعلاما Today والبحث |
 | WaslDatabaseBaselineTest | Migration فعلية من Schema v1 إلى v2، حفظ بيانات الدين، وإنشاء reminders فارغة |
 | PaymentFlowUiInstrumentedTest | إنشاء دين → دفع جزئي → إعادة فتح Room → بقاء المتبقي والدفعة في Timeline |
 | DueDateUiInstrumentedTest | فتح تفاصيل الدين بـDeep link وعرض تاريخ الاستحقاق وموعد التذكير وحالته |
 | TodayUiInstrumentedTest | التنقل إلى Today، فصل المتأخر/اليوم، استبعاد القادم، فتح الحساب، وأزرار الإذن/Retry |
+| SearchUiInstrumentedTest | البحث بالوصف، فتح الحساب والرجوع إلى العبارة نفسها، وتحديث النتيجة بعد إنشاء دين ودفعة |
 | WorkManagerReminderSchedulerInstrumentedTest | تكرار الجدولة يترك Work delivery نشطًا واحدًا فقط |
 | ReminderNotificationPublisherInstrumentedTest | إذن الإشعار وقناته وظهور Notification فعلية ذات tag ثابت وPendingIntent |
 

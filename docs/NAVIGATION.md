@@ -1,21 +1,23 @@
 # معمارية التنقل
 
-الحالة: Navigation 3 منفذ للرئيسية وToday وتفاصيل الحساب؛ بقية الوجهات العليا والتكيف Medium/Expanded ما زالت عقد تصميم.
+الحالة: Navigation 3 منفذ للرئيسية وToday والبحث وتفاصيل الحساب؛ بقية الوجهات العليا والتكيف Medium/Expanded ما زالت عقد تصميم.
 
 ## المسار المنفذ
 
 - `HomeRoute`: جذر التطبيق وقائمة الحسابات.
 - `TodayRoute`: وجهة عليا تعرض العمل اليومي الحالي، وتنتقل إليها من التنقل السفلي.
+- `SearchRoute`: وجهة عليا تحتفظ بعبارة البحث ونتائجها Reactive وتنتقل إليها من التنقل السفلي.
 - `AccountDetailsRoute(debtId)`: يحمل Debt ID فقط، ثم يقرأ البيانات Reactive من Repository.
 - يملك `WaslApp` Back stack واحدًا عبر `rememberNavBackStack`، والمفاتيح `NavKey` قابلة للتسلسل.
 - يعيد Back من التفاصيل إلى القائمة الموجودة في المكدس؛ System back يمر عبر `NavDisplay`.
-- فتح التفاصيل من Today يعيد Back إلى Today، والعودة إلى الرئيسية تنظف ما فوق جذر Home دون تكرار وجهة عليا.
+- فتح التفاصيل من Today يعيد Back إلى Today، وفتحها من Search يعيد Back إلى البحث وعبارته نفسها، والعودة إلى الرئيسية تنظف ما فوق جذر Home دون تكرار وجهة عليا.
 - إشعار موعد الدين يرسل `debtId` فقط إلى MainActivity ذات `singleTop`، ويضيف AccountDetailsRoute بعد التحقق عبر Repository.
 
 ## الوجهات العليا
 
 - الرئيسية.
 - اليوم.
+- البحث.
 - الحسابات.
 - الأشخاص.
 - المستندات.
@@ -59,7 +61,7 @@
 - Person list → Person details → Debt details → Ledger entry details مستهدف عند بناء صفحات الأشخاص.
 - Today → Account details → تسجيل دفعة/إجراء منفذ للديون المستحقة والمتأخرة.
 - Documents → Document preview.
-- Search → نوع نتيجة → تفاصيل أصلية.
+- Search → نتيجة دين → تفاصيل الحساب منفذ؛ أنواع العمليات والمستندات تنتظر نماذجها ووجهاتها الأصلية.
 
 ## Deep links وNotifications
 

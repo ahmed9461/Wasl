@@ -22,7 +22,7 @@
 
 ## المرحلة الحالية
 
-MVP Phase 1 / Core debt-payment + due reminder + Today فوق Persistence موثوق.
+MVP Phase 1 / Core debt-payment + due reminder + Today + local search فوق Persistence موثوق.
 
 ما يعمل الآن:
 
@@ -47,12 +47,14 @@ MVP Phase 1 / Core debt-payment + due reminder + Today فوق Persistence موث
 - شاشة Today Reactive للديون النشطة غير المسددة المستحقة اليوم والمتأخرة، تفصل الحالتين وتحسب أيام التأخير من DueState وLocalDate الحاليين.
 - الرئيسية وToday وجهتان علويتان بتنقل سفلي، ومن Today تفتح تفاصيل الحساب حيث تسجل الدفعة عبر مسار التأكيد القائم.
 - معالجة BLOCKED_PERMISSION بطلب إذن الإشعارات أو إعدادات القناة، ومعالجة FAILED بإعادة Recovery تعيد الحالة إلى SCHEDULED قبل الجدولة.
+- وجهة بحث محلية Reactive في اسم الشخص ووصف الدين، تعرض كل دين كنتيجة مستقلة وتفتح تفاصيله بالـID.
+- حد بحث ظاهر قدره 50 نتيجة، مع تطبيع المسافات ومعاملة محارف SQL wildcard كنصوص حرفية.
 - CI للبناء والاختبارات وLint واختبارات الجهاز.
 
 ما لا يعمل بعد:
 
 - اختيار شخص موجود وإنشاء أكثر من دين له من الواجهة.
-- البحث المحلي.
+- البحث في العمليات والمستندات وأرقامها والتواريخ والمبالغ؛ التنفيذ الحالي يغطي الأشخاص والديون والوصف فقط.
 - أنواع التذكير المتقدمة والتكرار وAlarmManager القوي/الدقيق.
 - المستندات وPDF.
 - النسخ الاحتياطي والاستعادة.
@@ -80,7 +82,7 @@ MVP Phase 1 / Core debt-payment + due reminder + Today فوق Persistence موث
 
 ## البنية الحالية
 
-- app: Android entry point، Compose، Home/Today/Account details ViewModels، Navigation 3، Room، Repository واختبارات الجهاز.
+- app: Android entry point، Compose، Home/Today/Search/Account details ViewModels، Navigation 3، Room، Repository واختبارات الجهاز.
 - core:domain: Money، CurrencyCode، Debt aggregate، ledger، summary.
 - docs: عقود التصميم والهندسة.
 - .github/workflows/ci.yml: حاجز التحقق الآلي.

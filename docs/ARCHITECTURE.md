@@ -44,6 +44,8 @@ Notifications وAlarmManager وWorkManager وBiometrics وKeystore وFileProvide
 
 في Today يمر LocalDate الحالي إلى استعلام Room محدد يستخدم فهرس `lifecycle_state, due_date_epoch_day` ويعيد فقط ACTIVE غير المسدد المستحق حتى ذلك اليوم. يعيد Repository بناء DebtLedger للعناصر المرشحة، ثم يشتق ViewModel حالة DUE_TODAY/OVERDUE وعدد الأيام دون تخزين نص حالة في القاعدة.
 
+في Search تطبع `LocalSearchQuery` مدخل المستخدم وتحوّل محارف SQLite LIKE إلى قيم حرفية. ينفذ DAO استعلامًا محدودًا يصل debts بـpersons ويعيد 51 Aggregate فقط؛ يعرض ViewModel أول 50 ويستخدم العنصر الإضافي لإظهار وجود المزيد. تبقى العلاقات والLedger تحت Room Flow نفسها، لذلك ينعكس إنشاء دين أو تسجيل دفعة على النتائج الحالية دون نسخة بحث منفصلة أو مصدر رصيد جديد.
+
 ## تدفق الكتابة المالية
 
 مثال تسجيل دفعة:
@@ -88,7 +90,7 @@ Notifications وAlarmManager وWorkManager وBiometrics وKeystore وFileProvide
 ## بنية الحزم الحالية
 
 - `com.wasl.domain`: القواعد المالية وParsing الدقيق للإدخال.
-- `com.wasl.app`: Application entry وComposition root وHome/Today/Account details ViewModels وشاشات Compose وNavigation keys.
+- `com.wasl.app`: Application entry وComposition root وHome/Today/Search/Account details ViewModels وشاشات Compose وNavigation keys.
 - `com.wasl.app.data`: عقود Repository وRead/Command models.
 - `com.wasl.app.data.local`: Room database وRepository الذري وMappers الداخلية.
 - `com.wasl.app.data.local.entity`: persons وdebts وledger_entries وreminders وعلاقات القراءة.

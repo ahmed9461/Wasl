@@ -171,6 +171,16 @@ private class TodayFakeRepository(
         }
     }
 
+    override fun observeSearchAccounts(
+        query: String,
+        limit: Int,
+    ): Flow<List<AccountOverview>> = accounts.map { values ->
+        values.filter { account ->
+            account.person.displayName.contains(query, ignoreCase = true) ||
+                account.ledger.header.description?.contains(query, ignoreCase = true) == true
+        }.take(limit)
+    }
+
     override fun observeAccount(debtId: DebtId): Flow<AccountOverview?> =
         accounts.map { values -> values.firstOrNull { it.ledger.header.id == debtId } }
 

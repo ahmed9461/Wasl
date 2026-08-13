@@ -108,6 +108,9 @@ private data object HomeRoute : NavKey
 private data object TodayRoute : NavKey
 
 @Serializable
+private data object SearchRoute : NavKey
+
+@Serializable
 private data class AccountDetailsRoute(
     val debtId: String,
 ) : NavKey
@@ -198,6 +201,11 @@ fun WaslApp(
                                         backStack.add(TodayRoute)
                                     }
                                 },
+                                onOpenSearch = {
+                                    if (backStack.lastOrNull() != SearchRoute) {
+                                        backStack.add(SearchRoute)
+                                    }
+                                },
                                 onOpenCreate = homeViewModel::openCreateDialog,
                                 onOpenAccount = { debtId ->
                                     backStack.add(AccountDetailsRoute(debtId.value))
@@ -235,6 +243,11 @@ fun WaslApp(
                                 onOpenHome = {
                                     while (backStack.size > 1) backStack.removeLastOrNull()
                                 },
+                                onOpenSearch = {
+                                    if (backStack.lastOrNull() != SearchRoute) {
+                                        backStack.add(SearchRoute)
+                                    }
+                                },
                                 onOpenAccount = { debtId ->
                                     backStack.add(AccountDetailsRoute(debtId.value))
                                 },
@@ -243,6 +256,30 @@ fun WaslApp(
                                 onResolveNotificationPermission = ::requestNotificationAccess,
                                 onRetryReminders = todayViewModel::retryReminderRecovery,
                                 onNoticeShown = todayViewModel::clearNotice,
+                            )
+                        }
+                        entry<SearchRoute> {
+                            val searchViewModel: SearchViewModel = viewModel(
+                                key = "search:$instanceKey",
+                                factory = SearchViewModel.Factory(repository),
+                            )
+                            val state by searchViewModel.uiState.collectAsStateWithLifecycle()
+                            SearchScreen(
+                                state = state,
+                                onQueryChange = searchViewModel::updateQuery,
+                                onClearQuery = searchViewModel::clearQuery,
+                                onRetryLoad = searchViewModel::retryLoad,
+                                onOpenAccount = { debtId ->
+                                    backStack.add(AccountDetailsRoute(debtId.value))
+                                },
+                                onOpenHome = {
+                                    while (backStack.size > 1) backStack.removeLastOrNull()
+                                },
+                                onOpenToday = {
+                                    if (backStack.lastOrNull() != TodayRoute) {
+                                        backStack.add(TodayRoute)
+                                    }
+                                },
                             )
                         }
                         entry<AccountDetailsRoute> { route ->
@@ -282,6 +319,7 @@ private fun WaslHomeScreen(
     state: HomeUiState,
     onOpenHome: () -> Unit,
     onOpenToday: () -> Unit,
+    onOpenSearch: () -> Unit,
     onOpenCreate: () -> Unit,
     onOpenAccount: (com.wasl.domain.DebtId) -> Unit,
     onDismissCreate: () -> Unit,
@@ -311,6 +349,7 @@ private fun WaslHomeScreen(
                 selected = WaslTopLevelDestination.HOME,
                 onOpenHome = onOpenHome,
                 onOpenToday = onOpenToday,
+                onOpenSearch = onOpenSearch,
             )
         },
         floatingActionButton = {
@@ -817,6 +856,7 @@ private fun WaslHomeScreenPreview() {
                 state = HomeUiState(isLoading = false),
                 onOpenHome = {},
                 onOpenToday = {},
+                onOpenSearch = {},
                 onOpenCreate = {},
                 onOpenAccount = {},
                 onDismissCreate = {},

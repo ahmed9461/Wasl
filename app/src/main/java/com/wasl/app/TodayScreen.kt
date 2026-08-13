@@ -50,6 +50,7 @@ internal fun TodayScreen(
     state: TodayUiState,
     notificationsAvailable: Boolean,
     onOpenHome: () -> Unit,
+    onOpenSearch: () -> Unit,
     onOpenAccount: (com.wasl.domain.DebtId) -> Unit,
     onRefreshDate: () -> Unit,
     onRetryLoad: () -> Unit,
@@ -91,6 +92,7 @@ internal fun TodayScreen(
                 selected = WaslTopLevelDestination.TODAY,
                 onOpenHome = onOpenHome,
                 onOpenToday = {},
+                onOpenSearch = onOpenSearch,
             )
         },
     ) { scaffoldPadding ->

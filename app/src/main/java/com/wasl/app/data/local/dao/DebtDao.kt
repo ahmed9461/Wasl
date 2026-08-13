@@ -25,6 +25,19 @@ interface DebtDao {
     fun observeActiveAggregates(): Flow<List<DebtAggregate>>
 
     @Transaction
+    @Query(
+        """
+        SELECT * FROM debts
+        WHERE lifecycle_state = 'ACTIVE'
+          AND closed_at IS NULL
+          AND due_date_epoch_day IS NOT NULL
+          AND due_date_epoch_day <= :onOrBeforeEpochDay
+        ORDER BY due_date_epoch_day ASC, opened_at DESC, id DESC
+        """,
+    )
+    fun observeDueAggregates(onOrBeforeEpochDay: Long): Flow<List<DebtAggregate>>
+
+    @Transaction
     @Query("SELECT * FROM debts WHERE id = :id")
     fun observeAggregateById(id: String): Flow<DebtAggregate?>
 

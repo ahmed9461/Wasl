@@ -216,6 +216,14 @@ private class FakeWaslRepository(
 
     override fun observeAccounts(): Flow<List<AccountOverview>> = accounts
 
+    override fun observeDueAccounts(onOrBefore: LocalDate): Flow<List<AccountOverview>> =
+        accounts.map { values ->
+            values.filter { account ->
+                account.ledger.header.dueDate?.let { !it.isAfter(onOrBefore) } == true &&
+                    !account.ledger.balance.isZero
+            }
+        }
+
     override fun observeAccount(debtId: DebtId): Flow<AccountOverview?> =
         accounts.map { values ->
             values.firstOrNull { it.ledger.header.id == debtId }

@@ -49,6 +49,11 @@ class RoomWaslRepository(
             aggregates.map(::toAccountOverview)
         }
 
+    override fun observeDueAccounts(onOrBefore: LocalDate): Flow<List<AccountOverview>> =
+        debtDao.observeDueAggregates(onOrBefore.toEpochDay()).map { aggregates ->
+            aggregates.map(::toAccountOverview)
+        }
+
     override fun observeAccount(debtId: DebtId): Flow<AccountOverview?> =
         debtDao.observeAggregateById(debtId.value).map { aggregate ->
             aggregate?.let(::toAccountOverview)

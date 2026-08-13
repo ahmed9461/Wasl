@@ -36,6 +36,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.runner.RunWith
 
@@ -184,6 +185,43 @@ class RoomWaslRepositoryInstrumentedTest {
         assertEquals(ReminderStatus.SCHEDULED, rescheduled.status)
         assertNull(rescheduled.lastFailureCode)
         assertEquals(ZoneId.of("Europe/London"), rescheduled.zoneId)
+    }
+
+    @Test
+    fun dueAccountsQueryReturnsOnlyUnsettledTodayAndOverdueInDueDateOrder() = runTest {
+        repository.createPersonWithDebt(datedCommand("overdue", "2026-08-11", 0))
+        repository.createPersonWithDebt(datedCommand("today", "2026-08-14", 1))
+        repository.createPersonWithDebt(datedCommand("upcoming", "2026-08-15", 2))
+        repository.createPersonWithDebt(datedCommand("settled", "2026-08-10", 3))
+        repository.createPersonWithDebt(
+            datedCommand("without-date", null, 4),
+        )
+        repository.recordPayment(
+            RecordPaymentCommand(
+                commandId = "settle-command",
+                entryId = LedgerEntryId("settle-payment"),
+                debtId = DebtId("debt-settled"),
+                amount = Money(100_000L, CurrencyCode.YER),
+                paidAt = Instant.parse("2026-08-13T01:00:00Z"),
+                recordedAt = Instant.parse("2026-08-13T01:00:00Z"),
+            ),
+        )
+
+        val dueAccounts = repository
+            .observeDueAccounts(LocalDate.parse("2026-08-14"))
+            .first()
+
+        assertEquals(
+            listOf("debt-overdue", "debt-today"),
+            dueAccounts.map { it.ledger.header.id.value },
+        )
+        assertEquals(
+            listOf(
+                LocalDate.parse("2026-08-11"),
+                LocalDate.parse("2026-08-14"),
+            ),
+            dueAccounts.map { it.ledger.header.dueDate },
+        )
     }
 
     @Test
@@ -345,6 +383,24 @@ class RoomWaslRepositoryInstrumentedTest {
         createdAt = Instant.parse("2026-08-13T00:00:00Z"),
         description = "دين تجريبي",
     )
+
+    private fun datedCommand(
+        suffix: String,
+        dueDate: String?,
+        minute: Int,
+    ): CreatePersonWithDebtCommand {
+        val timestamp = Instant.parse(
+            "2026-08-13T00:${minute.toString().padStart(2, '0')}:00Z",
+        )
+        return baseCommand().copy(
+            personId = PersonId("person-$suffix"),
+            debtId = DebtId("debt-$suffix"),
+            personName = "شخص $suffix",
+            openedAt = timestamp,
+            createdAt = timestamp,
+            dueDate = dueDate?.let(LocalDate::parse),
+        )
+    }
 
     private fun paymentCommand(
         commandId: String,

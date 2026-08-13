@@ -2,8 +2,10 @@ package com.wasl.app
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -66,6 +70,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
@@ -83,8 +90,10 @@ import com.wasl.domain.Money
 import com.wasl.domain.MoneyInputParser
 import java.math.BigDecimal
 import java.text.NumberFormat
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -92,6 +101,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 private data object HomeRoute : NavKey
+
+@Serializable
+private data object TodayRoute : NavKey
 
 @Serializable
 private data class AccountDetailsRoute(
@@ -114,19 +126,45 @@ fun WaslApp(
     repository: WaslRepository,
     instanceKey: String = "production",
     reminderScheduler: ReminderScheduler = NoOpReminderScheduler,
+    todayClock: Clock = Clock.systemUTC(),
+    todayZoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
     requestedDebtId: String? = null,
     onRequestedDebtHandled: () -> Unit = {},
 ) {
     val backStack = rememberNavBackStack(HomeRoute)
     val context = LocalContext.current
-    var notificationPermissionGranted by remember {
-        mutableStateOf(hasNotificationPermission(context))
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var notificationsAvailable by remember {
+        mutableStateOf(canPostNotifications(context))
     }
+    var permissionRequestAttempted by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
-        notificationPermissionGranted = granted
-        if (granted) reminderScheduler.requestRecovery()
+        notificationsAvailable = canPostNotifications(context)
+        if (granted && notificationsAvailable) reminderScheduler.requestRecovery()
+    }
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                notificationsAvailable = canPostNotifications(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    fun requestNotificationAccess() {
+        when {
+            canPostNotifications(context) -> reminderScheduler.requestRecovery()
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                !hasNotificationRuntimePermission(context) &&
+                !permissionRequestAttempted -> {
+                permissionRequestAttempted = true
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+
+            else -> openNotificationSettings(context)
+        }
     }
     LaunchedEffect(requestedDebtId) {
         val debtId = requestedDebtId ?: return@LaunchedEffect
@@ -152,6 +190,12 @@ fun WaslApp(
                             val state by homeViewModel.uiState.collectAsStateWithLifecycle()
                             WaslHomeScreen(
                                 state = state,
+                                onOpenHome = {},
+                                onOpenToday = {
+                                    if (backStack.lastOrNull() != TodayRoute) {
+                                        backStack.add(TodayRoute)
+                                    }
+                                },
                                 onOpenCreate = homeViewModel::openCreateDialog,
                                 onOpenAccount = { debtId ->
                                     backStack.add(AccountDetailsRoute(debtId.value))
@@ -165,16 +209,38 @@ fun WaslApp(
                                 onDueDateChange = homeViewModel::updateDueDate,
                                 onReminderChange = { enabled ->
                                     homeViewModel.updateRemindOnDueDate(enabled)
-                                    if (enabled &&
-                                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                        !notificationPermissionGranted
-                                    ) {
-                                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                    }
+                                    if (enabled && !notificationsAvailable) requestNotificationAccess()
                                 },
-                                notificationPermissionGranted = notificationPermissionGranted,
+                                notificationPermissionGranted = notificationsAvailable,
                                 onSave = homeViewModel::createPersonWithDebt,
                                 onSuccessShown = homeViewModel::clearSuccessMessage,
+                            )
+                        }
+                        entry<TodayRoute> {
+                            val todayViewModel: TodayViewModel = viewModel(
+                                key = "today:$instanceKey",
+                                factory = TodayViewModel.Factory(
+                                    repository = repository,
+                                    reminderScheduler = reminderScheduler,
+                                    clock = todayClock,
+                                    zoneIdProvider = todayZoneIdProvider,
+                                ),
+                            )
+                            val state by todayViewModel.uiState.collectAsStateWithLifecycle()
+                            TodayScreen(
+                                state = state,
+                                notificationsAvailable = notificationsAvailable,
+                                onOpenHome = {
+                                    while (backStack.size > 1) backStack.removeLastOrNull()
+                                },
+                                onOpenAccount = { debtId ->
+                                    backStack.add(AccountDetailsRoute(debtId.value))
+                                },
+                                onRefreshDate = todayViewModel::refreshForCurrentDate,
+                                onRetryLoad = todayViewModel::retryLoad,
+                                onResolveNotificationPermission = ::requestNotificationAccess,
+                                onRetryReminders = todayViewModel::retryReminderRecovery,
+                                onNoticeShown = todayViewModel::clearNotice,
                             )
                         }
                         entry<AccountDetailsRoute> { route ->
@@ -212,6 +278,8 @@ fun WaslApp(
 @Composable
 private fun WaslHomeScreen(
     state: HomeUiState,
+    onOpenHome: () -> Unit,
+    onOpenToday: () -> Unit,
     onOpenCreate: () -> Unit,
     onOpenAccount: (com.wasl.domain.DebtId) -> Unit,
     onDismissCreate: () -> Unit,
@@ -236,6 +304,13 @@ private fun WaslHomeScreen(
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            WaslTopLevelNavigation(
+                selected = WaslTopLevelDestination.HOME,
+                onOpenHome = onOpenHome,
+                onOpenToday = onOpenToday,
+            )
+        },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onOpenCreate,
@@ -693,12 +768,24 @@ private fun summaryRows(values: Map<CurrencyCode, Money>): List<String> =
         formatMoney(values[currency] ?: Money.zero(currency))
     }
 
-private fun hasNotificationPermission(context: Context): Boolean =
+private fun hasNotificationRuntimePermission(context: Context): Boolean =
     Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
         ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.POST_NOTIFICATIONS,
         ) == PackageManager.PERMISSION_GRANTED
+
+private fun canPostNotifications(context: Context): Boolean =
+    hasNotificationRuntimePermission(context) &&
+        NotificationManagerCompat.from(context).areNotificationsEnabled()
+
+private fun openNotificationSettings(context: Context) {
+    context.startActivity(
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        },
+    )
+}
 
 internal fun formatMoney(money: Money): String {
     val fractionDigits = MoneyInputParser.fractionDigits(money.currency)
@@ -718,6 +805,8 @@ private fun WaslHomeScreenPreview() {
         WaslTheme {
             WaslHomeScreen(
                 state = HomeUiState(isLoading = false),
+                onOpenHome = {},
+                onOpenToday = {},
                 onOpenCreate = {},
                 onOpenAccount = {},
                 onDismissCreate = {},

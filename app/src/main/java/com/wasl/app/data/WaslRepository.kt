@@ -2,10 +2,13 @@ package com.wasl.app.data
 
 import com.wasl.domain.DebtId
 import com.wasl.domain.DebtLedger
+import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 
 interface WaslRepository {
     fun observeAccounts(): Flow<List<AccountOverview>>
+
+    fun observeDueAccounts(onOrBefore: LocalDate): Flow<List<AccountOverview>>
 
     fun observeAccount(debtId: DebtId): Flow<AccountOverview?>
 

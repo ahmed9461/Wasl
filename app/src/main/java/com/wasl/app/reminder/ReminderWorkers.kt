@@ -75,29 +75,28 @@ class ReminderRecoveryWorker(
         val currentZone = ZoneId.systemDefault()
         return try {
             application.reminderStore.getRecoverableReminders().forEach { stored ->
-                val reminder = if (stored.zoneId != currentZone) {
-                    val rebased = ReminderTime.rebaseToZone(
-                        triggerAt = stored.triggerAt,
-                        sourceZone = stored.zoneId,
-                        targetZone = currentZone,
-                        now = now,
-                    )
+                val plan = planReminderRecovery(
+                    stored = stored,
+                    currentZone = currentZone,
+                    now = now,
+                    canNotify = application.reminderNotificationPublisher.canNotify(),
+                )
+                if (!plan.shouldSchedule) return@forEach
+                if (plan.shouldPersistScheduledState) {
                     application.reminderStore.updateReminderSchedule(
                         reminderId = stored.id,
-                        triggerAt = rebased,
-                        zoneId = currentZone,
+                        triggerAt = plan.triggerAt,
+                        zoneId = plan.zoneId,
                         updatedAt = now,
                     )
-                    stored.copy(
-                        triggerAt = rebased,
-                        zoneId = currentZone,
-                        status = ReminderStatus.SCHEDULED,
-                        lastFailureCode = null,
-                        updatedAt = now,
-                    )
-                } else {
-                    stored
                 }
+                val reminder = stored.copy(
+                    triggerAt = plan.triggerAt,
+                    zoneId = plan.zoneId,
+                    status = ReminderStatus.SCHEDULED,
+                    lastFailureCode = null,
+                    updatedAt = if (plan.shouldPersistScheduledState) now else stored.updatedAt,
+                )
                 application.reminderScheduler.schedule(reminder)
             }
             Result.success()

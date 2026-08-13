@@ -18,6 +18,7 @@ import com.wasl.domain.Money
 import com.wasl.domain.PersonId
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -228,6 +229,17 @@ private class PaymentFakeRepository(
         get() = accountState.value
 
     override fun observeAccounts(): Flow<List<AccountOverview>> = accountState.map { listOf(it) }
+
+    override fun observeDueAccounts(onOrBefore: LocalDate): Flow<List<AccountOverview>> =
+        accountState.map { account ->
+            listOfNotNull(
+                account.takeIf {
+                    it.ledger.header.dueDate?.let { dueDate ->
+                        !dueDate.isAfter(onOrBefore)
+                    } == true && !it.ledger.balance.isZero
+                },
+            )
+        }
 
     override fun observeAccount(debtId: DebtId): Flow<AccountOverview?> = accountState.map {
         it.takeIf { account -> account.ledger.header.id == debtId }

@@ -75,11 +75,11 @@
 
 ## آخر تحقق
 
-- نجح `core:domain`: 19/19 اختبارًا، ونجح `app` unit: 30/30 اختبارًا، ومنها 7 اختبارات جديدة لمعيار البحث وحالته وحده وRetry وتحديثه Reactive.
-- نجحت [بوابة الرأس الحالي في PR #1](https://github.com/ahmed9461/Wasl/pull/1/checks): اختبارات الوحدة وLint وDebug APK وحاجز تطابق Room Schema، ثم 23/23 اختبار Android على Emulator API 35.
-- تشمل اختبارات Android الجديدة مطابقة الاسم والوصف وحماية wildcard والحد، وتحديث Flow بعد إنشاء دين ودفعة، وفتح النتيجة والرجوع إلى عبارة البحث؛ وتبقى اختبارات Today وMigration والذرية وIdempotency وUnique Work والإشعار ورحلة الدفع خضراء.
-- تحفظ كل دورة خضراء `Wasl-debug` و`Wasl-room-schema` وتقارير `Wasl-room-instrumentation-results` تحت صفحة Checks نفسها، مع SHA-256 صادر من GitHub Artifacts.
-- اختبارات شريحة الشخص الموجود مكتوبة، لكن لم تشغل محليًا لأن Gradle wrapper لا يستطيع إنشاء lock تحت `/root/.gradle` في بيئة العمل؛ يجب اعتماد أول دورة GitHub Actions لهذه الشريحة قبل اعتبار تحققها مكتملًا.
+- نجح `core:domain`: 19/19 اختبارًا، ونجح `app` unit: 33/33 اختبارًا، ومنها اختيار Person ID وحد 20 نتيجة وإنشاء دين مستقل للشخص الموجود.
+- نجحت [GitHub Actions run #52](https://github.com/ahmed9461/Wasl/actions/runs/31743166245) على الرأس `3e98417`: اختبارات الوحدة وLint وDebug APK وحاجز تطابق Room Schema، ثم 27/27 اختبار Android على Emulator API 35.
+- تشمل اختبارات Android الجديدة تعدد الديون مع Person واحد، Idempotency ورفض الشخص المفقود وPayload المتعارض، استعلام الأشخاص المحدود والـwildcards، ورحلة Compose من الدين الأول إلى اختيار الشخص نفسه وظهور الدينين في البحث.
+- مخرجات الدورة: `Wasl-debug` SHA-256 `ff364b710da02844f62a5f1065d767b17f840691bbbc3ffde8be5d1c8685a0cf`، و`Wasl-room-schema` SHA-256 `f02ff5551af04e202f28eb5920b70a08109c4a860869cec5a42769ea2b0d1842`، وتقارير الجهاز SHA-256 `913c88cadeccab318bee1c5ca146a02a9256c179e73967fdd7d81086c211b543`.
+- تعذر تشغيل Gradle محليًا لأن wrapper لا يستطيع إنشاء lock تحت `/root/.gradle` في بيئة العمل؛ عوضت بوابة GitHub Actions ذلك ببناء واختبارات فعلية كاملة على بيئة نظيفة.
 
 ## غير منفذ
 

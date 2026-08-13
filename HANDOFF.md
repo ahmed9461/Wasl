@@ -49,7 +49,8 @@
 - نجح محليًا: domain tests، app unit tests، Lint، Debug APK، وAndroidTest APK باستخدام JDK 17 وSDK 36.
 - Debug APK المحلي: 12,101,400 بايت، SHA-256: `241cd2364fa0f9b0822859909d25523d0d7d324347d06a722f4572f2fd82403e`.
 - AndroidTest APK المحلي: 1,352,652 بايت، SHA-256: `ccd625f3da8638ef0877fce76e5adbead2c23829ff636e88a5bf7f9ec59117c2`.
-- التحقق البعيد للشريحة الجديدة سيضاف هنا بعد اكتمال GitHub Actions على Head المنشور.
+- نجح [GitHub Actions run #17](https://github.com/ahmed9461/Wasl/actions/runs/31672654877) كاملًا على commit `7fdbb0b`: Job البناء والاختبارات الوحدوية وLint وDebug APK، ثم 10/10 اختبارات Android على Emulator API 35، ومنها رحلة إنشاء الدين والدفع الجزئي وإعادة فتح Room.
+- حُفظت الأدلة في Artifact [Wasl-room-instrumentation-results](https://github.com/ahmed9461/Wasl/actions/runs/31672654877/artifacts/9170593243) ببصمة SHA-256: `ea697899f226dcb45bd29e6ca6a45a9fad368e716b5bf1e7b00e6a94e83c7b3e`، وArtifact [Wasl-debug](https://github.com/ahmed9461/Wasl/actions/runs/31672654877/artifacts/9170409587) ببصمة SHA-256: `b8bd76e4d0ddf9e77e8737cc621bff5d0d6b654111481e9cd98bd02199ab70c2`.
 
 ## غير منفذ
 

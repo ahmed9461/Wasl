@@ -54,14 +54,11 @@
 
 ## آخر تحقق
 
-- نجحت اختبارات core:domain محليًا: 19/19 بلا فشل.
-- نجحت اختبارات ViewModel محليًا: 8/8 بلا فشل، منها 5 لمسار التفاصيل ونتائج Commit غير المؤكدة.
-- يوجد 10 اختبارات Android: 9 لـRoom وMigration baseline واختبار UI للدفعة وإعادة الفتح؛ جرى تجميع AndroidTest APK محليًا وسيشغّلها CI على Emulator API 35.
-- نجح محليًا: domain tests، app unit tests، Lint، Debug APK، وAndroidTest APK باستخدام JDK 17 وSDK 36.
-- Debug APK المحلي: 12,101,400 بايت، SHA-256: `241cd2364fa0f9b0822859909d25523d0d7d324347d06a722f4572f2fd82403e`.
-- AndroidTest APK المحلي: 1,352,652 بايت، SHA-256: `ccd625f3da8638ef0877fce76e5adbead2c23829ff636e88a5bf7f9ec59117c2`.
-- نجح [GitHub Actions run #17](https://github.com/ahmed9461/Wasl/actions/runs/31672654877) كاملًا على commit `7fdbb0b`: Job البناء والاختبارات الوحدوية وLint وDebug APK، ثم 10/10 اختبارات Android على Emulator API 35، ومنها رحلة إنشاء الدين والدفع الجزئي وإعادة فتح Room.
-- حُفظت الأدلة في Artifact [Wasl-room-instrumentation-results](https://github.com/ahmed9461/Wasl/actions/runs/31672654877/artifacts/9170593243) ببصمة SHA-256: `ea697899f226dcb45bd29e6ca6a45a9fad368e716b5bf1e7b00e6a94e83c7b3e`، وArtifact [Wasl-debug](https://github.com/ahmed9461/Wasl/actions/runs/31672654877/artifacts/9170409587) ببصمة SHA-256: `b8bd76e4d0ddf9e77e8737cc621bff5d0d6b654111481e9cd98bd02199ab70c2`.
+- نجح `core:domain`: 19/19 اختبارًا، ونجح `app` unit: 15/15 اختبارًا (Home: 6، تفاصيل الحساب: 5، حساب وقت التذكير: 4).
+- نجح [GitHub Actions run #23](https://github.com/ahmed9461/Wasl/actions/runs/31713668986) كاملًا على commit `1df2845`: اختبارات الوحدة وLint وDebug APK وحاجز تطابق Room Schema، ثم 16/16 اختبار Android على Emulator API 35.
+- تشمل اختبارات Android: Migration v1→v2 مع حفظ Ledger القديم، ذرية الدين والتذكير، Idempotency وإعادة الفتح، استرداد حالات التذكير، Unique Work، نشر إشعار فعلي، وفتح تفاصيل الدين من UI/deep link.
+- حُفظت تقارير المحاكي في Artifact [Wasl-room-instrumentation-results](https://github.com/ahmed9461/Wasl/actions/runs/31713668986/artifacts/9186856018) ببصمة SHA-256: `061447333172da054c00d065f8385b29a0f603bd26fddff0edd5d21e2b3e1856`.
+- حُفظ [Wasl-debug](https://github.com/ahmed9461/Wasl/actions/runs/31713668986/artifacts/9186535911) ببصمة SHA-256: `e9601ffca38b9ef371f00a81fda161cb2c6202537defb2b49875434fd5853d92`، و[Wasl-room-schema](https://github.com/ahmed9461/Wasl/actions/runs/31713668986/artifacts/9186536343) ببصمة SHA-256: `1833a94a2061f48eded7005080c4424eec143c3d2fd1f29e6a77a83ac4195a6b`.
 
 ## غير منفذ
 

@@ -6,10 +6,12 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import com.wasl.app.data.local.dao.DebtDao
+import com.wasl.app.data.local.dao.AuditEventDao
 import com.wasl.app.data.local.dao.LedgerDao
 import com.wasl.app.data.local.dao.PersonDao
 import com.wasl.app.data.local.dao.ReminderDao
 import com.wasl.app.data.local.entity.DebtEntity
+import com.wasl.app.data.local.entity.AuditEventEntity
 import com.wasl.app.data.local.entity.LedgerEntryEntity
 import com.wasl.app.data.local.entity.PersonEntity
 import com.wasl.app.data.local.entity.ReminderEntity
@@ -20,8 +22,9 @@ import com.wasl.app.data.local.entity.ReminderEntity
         DebtEntity::class,
         LedgerEntryEntity::class,
         ReminderEntity::class,
+        AuditEventEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class WaslDatabase : RoomDatabase() {
@@ -32,6 +35,8 @@ abstract class WaslDatabase : RoomDatabase() {
     abstract fun ledgerDao(): LedgerDao
 
     abstract fun reminderDao(): ReminderDao
+
+    abstract fun auditEventDao(): AuditEventDao
 
     companion object {
         const val DATABASE_NAME = "wasl.db"
@@ -74,7 +79,35 @@ abstract class WaslDatabase : RoomDatabase() {
             }
         }
 
-        val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `audit_events` (
+                        `id` TEXT NOT NULL,
+                        `command_id` TEXT NOT NULL,
+                        `aggregate_type` TEXT NOT NULL,
+                        `aggregate_id` TEXT NOT NULL,
+                        `event_type` TEXT NOT NULL,
+                        `occurred_at` INTEGER NOT NULL,
+                        `actor` TEXT NOT NULL,
+                        `before_snapshot` TEXT,
+                        `after_snapshot` TEXT,
+                        `reason` TEXT,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_audit_events_command_id` ON `audit_events` (`command_id`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_audit_events_aggregate_id_aggregate_type_occurred_at` ON `audit_events` (`aggregate_id`, `aggregate_type`, `occurred_at`)",
+                )
+            }
+        }
+
+        val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
 
         fun create(context: Context): WaslDatabase =
             Room.databaseBuilder(

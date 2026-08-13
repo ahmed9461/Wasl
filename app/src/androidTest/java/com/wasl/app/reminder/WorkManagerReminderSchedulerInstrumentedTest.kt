@@ -15,6 +15,9 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
@@ -59,5 +62,39 @@ class WorkManagerReminderSchedulerInstrumentedTest {
                 info.state == WorkInfo.State.RUNNING
         }
         assertEquals(1, active.size)
+    }
+
+    @Test
+    fun cancellingReminderLeavesNoActiveDelivery() = runBlocking {
+        val now = Instant.parse("2026-08-13T00:00:00Z")
+        val scheduler = WorkManagerReminderScheduler(
+            context = context,
+            clock = Clock.fixed(now, ZoneOffset.UTC),
+        )
+        val reminder = ReminderRecord(
+            id = reminderId,
+            debtId = DebtId("debt-test"),
+            triggerAt = now.plusSeconds(3_600),
+            zoneId = ZoneOffset.UTC,
+            status = ReminderStatus.SCHEDULED,
+            createdAt = now,
+            updatedAt = now,
+        )
+
+        scheduler.schedule(reminder)
+        scheduler.cancel(reminderId)
+
+        val work = withTimeout(10_000) {
+            workManager.getWorkInfosForUniqueWorkFlow(
+                WorkManagerReminderScheduler.deliveryWorkName(reminderId),
+            ).first { infos ->
+                infos.isNotEmpty() && infos.none { info ->
+                    info.state == WorkInfo.State.ENQUEUED ||
+                        info.state == WorkInfo.State.BLOCKED ||
+                        info.state == WorkInfo.State.RUNNING
+                }
+            }
+        }
+        assertEquals(0, work.count { it.state == WorkInfo.State.ENQUEUED })
     }
 }

@@ -7,6 +7,8 @@ import com.wasl.app.data.CreateDebtForExistingPersonCommand
 import com.wasl.app.data.CreatePersonWithDebtCommand
 import com.wasl.app.data.DebtLifecycleState
 import com.wasl.app.data.DueReminderRequest
+import com.wasl.app.data.DueScheduleAuditEvent
+import com.wasl.app.data.DueScheduleSnapshot
 import com.wasl.app.data.LocalSearchQuery
 import com.wasl.app.data.PersonRecord
 import com.wasl.app.data.RecordNotFoundException
@@ -15,8 +17,10 @@ import com.wasl.app.data.ReminderRecord
 import com.wasl.app.data.ReminderStatus
 import com.wasl.app.data.ReminderStore
 import com.wasl.app.data.ReversePaymentCommand
+import com.wasl.app.data.UpdateDueScheduleCommand
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.data.local.entity.DebtAggregate
+import com.wasl.app.data.local.entity.AuditEventEntity
 import com.wasl.app.data.local.entity.DebtEntity
 import com.wasl.app.data.local.entity.LedgerEntryEntity
 import com.wasl.app.data.local.entity.PersonEntity
@@ -47,6 +51,7 @@ class RoomWaslRepository(
     private val debtDao = database.debtDao()
     private val ledgerDao = database.ledgerDao()
     private val reminderDao = database.reminderDao()
+    private val auditEventDao = database.auditEventDao()
 
     override fun observeAccounts(): Flow<List<AccountOverview>> =
         debtDao.observeActiveAggregates().map { aggregates ->
@@ -292,6 +297,105 @@ class RoomWaslRepository(
             requireAccount(command.debtId).ledger
         }
 
+    override suspend fun updateDueSchedule(
+        command: UpdateDueScheduleCommand,
+    ): AccountOverview = database.withTransaction {
+        auditEventDao.findByCommandId(command.commandId)?.let { persisted ->
+            validateDueScheduleReplay(command, persisted)
+            return@withTransaction requireAccount(command.debtId)
+        }
+
+        val aggregate = debtDao.findAggregateById(command.debtId.value)
+            ?: throw RecordNotFoundException("Debt ${command.debtId.value} was not found.")
+        val current = toAccountOverview(aggregate)
+        require(current.lifecycleState == DebtLifecycleState.ACTIVE) {
+            "Only an active debt can change its due schedule."
+        }
+        require(!current.ledger.balance.isZero) {
+            "A settled debt cannot receive a new due schedule."
+        }
+        require(!command.updatedAt.isBefore(current.ledger.header.openedAt)) {
+            "Schedule update cannot predate the debt."
+        }
+
+        val existingReminder = reminderDao.findDueDateForDebt(command.debtId.value)
+        val before = DueScheduleSnapshot(
+            dueDate = current.ledger.header.dueDate,
+            dueReminder = existingReminder?.activeRequestOrNull(),
+        )
+        val after = DueScheduleSnapshot(
+            dueDate = command.dueDate,
+            dueReminder = command.dueReminder,
+        )
+        require(before != after) { "Due schedule is unchanged." }
+
+        val requestedReminder = command.dueReminder
+        if (existingReminder != null && requestedReminder != null) {
+            require(existingReminder.id == requestedReminder.id) {
+                "An existing due reminder must keep its stable ID."
+            }
+        }
+
+        check(
+            debtDao.updateDueDate(
+                id = command.debtId.value,
+                dueDateEpochDay = command.dueDate?.toEpochDay(),
+                updatedAt = command.updatedAt.toEpochMilli(),
+            ) == 1,
+        ) { "Debt due date was not updated." }
+
+        when {
+            requestedReminder == null && existingReminder != null -> {
+                check(
+                    reminderDao.updateStatus(
+                        id = existingReminder.id,
+                        status = ReminderStatus.CANCELLED.name,
+                        failureCode = null,
+                        deliveredAt = null,
+                        updatedAt = command.updatedAt.toEpochMilli(),
+                    ) == 1,
+                ) { "Due reminder was not cancelled." }
+            }
+
+            requestedReminder != null && existingReminder == null -> {
+                reminderDao.insert(
+                    requestedReminder.toEntity(
+                        debtId = command.debtId,
+                        createdAt = command.updatedAt,
+                    ),
+                )
+            }
+
+            requestedReminder != null && existingReminder != null -> {
+                check(
+                    reminderDao.updateSchedule(
+                        id = existingReminder.id,
+                        triggerAt = requestedReminder.triggerAt.toEpochMilli(),
+                        zoneId = requestedReminder.zoneId.id,
+                        updatedAt = command.updatedAt.toEpochMilli(),
+                    ) == 1,
+                ) { "Due reminder was not rescheduled." }
+            }
+        }
+
+        auditEventDao.insert(
+            AuditEventEntity(
+                id = command.auditEventId,
+                commandId = command.commandId,
+                aggregateType = AuditAggregateType.DEBT.name,
+                aggregateId = command.debtId.value,
+                eventType = AuditEventType.DUE_SCHEDULE_CHANGED.name,
+                occurredAt = command.updatedAt.toEpochMilli(),
+                actor = AuditActor.LOCAL_USER.name,
+                beforeSnapshot = DueScheduleAuditCodec.encode(before),
+                afterSnapshot = DueScheduleAuditCodec.encode(after),
+                reason = null,
+            ),
+        )
+
+        requireAccount(command.debtId)
+    }
+
     private suspend fun requireAccount(debtId: DebtId): AccountOverview =
         debtDao.findAggregateById(debtId.value)
             ?.let(::toAccountOverview)
@@ -441,6 +545,24 @@ class RoomWaslRepository(
         if (!matches) throw CommandConflictException("Command ID was reused with different data.")
     }
 
+    private fun validateDueScheduleReplay(
+        command: UpdateDueScheduleCommand,
+        persisted: AuditEventEntity,
+    ) {
+        val afterSnapshot = persisted.afterSnapshot?.let(DueScheduleAuditCodec::decode)
+        val matches = persisted.id == command.auditEventId &&
+            persisted.aggregateType == AuditAggregateType.DEBT.name &&
+            persisted.aggregateId == command.debtId.value &&
+            persisted.eventType == AuditEventType.DUE_SCHEDULE_CHANGED.name &&
+            persisted.occurredAt == command.updatedAt.toEpochMilli() &&
+            persisted.actor == AuditActor.LOCAL_USER.name &&
+            persisted.reason == null &&
+            afterSnapshot == DueScheduleSnapshot(command.dueDate, command.dueReminder)
+        if (!matches) {
+            throw CommandConflictException("Command ID was reused with different schedule data.")
+        }
+    }
+
     private fun toAccountOverview(aggregate: DebtAggregate): AccountOverview {
         val debt = aggregate.debt
         check(aggregate.person.id == debt.personId) { "Debt person relation is corrupt." }
@@ -486,6 +608,32 @@ class RoomWaslRepository(
             notes = debt.notes,
             closedAt = debt.closedAt?.let(Instant::ofEpochMilli),
             dueReminder = dueReminders.singleOrNull()?.toRecord(),
+            dueScheduleAuditEvents = aggregate.auditEvents
+                .map(::toDueScheduleAuditEvent)
+                .sortedWith(
+                    compareBy<DueScheduleAuditEvent> { it.occurredAt }.thenBy { it.id },
+                ),
+        )
+    }
+
+    private fun toDueScheduleAuditEvent(entity: AuditEventEntity): DueScheduleAuditEvent {
+        check(entity.aggregateType == AuditAggregateType.DEBT.name) {
+            "Unsupported audit aggregate type: ${entity.aggregateType}"
+        }
+        check(entity.eventType == AuditEventType.DUE_SCHEDULE_CHANGED.name) {
+            "Unsupported audit event type: ${entity.eventType}"
+        }
+        check(entity.actor == AuditActor.LOCAL_USER.name) {
+            "Unsupported audit actor: ${entity.actor}"
+        }
+        check(entity.reason == null) { "Due schedule event contains an unexpected reason." }
+        return DueScheduleAuditEvent(
+            id = entity.id,
+            commandId = entity.commandId,
+            debtId = DebtId(entity.aggregateId),
+            occurredAt = Instant.ofEpochMilli(entity.occurredAt),
+            before = DueScheduleAuditCodec.decode(requireNotNull(entity.beforeSnapshot)),
+            after = DueScheduleAuditCodec.decode(requireNotNull(entity.afterSnapshot)),
         )
     }
 
@@ -529,6 +677,37 @@ class RoomWaslRepository(
             updatedAt = Instant.ofEpochMilli(updatedAt),
         )
     }
+
+    private fun ReminderEntity.activeRequestOrNull(): DueReminderRequest? =
+        if (status == ReminderStatus.CANCELLED.name) {
+            null
+        } else {
+            DueReminderRequest(
+                id = id,
+                triggerAt = Instant.ofEpochMilli(triggerAt),
+                zoneId = ZoneId.of(zoneId),
+            )
+        }
+
+    private fun DueReminderRequest.toEntity(
+        debtId: DebtId,
+        createdAt: Instant,
+    ): ReminderEntity = ReminderEntity(
+        id = id,
+        subjectType = ReminderSubjectType.DEBT.name,
+        subjectId = debtId.value,
+        reminderType = ReminderType.DUE_DATE.name,
+        scheduleType = ReminderScheduleType.WORK.name,
+        triggerAt = triggerAt.toEpochMilli(),
+        zoneId = zoneId.id,
+        repeatRule = null,
+        status = ReminderStatus.SCHEDULED.name,
+        platformRequestCode = null,
+        lastFailureCode = null,
+        deliveredAt = null,
+        createdAt = createdAt.toEpochMilli(),
+        updatedAt = createdAt.toEpochMilli(),
+    )
 
     private fun toDomainEntry(entity: LedgerEntryEntity): LedgerEntry =
         when (LedgerKind.valueOf(entity.kind)) {
@@ -625,6 +804,12 @@ class RoomWaslRepository(
     private enum class ReminderType { DUE_DATE }
 
     private enum class ReminderScheduleType { WORK }
+
+    private enum class AuditAggregateType { DEBT }
+
+    private enum class AuditEventType { DUE_SCHEDULE_CHANGED }
+
+    private enum class AuditActor { LOCAL_USER }
 
     private companion object {
         const val FAILURE_NOTIFICATIONS_DISABLED = "NOTIFICATIONS_DISABLED"

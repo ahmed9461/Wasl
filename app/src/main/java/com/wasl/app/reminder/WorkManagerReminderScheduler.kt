@@ -37,6 +37,10 @@ class WorkManagerReminderScheduler(
         )
     }
 
+    override fun cancel(reminderId: String) {
+        workManager.cancelUniqueWork(deliveryWorkName(reminderId))
+    }
+
     override fun requestRecovery() {
         val work = OneTimeWorkRequestBuilder<ReminderRecoveryWorker>()
             .addTag(RECOVERY_TAG)

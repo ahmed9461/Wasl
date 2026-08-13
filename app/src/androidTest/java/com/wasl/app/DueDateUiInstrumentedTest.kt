@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -23,6 +26,8 @@ import java.util.UUID
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.runner.RunWith
@@ -87,10 +92,47 @@ class DueDateUiInstrumentedTest {
         composeRule.onNodeWithText("مجدول").assertIsDisplayed()
     }
 
+    @Test
+    fun removingDueDateCancelsReminderAndShowsAuditInTimeline() {
+        composeRule.setContent {
+            WaslApp(
+                repository = repository,
+                instanceKey = "due-date-edit-ui-test",
+                requestedDebtId = "debt-due",
+            )
+        }
+
+        waitForTag("edit-due-schedule")
+        composeRule.onNodeWithTag("edit-due-schedule").performClick()
+        waitForTag("remove-due-date")
+        composeRule.onNodeWithTag("remove-due-date").performClick()
+        composeRule.onNodeWithTag("save-due-schedule").performClick()
+
+        waitForText("تم إلغاء تاريخ الاستحقاق")
+        composeRule.onNodeWithText("تم إلغاء تاريخ الاستحقاق")
+            .performScrollTo()
+            .assertIsDisplayed()
+        runBlocking {
+            val account = requireNotNull(repository.getAccount(DebtId("debt-due")))
+            assertNull(account.ledger.header.dueDate)
+            assertEquals(com.wasl.app.data.ReminderStatus.CANCELLED, account.dueReminder?.status)
+            assertEquals(1, account.dueScheduleAuditEvents.size)
+        }
+    }
+
     private fun waitForText(text: String) {
         composeRule.waitUntil(timeoutMillis = 10_000) {
             runCatching {
                 composeRule.onNodeWithText(text).fetchSemanticsNode()
+            }.isSuccess
+        }
+    }
+
+
+    private fun waitForTag(tag: String) {
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            runCatching {
+                composeRule.onNodeWithTag(tag).fetchSemanticsNode()
             }.isSuccess
         }
     }

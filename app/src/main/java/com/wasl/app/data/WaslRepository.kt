@@ -27,4 +27,6 @@ interface WaslRepository {
     suspend fun recordPayment(command: RecordPaymentCommand): DebtLedger
 
     suspend fun reversePayment(command: ReversePaymentCommand): DebtLedger
+
+    suspend fun updateDueSchedule(command: UpdateDueScheduleCommand): AccountOverview
 }

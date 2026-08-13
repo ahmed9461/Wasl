@@ -13,6 +13,8 @@ import com.wasl.app.data.RecordNotFoundException
 import com.wasl.app.data.ReminderStatus
 import com.wasl.app.data.RecordPaymentCommand
 import com.wasl.app.data.ReversePaymentCommand
+import com.wasl.app.data.UpdateDueScheduleCommand
+import com.wasl.app.data.local.entity.AuditEventEntity
 import com.wasl.app.data.local.entity.DebtEntity
 import com.wasl.app.data.local.entity.ReminderEntity
 import com.wasl.domain.CurrencyCode
@@ -196,6 +198,109 @@ class RoomWaslRepositoryInstrumentedTest {
         assertEquals(ZoneId.of("Asia/Riyadh"), restored.dueReminder?.zoneId)
         assertEquals(ReminderStatus.SCHEDULED, restored.dueReminder?.status)
         assertEquals(1, database!!.reminderDao().count())
+    }
+
+    @Test
+    fun dueScheduleCanBeRescheduledThenCancelledWithIdempotentAudit() = runTest {
+        repository.createPersonWithDebt(
+            baseCommand().copy(
+                dueDate = LocalDate.parse("2026-08-14"),
+                dueReminder = DueReminderRequest(
+                    id = "stable-due-reminder",
+                    triggerAt = Instant.parse("2026-08-14T06:00:00Z"),
+                    zoneId = ZoneId.of("Asia/Riyadh"),
+                ),
+            ),
+        )
+        val reschedule = UpdateDueScheduleCommand(
+            commandId = "reschedule-command",
+            auditEventId = "reschedule-audit",
+            debtId = DebtId("debt-1"),
+            dueDate = LocalDate.parse("2026-08-20"),
+            dueReminder = DueReminderRequest(
+                id = "stable-due-reminder",
+                triggerAt = Instant.parse("2026-08-20T06:00:00Z"),
+                zoneId = ZoneId.of("Asia/Riyadh"),
+            ),
+            updatedAt = Instant.parse("2026-08-13T00:05:00Z"),
+        )
+
+        repository.updateDueSchedule(reschedule)
+        repository.updateDueSchedule(reschedule)
+
+        val updated = assertNotNull(repository.getAccount(DebtId("debt-1")))
+        assertEquals(LocalDate.parse("2026-08-20"), updated.ledger.header.dueDate)
+        assertEquals("stable-due-reminder", updated.dueReminder?.id)
+        assertEquals(Instant.parse("2026-08-20T06:00:00Z"), updated.dueReminder?.triggerAt)
+        assertEquals(ReminderStatus.SCHEDULED, updated.dueReminder?.status)
+        assertEquals(1, updated.dueScheduleAuditEvents.size)
+        assertEquals(LocalDate.parse("2026-08-14"), updated.dueScheduleAuditEvents.single().before.dueDate)
+        assertEquals(LocalDate.parse("2026-08-20"), updated.dueScheduleAuditEvents.single().after.dueDate)
+        assertEquals(1, database!!.auditEventDao().count())
+
+        val cancel = UpdateDueScheduleCommand(
+            commandId = "cancel-schedule-command",
+            auditEventId = "cancel-schedule-audit",
+            debtId = DebtId("debt-1"),
+            dueDate = null,
+            dueReminder = null,
+            updatedAt = Instant.parse("2026-08-13T00:06:00Z"),
+        )
+        repository.updateDueSchedule(cancel)
+        repository.updateDueSchedule(cancel)
+        reopenDatabase()
+
+        val cancelled = assertNotNull(repository.getAccount(DebtId("debt-1")))
+        assertNull(cancelled.ledger.header.dueDate)
+        assertEquals(ReminderStatus.CANCELLED, cancelled.dueReminder?.status)
+        assertEquals(2, cancelled.dueScheduleAuditEvents.size)
+        assertEquals(Money(100_000L, CurrencyCode.YER), cancelled.ledger.header.originalAmount)
+        assertEquals(Money(100_000L, CurrencyCode.YER), cancelled.ledger.balance)
+        assertEquals(0, cancelled.ledger.entries.size)
+        assertEquals(2, database!!.auditEventDao().count())
+    }
+
+    @Test
+    fun auditInsertFailureRollsBackDueDateAndReminderChange() = runTest {
+        repository.createPersonWithDebt(
+            baseCommand().copy(dueDate = LocalDate.parse("2026-08-14")),
+        )
+        database!!.auditEventDao().insert(
+            AuditEventEntity(
+                id = "taken-audit-id",
+                commandId = "unrelated-command",
+                aggregateType = "DEBT",
+                aggregateId = "unrelated-debt",
+                eventType = "DUE_SCHEDULE_CHANGED",
+                occurredAt = 1L,
+                actor = "LOCAL_USER",
+                beforeSnapshot = null,
+                afterSnapshot = null,
+                reason = null,
+            ),
+        )
+
+        assertFailsWith<SQLiteConstraintException> {
+            repository.updateDueSchedule(
+                UpdateDueScheduleCommand(
+                    commandId = "rollback-command",
+                    auditEventId = "taken-audit-id",
+                    debtId = DebtId("debt-1"),
+                    dueDate = LocalDate.parse("2026-08-20"),
+                    dueReminder = DueReminderRequest(
+                        id = "rollback-reminder",
+                        triggerAt = Instant.parse("2026-08-20T06:00:00Z"),
+                        zoneId = ZoneId.of("Asia/Riyadh"),
+                    ),
+                    updatedAt = Instant.parse("2026-08-13T00:05:00Z"),
+                ),
+            )
+        }
+
+        val unchanged = assertNotNull(repository.getAccount(DebtId("debt-1")))
+        assertEquals(LocalDate.parse("2026-08-14"), unchanged.ledger.header.dueDate)
+        assertNull(unchanged.dueReminder)
+        assertEquals(1, database!!.auditEventDao().count())
     }
 
     @Test

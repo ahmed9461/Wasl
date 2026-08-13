@@ -292,7 +292,11 @@ fun WaslApp(
                             val debtId = com.wasl.domain.DebtId(route.debtId)
                             val detailsViewModel: AccountDetailsViewModel = viewModel(
                                 key = "account:$instanceKey:${route.debtId}",
-                                factory = AccountDetailsViewModel.Factory(repository, debtId),
+                                factory = AccountDetailsViewModel.Factory(
+                                    repository = repository,
+                                    debtId = debtId,
+                                    reminderScheduler = reminderScheduler,
+                                ),
                             )
                             val state by detailsViewModel.uiState.collectAsStateWithLifecycle()
                             AccountDetailsScreen(
@@ -310,6 +314,17 @@ fun WaslApp(
                                 onDismissReversal = detailsViewModel::dismissReversalDialog,
                                 onReversalReasonChange = detailsViewModel::updateReversalReason,
                                 onConfirmReversal = detailsViewModel::confirmReversal,
+                                onOpenDueSchedule = detailsViewModel::openDueScheduleDialog,
+                                onDismissDueSchedule = detailsViewModel::dismissDueScheduleDialog,
+                                onDueScheduleDateChange = detailsViewModel::updateDueScheduleDate,
+                                onDueScheduleReminderChange = { enabled ->
+                                    detailsViewModel.updateDueScheduleReminder(enabled)
+                                    if (enabled && !notificationsAvailable) {
+                                        requestNotificationAccess()
+                                    }
+                                },
+                                onConfirmDueSchedule = detailsViewModel::confirmDueSchedule,
+                                notificationPermissionGranted = notificationsAvailable,
                                 onNoticeShown = detailsViewModel::clearNotice,
                             )
                         }

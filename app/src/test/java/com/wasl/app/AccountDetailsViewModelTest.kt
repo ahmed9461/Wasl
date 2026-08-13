@@ -5,10 +5,17 @@ import com.wasl.app.data.CommandConflictException
 import com.wasl.app.data.CreateDebtForExistingPersonCommand
 import com.wasl.app.data.CreatePersonWithDebtCommand
 import com.wasl.app.data.DebtLifecycleState
+import com.wasl.app.data.DueReminderRequest
+import com.wasl.app.data.DueScheduleAuditEvent
+import com.wasl.app.data.DueScheduleSnapshot
 import com.wasl.app.data.PersonRecord
 import com.wasl.app.data.RecordPaymentCommand
 import com.wasl.app.data.ReversePaymentCommand
+import com.wasl.app.data.ReminderRecord
+import com.wasl.app.data.ReminderStatus
+import com.wasl.app.data.UpdateDueScheduleCommand
 import com.wasl.app.data.WaslRepository
+import com.wasl.app.reminder.ReminderScheduler
 import com.wasl.domain.CurrencyCode
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtHeader
@@ -170,13 +177,87 @@ class AccountDetailsViewModelTest {
         assertNull(viewModel.uiState.value.reversalPaymentId)
     }
 
+    @Test
+    fun reschedulesDueDateWithStableReminderAndAppendsAudit() = runTest {
+        val repository = PaymentFakeRepository(accountWithDueSchedule())
+        val scheduler = RecordingAccountReminderScheduler()
+        val ids = ArrayDeque(listOf("schedule-command", "schedule-audit"))
+        val viewModel = detailsViewModel(repository, ids, scheduler)
+        advanceUntilIdle()
+
+        viewModel.openDueScheduleDialog()
+        viewModel.updateDueScheduleDate(LocalDate.parse("2026-08-15"))
+        viewModel.confirmDueSchedule()
+        advanceUntilIdle()
+
+        assertEquals(LocalDate.parse("2026-08-15"), repository.account.ledger.header.dueDate)
+        assertEquals("due-reminder", repository.account.dueReminder?.id)
+        assertEquals(ReminderStatus.SCHEDULED, repository.account.dueReminder?.status)
+        assertEquals(1, repository.account.dueScheduleAuditEvents.size)
+        assertEquals("due-reminder", scheduler.scheduled.single().id)
+        assertIs<AccountOperationNotice.DueScheduleUpdatedNotice>(
+            viewModel.uiState.value.notice,
+        )
+    }
+
+    @Test
+    fun removingDueDateCancelsReminderAndKeepsAnAuditEvent() = runTest {
+        val repository = PaymentFakeRepository(accountWithDueSchedule())
+        val scheduler = RecordingAccountReminderScheduler()
+        val ids = ArrayDeque(listOf("cancel-command", "cancel-audit"))
+        val viewModel = detailsViewModel(repository, ids, scheduler)
+        advanceUntilIdle()
+
+        viewModel.openDueScheduleDialog()
+        viewModel.updateDueScheduleDate(null)
+        viewModel.confirmDueSchedule()
+        advanceUntilIdle()
+
+        assertNull(repository.account.ledger.header.dueDate)
+        assertEquals(ReminderStatus.CANCELLED, repository.account.dueReminder?.status)
+        assertEquals(listOf("due-reminder"), scheduler.cancelled)
+        val audit = repository.account.dueScheduleAuditEvents.single()
+        assertEquals(LocalDate.parse("2026-08-14"), audit.before.dueDate)
+        assertNull(audit.after.dueDate)
+        assertFalse(viewModel.uiState.value.isDueScheduleDialogOpen)
+    }
+
+    @Test
+    fun retryAfterUnknownDueScheduleResultReusesTheSameCommand() = runTest {
+        val repository = PaymentFakeRepository(
+            initialAccount = accountWithDueSchedule(),
+            dueScheduleFailuresAfterCommit = 1,
+        )
+        val scheduler = RecordingAccountReminderScheduler()
+        val ids = ArrayDeque(listOf("stable-schedule-command", "stable-schedule-audit"))
+        val viewModel = detailsViewModel(repository, ids, scheduler)
+        advanceUntilIdle()
+
+        viewModel.openDueScheduleDialog()
+        viewModel.updateDueScheduleDate(LocalDate.parse("2026-08-16"))
+        viewModel.confirmDueSchedule()
+        advanceUntilIdle()
+        assertNotNull(viewModel.uiState.value.dueScheduleError)
+
+        viewModel.confirmDueSchedule()
+        advanceUntilIdle()
+
+        assertEquals(2, repository.dueScheduleCalls.size)
+        assertEquals(repository.dueScheduleCalls.first(), repository.dueScheduleCalls.last())
+        assertEquals(1, repository.account.dueScheduleAuditEvents.size)
+        assertEquals(1, scheduler.scheduled.size)
+    }
+
     private fun detailsViewModel(
         repository: PaymentFakeRepository,
         ids: ArrayDeque<String>,
+        scheduler: ReminderScheduler = RecordingAccountReminderScheduler(),
     ) = AccountDetailsViewModel(
         repository = repository,
         debtId = DebtId("debt-1"),
         clock = Clock.fixed(Instant.parse("2026-08-13T00:05:00Z"), ZoneOffset.UTC),
+        zoneIdProvider = { ZoneOffset.UTC },
+        reminderScheduler = scheduler,
         idFactory = { ids.removeFirst() },
     )
 
@@ -213,19 +294,43 @@ class AccountDetailsViewModelTest {
             ),
         )
     }
+
+    private fun accountWithDueSchedule(): AccountOverview {
+        val account = baseAccount()
+        val dueDate = LocalDate.parse("2026-08-14")
+        val reminderTime = Instant.parse("2026-08-14T09:00:00Z")
+        return account.copy(
+            ledger = DebtLedger(
+                header = account.ledger.header.copy(dueDate = dueDate),
+                entries = account.ledger.entries,
+            ),
+            dueReminder = ReminderRecord(
+                id = "due-reminder",
+                debtId = account.ledger.header.id,
+                triggerAt = reminderTime,
+                zoneId = ZoneOffset.UTC,
+                status = ReminderStatus.SCHEDULED,
+                createdAt = account.ledger.header.openedAt,
+                updatedAt = account.ledger.header.openedAt,
+            ),
+        )
+    }
 }
 
 private class PaymentFakeRepository(
     initialAccount: AccountOverview,
     private var paymentFailuresAfterCommit: Int = 0,
     private var reversalFailuresAfterCommit: Int = 0,
+    private var dueScheduleFailuresAfterCommit: Int = 0,
 ) : WaslRepository {
     private val accountState = MutableStateFlow(initialAccount)
     private val paymentCommandsById = mutableMapOf<String, RecordPaymentCommand>()
     private val reversalCommandsById = mutableMapOf<String, ReversePaymentCommand>()
+    private val dueScheduleCommandsById = mutableMapOf<String, UpdateDueScheduleCommand>()
 
     val paymentCalls = mutableListOf<RecordPaymentCommand>()
     val reversalCalls = mutableListOf<ReversePaymentCommand>()
+    val dueScheduleCalls = mutableListOf<UpdateDueScheduleCommand>()
     val account: AccountOverview
         get() = accountState.value
 
@@ -320,4 +425,74 @@ private class PaymentFakeRepository(
         }
         return updated
     }
+
+    override suspend fun updateDueSchedule(command: UpdateDueScheduleCommand): AccountOverview {
+        dueScheduleCalls += command
+        dueScheduleCommandsById[command.commandId]?.let { existing ->
+            if (existing != command) throw CommandConflictException("Conflicting schedule command.")
+            return account
+        }
+
+        val current = account
+        val before = DueScheduleSnapshot(
+            dueDate = current.ledger.header.dueDate,
+            dueReminder = current.dueReminder
+                ?.takeIf { it.status != ReminderStatus.CANCELLED }
+                ?.let { DueReminderRequest(it.id, it.triggerAt, it.zoneId) },
+        )
+        val updatedReminder = command.dueReminder?.let { request ->
+            ReminderRecord(
+                id = request.id,
+                debtId = command.debtId,
+                triggerAt = request.triggerAt,
+                zoneId = request.zoneId,
+                status = ReminderStatus.SCHEDULED,
+                createdAt = current.dueReminder?.createdAt ?: command.updatedAt,
+                updatedAt = command.updatedAt,
+            )
+        } ?: current.dueReminder?.copy(
+            status = ReminderStatus.CANCELLED,
+            lastFailureCode = null,
+            deliveredAt = null,
+            updatedAt = command.updatedAt,
+        )
+        val after = DueScheduleSnapshot(command.dueDate, command.dueReminder)
+        val audit = DueScheduleAuditEvent(
+            id = command.auditEventId,
+            commandId = command.commandId,
+            debtId = command.debtId,
+            occurredAt = command.updatedAt,
+            before = before,
+            after = after,
+        )
+        dueScheduleCommandsById[command.commandId] = command
+        accountState.value = current.copy(
+            ledger = DebtLedger(
+                header = current.ledger.header.copy(dueDate = command.dueDate),
+                entries = current.ledger.entries,
+            ),
+            dueReminder = updatedReminder,
+            dueScheduleAuditEvents = current.dueScheduleAuditEvents + audit,
+        )
+        if (dueScheduleFailuresAfterCommit > 0) {
+            dueScheduleFailuresAfterCommit -= 1
+            error("Simulated unknown schedule result after commit.")
+        }
+        return account
+    }
+}
+
+private class RecordingAccountReminderScheduler : ReminderScheduler {
+    val scheduled = mutableListOf<ReminderRecord>()
+    val cancelled = mutableListOf<String>()
+
+    override fun schedule(reminder: ReminderRecord) {
+        scheduled += reminder
+    }
+
+    override fun cancel(reminderId: String) {
+        cancelled += reminderId
+    }
+
+    override fun requestRecovery() = Unit
 }

@@ -23,21 +23,26 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -47,15 +52,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wasl.app.data.AccountOverview
+import com.wasl.app.data.DueReminderRequest
+import com.wasl.app.data.DueScheduleAuditEvent
 import com.wasl.app.data.ReminderStatus
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtState
 import com.wasl.domain.LedgerEntryId
+import com.wasl.domain.LedgerEntry
 import com.wasl.domain.Money
 import com.wasl.domain.PaymentRecorded
 import com.wasl.domain.PaymentReversed
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -76,6 +86,12 @@ internal fun AccountDetailsScreen(
     onDismissReversal: () -> Unit,
     onReversalReasonChange: (String) -> Unit,
     onConfirmReversal: () -> Unit,
+    onOpenDueSchedule: () -> Unit,
+    onDismissDueSchedule: () -> Unit,
+    onDueScheduleDateChange: (LocalDate?) -> Unit,
+    onDueScheduleReminderChange: (Boolean) -> Unit,
+    onConfirmDueSchedule: () -> Unit,
+    notificationPermissionGranted: Boolean,
     onNoticeShown: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -149,6 +165,7 @@ internal fun AccountDetailsScreen(
                     scaffoldPadding = scaffoldPadding,
                     onRetry = onRetry,
                     onOpenReversal = onOpenReversal,
+                    onOpenDueSchedule = onOpenDueSchedule,
                 )
             }
         }
@@ -186,6 +203,20 @@ internal fun AccountDetailsScreen(
             onConfirm = onConfirmReversal,
         )
     }
+
+
+    if (state.isDueScheduleDialogOpen && account != null) {
+        DueScheduleDialog(
+            form = state.dueScheduleForm,
+            isSaving = state.isUpdatingDueSchedule,
+            error = state.dueScheduleError,
+            notificationPermissionGranted = notificationPermissionGranted,
+            onDismiss = onDismissDueSchedule,
+            onDueDateChange = onDueScheduleDateChange,
+            onReminderChange = onDueScheduleReminderChange,
+            onConfirm = onConfirmDueSchedule,
+        )
+    }
 }
 
 @Composable
@@ -195,11 +226,20 @@ private fun AccountDetailsContent(
     scaffoldPadding: PaddingValues,
     onRetry: () -> Unit,
     onOpenReversal: (LedgerEntryId) -> Unit,
+    onOpenDueSchedule: () -> Unit,
 ) {
     val payments = account.ledger.entries
         .filterIsInstance<PaymentRecorded>()
         .associateBy { it.id }
     val reversedPaymentIds = account.ledger.reversedPaymentIds
+    val timelineItems = buildList<AccountTimelineItem> {
+        account.ledger.entries.forEach { entry ->
+            add(AccountTimelineItem.Ledger(entry))
+        }
+        account.dueScheduleAuditEvents.forEach { event ->
+            add(AccountTimelineItem.DueSchedule(event))
+        }
+    }.sortedWith(compareBy<AccountTimelineItem> { it.timestamp }.thenBy { it.key })
 
     LazyColumn(
         modifier = Modifier
@@ -220,7 +260,7 @@ private fun AccountDetailsContent(
         }
 
         item("summary") {
-            AccountSummaryCard(account)
+            AccountSummaryCard(account, onOpenDueSchedule)
         }
 
         item("timeline-heading") {
@@ -248,20 +288,24 @@ private fun AccountDetailsContent(
         }
 
         items(
-            items = account.ledger.entries,
-            key = { it.id.value },
-        ) { entry ->
-            when (entry) {
-                is PaymentRecorded -> PaymentTimelineCard(
-                    payment = entry,
-                    isReversed = entry.id in reversedPaymentIds,
-                    onReverse = { onOpenReversal(entry.id) },
-                )
+            items = timelineItems,
+            key = { it.key },
+        ) { item ->
+            when (item) {
+                is AccountTimelineItem.Ledger -> when (val entry = item.entry) {
+                    is PaymentRecorded -> PaymentTimelineCard(
+                        payment = entry,
+                        isReversed = entry.id in reversedPaymentIds,
+                        onReverse = { onOpenReversal(entry.id) },
+                    )
 
-                is PaymentReversed -> ReversalTimelineCard(
-                    reversal = entry,
-                    payment = payments[entry.paymentId],
-                )
+                    is PaymentReversed -> ReversalTimelineCard(
+                        reversal = entry,
+                        payment = payments[entry.paymentId],
+                    )
+                }
+
+                is AccountTimelineItem.DueSchedule -> DueScheduleAuditTimelineCard(item.event)
             }
         }
 
@@ -279,7 +323,10 @@ private fun AccountDetailsContent(
 }
 
 @Composable
-private fun AccountSummaryCard(account: AccountOverview) {
+private fun AccountSummaryCard(
+    account: AccountOverview,
+    onOpenDueSchedule: () -> Unit,
+) {
     val ledger = account.ledger
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -332,9 +379,10 @@ private fun AccountSummaryCard(account: AccountOverview) {
             )
             HorizontalDivider()
             MetadataRow("تاريخ الإنشاء", formatInstant(ledger.header.openedAt))
-            ledger.header.dueDate?.let { dueDate ->
-                MetadataRow("تاريخ الاستحقاق", "\u2066$dueDate\u2069")
-            }
+            MetadataRow(
+                "تاريخ الاستحقاق",
+                ledger.header.dueDate?.let(::formatDate) ?: "غير محدد",
+            )
             account.dueReminder?.let { reminder ->
                 MetadataRow("موعد التذكير", formatInstant(reminder.triggerAt))
                 MetadataRow(
@@ -351,6 +399,169 @@ private fun AccountSummaryCard(account: AccountOverview) {
             account.closedAt?.let { closedAt ->
                 MetadataRow("تاريخ الإغلاق", formatInstant(closedAt))
             }
+            if (!ledger.balance.isZero) {
+                TextButton(
+                    onClick = onOpenDueSchedule,
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .testTag("edit-due-schedule"),
+                ) {
+                    Text(
+                        if (ledger.header.dueDate == null) {
+                            "إضافة موعد وتذكير"
+                        } else {
+                            "تعديل الموعد والتذكير"
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun DueScheduleDialog(
+    form: DueScheduleForm,
+    isSaving: Boolean,
+    error: String?,
+    notificationPermissionGranted: Boolean,
+    onDismiss: () -> Unit,
+    onDueDateChange: (LocalDate?) -> Unit,
+    onReminderChange: (Boolean) -> Unit,
+    onConfirm: () -> Unit,
+) {
+    var showDatePicker by remember { androidx.compose.runtime.mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("الموعد والتذكير") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    "سيُحفظ أي تغيير في سجل العمليات دون تعديل أصل الدين أو الدفعات.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text("تاريخ الاستحقاق", fontWeight = FontWeight.SemiBold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedButton(
+                        onClick = { showDatePicker = true },
+                        enabled = !isSaving,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("edit-due-date"),
+                    ) {
+                        Text(form.dueDate?.let(::formatDate) ?: "اختيار تاريخ")
+                    }
+                    if (form.dueDate != null) {
+                        TextButton(
+                            onClick = { onDueDateChange(null) },
+                            enabled = !isSaving,
+                            modifier = Modifier.testTag("remove-due-date"),
+                        ) {
+                            Text("إزالة")
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("ذكرني يوم الاستحقاق", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "تذكير عادي قرابة 09:00 حسب توقيت الجهاز",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = form.remindOnDueDate,
+                        onCheckedChange = onReminderChange,
+                        enabled = !isSaving && form.dueDate != null,
+                        modifier = Modifier.testTag("edit-due-reminder"),
+                    )
+                }
+                if (form.remindOnDueDate && !notificationPermissionGranted) {
+                    Text(
+                        "سيُحفظ التذكير، لكنه لن يظهر حتى تسمح بإشعارات وَصل.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                error?.let {
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = !isSaving,
+                modifier = Modifier.testTag("save-due-schedule"),
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                }
+                Text(if (isSaving) "جارٍ الحفظ" else if (error != null) "إعادة المحاولة" else "حفظ التعديل")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isSaving) {
+                Text("إلغاء")
+            }
+        },
+    )
+
+    if (showDatePicker) {
+        val initialSelection = form.dueDate
+            ?.atStartOfDay(ZoneOffset.UTC)
+            ?.toInstant()
+            ?.toEpochMilli()
+        val pickerState = androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = initialSelection,
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pickerState.selectedDateMillis?.let { selected ->
+                            onDueDateChange(
+                                Instant.ofEpochMilli(selected)
+                                    .atZone(ZoneOffset.UTC)
+                                    .toLocalDate(),
+                            )
+                        }
+                        showDatePicker = false
+                    },
+                    enabled = pickerState.selectedDateMillis != null,
+                ) {
+                    Text("اختيار")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("إلغاء")
+                }
+            },
+        ) {
+            DatePicker(state = pickerState)
         }
     }
 }
@@ -595,7 +806,49 @@ private fun ReversalTimelineCard(
         timestamp = reversal.recordedAt,
         body = reversal.reason,
         money = payment?.amount,
-    )
+)
+}
+
+@Composable
+private fun DueScheduleAuditTimelineCard(event: DueScheduleAuditEvent) {
+    val title = when {
+        event.before.dueDate == null && event.after.dueDate != null ->
+            "تم تعيين تاريخ الاستحقاق"
+
+        event.before.dueDate != null && event.after.dueDate == null ->
+            "تم إلغاء تاريخ الاستحقاق"
+
+        event.before.dueDate != event.after.dueDate ->
+            "تم تعديل تاريخ الاستحقاق"
+
+        else -> "تم تعديل تذكير الاستحقاق"
+    }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("due-schedule-audit-${event.id}"),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(title, fontWeight = FontWeight.Bold)
+            MetadataRow("الوقت", formatInstant(event.occurredAt))
+            MetadataRow(
+                "الموعد السابق",
+                event.before.dueDate?.let(::formatDate) ?: "غير محدد",
+            )
+            MetadataRow(
+                "الموعد الجديد",
+                event.after.dueDate?.let(::formatDate) ?: "غير محدد",
+            )
+            MetadataRow("التذكير السابق", reminderSummary(event.before.dueReminder))
+            MetadataRow("التذكير الجديد", reminderSummary(event.after.dueReminder))
+        }
+    }
 }
 
 @Composable
@@ -680,10 +933,39 @@ private fun formatInstant(instant: Instant): String {
     return "\u2066${formatter.format(instant.atZone(ZoneId.systemDefault()))}\u2069"
 }
 
+private fun formatDate(date: LocalDate): String = "\u2066$date\u2069"
+
+private fun reminderSummary(reminder: DueReminderRequest?): String =
+    reminder?.let { "مفعل — ${formatInstant(it.triggerAt)}" } ?: "غير مفعل"
+
+private sealed interface AccountTimelineItem {
+    val key: String
+    val timestamp: Instant
+
+    data class Ledger(val entry: LedgerEntry) : AccountTimelineItem {
+        override val key: String = "ledger:${entry.id.value}"
+        override val timestamp: Instant = entry.recordedAt
+    }
+
+    data class DueSchedule(val event: DueScheduleAuditEvent) : AccountTimelineItem {
+        override val key: String = "due-schedule:${event.id}"
+        override val timestamp: Instant = event.occurredAt
+    }
+}
+
 private fun AccountOperationNotice.toDisplayText(): String = when (this) {
     is AccountOperationNotice.PaymentRecordedNotice ->
         "تم تسجيل ${formatMoney(amount)} في حساب $personName."
 
     is AccountOperationNotice.PaymentReversedNotice ->
         "تم عكس ${formatMoney(amount)} في حساب $personName دون حذف السجل."
+
+    is AccountOperationNotice.DueScheduleUpdatedNotice -> when {
+        platformSyncPending ->
+            "تم حفظ الموعد في حساب $personName، وستُستكمل مزامنة التذكير تلقائيًا."
+
+        dueDate == null -> "تم إلغاء موعد الاستحقاق والتذكير في حساب $personName."
+        reminderEnabled -> "تم تحديث موعد الاستحقاق وجدولة التذكير في حساب $personName."
+        else -> "تم تحديث موعد الاستحقاق دون تذكير في حساب $personName."
+    }
 }

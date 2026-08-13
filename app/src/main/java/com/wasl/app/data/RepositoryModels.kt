@@ -39,6 +39,7 @@ data class AccountOverview(
     val notes: String? = null,
     val closedAt: Instant? = null,
     val dueReminder: ReminderRecord? = null,
+    val dueScheduleAuditEvents: List<DueScheduleAuditEvent> = emptyList(),
 )
 
 enum class ReminderStatus {
@@ -72,6 +73,49 @@ data class DueReminderRequest(
 ) {
     init {
         require(id.isNotBlank()) { "Reminder ID cannot be blank." }
+    }
+}
+
+data class DueScheduleSnapshot(
+    val dueDate: LocalDate?,
+    val dueReminder: DueReminderRequest?,
+) {
+    init {
+        require(dueReminder == null || dueDate != null) {
+            "A due reminder requires a due date."
+        }
+    }
+}
+
+data class DueScheduleAuditEvent(
+    val id: String,
+    val commandId: String,
+    val debtId: DebtId,
+    val occurredAt: Instant,
+    val before: DueScheduleSnapshot,
+    val after: DueScheduleSnapshot,
+) {
+    init {
+        require(id.isNotBlank()) { "Audit event ID cannot be blank." }
+        require(commandId.isNotBlank()) { "Command ID cannot be blank." }
+        require(before != after) { "Audit event must describe a real change." }
+    }
+}
+
+data class UpdateDueScheduleCommand(
+    val commandId: String,
+    val auditEventId: String,
+    val debtId: DebtId,
+    val dueDate: LocalDate?,
+    val dueReminder: DueReminderRequest?,
+    val updatedAt: Instant,
+) {
+    init {
+        require(commandId.isNotBlank()) { "Command ID cannot be blank." }
+        require(auditEventId.isNotBlank()) { "Audit event ID cannot be blank." }
+        require(dueReminder == null || dueDate != null) {
+            "A due reminder requires a due date."
+        }
     }
 }
 

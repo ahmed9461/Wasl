@@ -189,6 +189,10 @@ private class SearchFakeRepository(
 
     override suspend fun reversePayment(command: ReversePaymentCommand): DebtLedger =
         error("Not used in this test.")
+
+    override suspend fun updateDueSchedule(
+        command: com.wasl.app.data.UpdateDueScheduleCommand,
+    ): AccountOverview = error("Not used in this test.")
 }
 
 private fun account(

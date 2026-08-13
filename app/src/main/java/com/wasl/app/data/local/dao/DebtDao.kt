@@ -80,6 +80,15 @@ interface DebtDao {
     )
     suspend fun updateClosure(id: String, closedAt: Long?, updatedAt: Long): Int
 
+    @Query(
+        """
+        UPDATE debts
+        SET due_date_epoch_day = :dueDateEpochDay, updated_at = :updatedAt
+        WHERE id = :id
+        """,
+    )
+    suspend fun updateDueDate(id: String, dueDateEpochDay: Long?, updatedAt: Long): Int
+
     @Query("SELECT COUNT(*) FROM debts")
     suspend fun count(): Int
 }

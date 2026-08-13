@@ -74,6 +74,7 @@ dependencies {
     // Keep Navigation 3 keys and Room's migration reader on one serialization runtime.
     implementation(platform(libs.kotlinx.serialization.bom))
     implementation(libs.kotlinx.serialization.core)
+    implementation(libs.kotlinx.serialization.json)
     ksp(libs.androidx.room.compiler)
 
     implementation(platform(libs.androidx.compose.bom))

@@ -5,10 +5,16 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.wasl.app.data.AccountOverview
 import com.wasl.app.data.CommandConflictException
+import com.wasl.app.data.DueReminderRequest
 import com.wasl.app.data.RecordNotFoundException
 import com.wasl.app.data.RecordPaymentCommand
 import com.wasl.app.data.ReversePaymentCommand
+import com.wasl.app.data.ReminderStatus
+import com.wasl.app.data.UpdateDueScheduleCommand
 import com.wasl.app.data.WaslRepository
+import com.wasl.app.reminder.NoOpReminderScheduler
+import com.wasl.app.reminder.ReminderScheduler
+import com.wasl.app.reminder.ReminderTime
 import com.wasl.domain.DebtId
 import com.wasl.domain.LedgerEntryId
 import com.wasl.domain.Money
@@ -16,6 +22,8 @@ import com.wasl.domain.MoneyInputParser
 import com.wasl.domain.PaymentRecorded
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -36,18 +44,27 @@ data class PaymentReview(
     val remainingAfter: Money,
 )
 
-sealed interface AccountOperationNotice {
-    val personName: String
-    val amount: Money
+data class DueScheduleForm(
+    val dueDate: LocalDate? = null,
+    val remindOnDueDate: Boolean = false,
+)
 
+sealed interface AccountOperationNotice {
     data class PaymentRecordedNotice(
-        override val personName: String,
-        override val amount: Money,
+        val personName: String,
+        val amount: Money,
     ) : AccountOperationNotice
 
     data class PaymentReversedNotice(
-        override val personName: String,
-        override val amount: Money,
+        val personName: String,
+        val amount: Money,
+    ) : AccountOperationNotice
+
+    data class DueScheduleUpdatedNotice(
+        val personName: String,
+        val dueDate: LocalDate?,
+        val reminderEnabled: Boolean,
+        val platformSyncPending: Boolean,
     ) : AccountOperationNotice
 }
 
@@ -64,6 +81,10 @@ data class AccountDetailsUiState(
     val reversalReason: String = "",
     val isReversingPayment: Boolean = false,
     val reversalError: String? = null,
+    val isDueScheduleDialogOpen: Boolean = false,
+    val dueScheduleForm: DueScheduleForm = DueScheduleForm(),
+    val isUpdatingDueSchedule: Boolean = false,
+    val dueScheduleError: String? = null,
     val notice: AccountOperationNotice? = null,
 )
 
@@ -71,6 +92,8 @@ class AccountDetailsViewModel(
     private val repository: WaslRepository,
     private val debtId: DebtId,
     private val clock: Clock = Clock.systemUTC(),
+    private val zoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
+    private val reminderScheduler: ReminderScheduler = NoOpReminderScheduler,
     private val idFactory: () -> String = { UUID.randomUUID().toString() },
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AccountDetailsUiState())
@@ -80,6 +103,7 @@ class AccountDetailsViewModel(
     private var pendingPaymentCommand: RecordPaymentCommand? = null
     private var pendingReversalCommand: ReversePaymentCommand? = null
     private var pendingReversalAmount: Money? = null
+    private var pendingDueScheduleCommand: UpdateDueScheduleCommand? = null
 
     init {
         observeAccount()
@@ -409,6 +433,198 @@ class AccountDetailsViewModel(
         }
     }
 
+    fun openDueScheduleDialog() {
+        val account = _uiState.value.account ?: return
+        if (account.ledger.balance.isZero) return
+        pendingDueScheduleCommand = null
+        _uiState.update {
+            it.copy(
+                isDueScheduleDialogOpen = true,
+                dueScheduleForm = DueScheduleForm(
+                    dueDate = account.ledger.header.dueDate,
+                    remindOnDueDate = account.dueReminder
+                        ?.status
+                        ?.let { it != ReminderStatus.CANCELLED }
+                        ?: false,
+                ),
+                dueScheduleError = null,
+                notice = null,
+            )
+        }
+    }
+
+    fun dismissDueScheduleDialog() {
+        if (_uiState.value.isUpdatingDueSchedule) return
+        pendingDueScheduleCommand = null
+        _uiState.update {
+            it.copy(
+                isDueScheduleDialogOpen = false,
+                dueScheduleForm = DueScheduleForm(),
+                dueScheduleError = null,
+            )
+        }
+    }
+
+    fun updateDueScheduleDate(value: LocalDate?) {
+        pendingDueScheduleCommand = null
+        _uiState.update {
+            it.copy(
+                dueScheduleForm = it.dueScheduleForm.copy(
+                    dueDate = value,
+                    remindOnDueDate = if (value == null) false else {
+                        it.dueScheduleForm.remindOnDueDate
+                    },
+                ),
+                dueScheduleError = null,
+            )
+        }
+    }
+
+    fun updateDueScheduleReminder(value: Boolean) {
+        pendingDueScheduleCommand = null
+        _uiState.update {
+            it.copy(
+                dueScheduleForm = it.dueScheduleForm.copy(
+                    remindOnDueDate = value && it.dueScheduleForm.dueDate != null,
+                ),
+                dueScheduleError = null,
+            )
+        }
+    }
+
+    fun confirmDueSchedule() {
+        val state = _uiState.value
+        if (state.isUpdatingDueSchedule) return
+        val account = state.account ?: return
+        val form = state.dueScheduleForm
+        val zoneId = zoneIdProvider()
+        val now = Instant.now(clock)
+        val today = now.atZone(zoneId).toLocalDate()
+
+        if (form.dueDate?.isBefore(today) == true) {
+            _uiState.update {
+                it.copy(dueScheduleError = "اختر تاريخ استحقاق اليوم أو بعده، أو ألغِ التاريخ.")
+            }
+            return
+        }
+        if (form.remindOnDueDate && form.dueDate == null) {
+            _uiState.update {
+                it.copy(dueScheduleError = "اختر تاريخ الاستحقاق قبل تفعيل التذكير.")
+            }
+            return
+        }
+
+        val currentReminderEnabled = account.dueReminder
+            ?.status
+            ?.let { it != ReminderStatus.CANCELLED }
+            ?: false
+        if (pendingDueScheduleCommand == null &&
+            form.dueDate == account.ledger.header.dueDate &&
+            form.remindOnDueDate == currentReminderEnabled
+        ) {
+            _uiState.update { it.copy(dueScheduleError = "لم تغيّر الموعد أو التذكير.") }
+            return
+        }
+
+        val command = pendingDueScheduleCommand ?: run {
+            val updatedAt = operationTimestamp(account) ?: run {
+                _uiState.update {
+                    it.copy(
+                        dueScheduleError = "وقت الجهاز أقدم من آخر عملية. صحح الوقت ثم أعد المحاولة.",
+                    )
+                }
+                return
+            }
+            val reminder = if (form.remindOnDueDate) {
+                DueReminderRequest(
+                    id = account.dueReminder?.id ?: idFactory(),
+                    triggerAt = ReminderTime.dueDateTrigger(
+                        dueDate = requireNotNull(form.dueDate),
+                        now = now,
+                        zoneId = zoneId,
+                    ),
+                    zoneId = zoneId,
+                )
+            } else {
+                null
+            }
+            UpdateDueScheduleCommand(
+                commandId = idFactory(),
+                auditEventId = idFactory(),
+                debtId = debtId,
+                dueDate = form.dueDate,
+                dueReminder = reminder,
+                updatedAt = updatedAt,
+            ).also { pendingDueScheduleCommand = it }
+        }
+
+        _uiState.update { it.copy(isUpdatingDueSchedule = true, dueScheduleError = null) }
+        viewModelScope.launch {
+            try {
+                val updated = repository.updateDueSchedule(command)
+                val platformSyncFailed = if (command.dueReminder != null) {
+                    val reminder = requireNotNull(updated.dueReminder)
+                    runCatching { reminderScheduler.schedule(reminder) }
+                        .onFailure { runCatching { reminderScheduler.requestRecovery() } }
+                        .isFailure
+                } else {
+                    account.dueReminder?.id?.let { reminderId ->
+                        runCatching { reminderScheduler.cancel(reminderId) }.isFailure
+                    } ?: false
+                }
+                pendingDueScheduleCommand = null
+                _uiState.update {
+                    it.copy(
+                        isDueScheduleDialogOpen = false,
+                        dueScheduleForm = DueScheduleForm(),
+                        isUpdatingDueSchedule = false,
+                        dueScheduleError = null,
+                        notice = AccountOperationNotice.DueScheduleUpdatedNotice(
+                            personName = account.person.displayName,
+                            dueDate = command.dueDate,
+                            reminderEnabled = command.dueReminder != null,
+                            platformSyncPending = platformSyncFailed,
+                        ),
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: IllegalArgumentException) {
+                pendingDueScheduleCommand = null
+                _uiState.update {
+                    it.copy(
+                        isUpdatingDueSchedule = false,
+                        dueScheduleError = "لم يعد هذا التعديل صالحًا للحساب الحالي.",
+                    )
+                }
+            } catch (_: RecordNotFoundException) {
+                pendingDueScheduleCommand = null
+                _uiState.update {
+                    it.copy(
+                        isUpdatingDueSchedule = false,
+                        dueScheduleError = "تعذر العثور على الحساب.",
+                    )
+                }
+            } catch (_: CommandConflictException) {
+                pendingDueScheduleCommand = null
+                _uiState.update {
+                    it.copy(
+                        isUpdatingDueSchedule = false,
+                        dueScheduleError = "تعذر تأكيد تعديل الموعد بأمان. راجع البيانات وأعد المحاولة.",
+                    )
+                }
+            } catch (_: Exception) {
+                // The commit result can be unknown. Keep the exact command for an idempotent retry.
+                _uiState.update {
+                    it.copy(
+                        isUpdatingDueSchedule = false,
+                        dueScheduleError = "تعذر تأكيد نتيجة التعديل. أعد المحاولة بنفس البيانات للتحقق بأمان.",
+                    )
+                }
+            }
+        }
+    }
+
     fun clearNotice() {
         _uiState.update { it.copy(notice = null) }
     }
@@ -444,6 +660,8 @@ class AccountDetailsViewModel(
         if (now.isBefore(account.ledger.header.openedAt)) return null
         val lastRecordedAt = account.ledger.entries.lastOrNull()?.recordedAt
         if (lastRecordedAt != null && now.isBefore(lastRecordedAt)) return null
+        val lastAuditAt = account.dueScheduleAuditEvents.lastOrNull()?.occurredAt
+        if (lastAuditAt != null && now.isBefore(lastAuditAt)) return null
         return now
     }
 
@@ -453,13 +671,18 @@ class AccountDetailsViewModel(
     class Factory(
         private val repository: WaslRepository,
         private val debtId: DebtId,
+        private val reminderScheduler: ReminderScheduler = NoOpReminderScheduler,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(AccountDetailsViewModel::class.java)) {
                 "Unknown ViewModel class: ${modelClass.name}"
             }
-            return AccountDetailsViewModel(repository, debtId) as T
+            return AccountDetailsViewModel(
+                repository = repository,
+                debtId = debtId,
+                reminderScheduler = reminderScheduler,
+            ) as T
         }
     }
 }

@@ -209,6 +209,10 @@ private class TodayFakeRepository(
 
     override suspend fun reversePayment(command: ReversePaymentCommand): DebtLedger =
         error("Not used in this test.")
+
+    override suspend fun updateDueSchedule(
+        command: com.wasl.app.data.UpdateDueScheduleCommand,
+    ): AccountOverview = error("Not used in this test.")
 }
 
 private class RecordingTodayReminderScheduler : ReminderScheduler {
@@ -216,6 +220,8 @@ private class RecordingTodayReminderScheduler : ReminderScheduler {
     var fail = false
 
     override fun schedule(reminder: com.wasl.app.data.ReminderRecord) = Unit
+
+    override fun cancel(reminderId: String) = Unit
 
     override fun requestRecovery() {
         recoveryRequests += 1

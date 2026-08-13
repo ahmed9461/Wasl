@@ -21,4 +21,9 @@ data class DebtAggregate(
         entityColumn = "subject_id",
     )
     val reminders: List<ReminderEntity>,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "aggregate_id",
+    )
+    val auditEvents: List<AuditEventEntity>,
 )

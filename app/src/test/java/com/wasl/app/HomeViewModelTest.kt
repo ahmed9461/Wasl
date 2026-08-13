@@ -414,6 +414,10 @@ private class FakeWaslRepository(
     override suspend fun reversePayment(command: ReversePaymentCommand): DebtLedger {
         error("Not used in this test.")
     }
+
+    override suspend fun updateDueSchedule(
+        command: com.wasl.app.data.UpdateDueScheduleCommand,
+    ): AccountOverview = error("Not used in this test.")
 }
 
 private fun person(id: String, name: String): PersonRecord {
@@ -433,6 +437,8 @@ private class RecordingReminderScheduler : ReminderScheduler {
         scheduled += reminder
     }
 
+    override fun cancel(reminderId: String) = Unit
+
     override fun requestRecovery() = Unit
 }
 
@@ -440,6 +446,8 @@ private class FailingReminderScheduler : ReminderScheduler {
     override fun schedule(reminder: ReminderRecord) {
         error("Simulated platform scheduler failure.")
     }
+
+    override fun cancel(reminderId: String) = Unit
 
     override fun requestRecovery() = Unit
 }

@@ -17,6 +17,16 @@ interface ReminderDao {
     @Query(
         """
         SELECT * FROM reminders
+        WHERE subject_type = 'DEBT'
+          AND subject_id = :debtId
+          AND reminder_type = 'DUE_DATE'
+        """,
+    )
+    suspend fun findDueDateForDebt(debtId: String): ReminderEntity?
+
+    @Query(
+        """
+        SELECT * FROM reminders
         WHERE status IN ('SCHEDULED', 'BLOCKED_PERMISSION', 'FAILED')
         ORDER BY trigger_at, id
         """,
@@ -30,6 +40,7 @@ interface ReminderDao {
             zone_id = :zoneId,
             status = 'SCHEDULED',
             last_failure_code = NULL,
+            delivered_at = NULL,
             updated_at = :updatedAt
         WHERE id = :id
         """,

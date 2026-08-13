@@ -84,17 +84,13 @@ Notifications وAlarmManager وWorkManager وBiometrics وKeystore وFileProvide
 
 ## بنية الحزم الحالية
 
-- com.wasl.domain: القواعد المالية.
-- com.wasl.app: Application entry وComposition root.
-- com.wasl.app.ui: الشاشات وTheme عند توسعها.
-
-البنية المقترحة للخطوة التالية داخل Data:
-
-- com.wasl.app.data.local.entity
-- com.wasl.app.data.local.dao
-- com.wasl.app.data.local.transaction
-- com.wasl.app.data.repository
-- com.wasl.app.data.mapper
+- `com.wasl.domain`: القواعد المالية وParsing الدقيق للإدخال.
+- `com.wasl.app`: Application entry وComposition root وHome ViewModel/Compose.
+- `com.wasl.app.data`: عقود Repository وRead/Command models.
+- `com.wasl.app.data.local`: Room database وRepository الذري وMappers الداخلية.
+- `com.wasl.app.data.local.entity`: persons وdebts وledger_entries وعلاقات القراءة.
+- `com.wasl.app.data.local.dao`: واجهات الإدخال والاستعلام بلا Update/Delete للسجل المالي.
+- `com.wasl.app.ui`: Theme، وتستقبل الشاشات الجديدة عند توسعها.
 
 لا تنشأ وحدة Gradle جديدة قبل وجود سبب مثل زمن بناء أو إعادة استخدام أو فصل Platform واضح.
 

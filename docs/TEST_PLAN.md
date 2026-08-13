@@ -19,7 +19,7 @@
 
 ### Database
 
-تضاف في Persistence slice:
+منفذة في Persistence slice الحالية:
 
 - Entity constraints.
 - DAO queries.
@@ -76,6 +76,10 @@
 | MoneyTest | حساب صحيح، منع خلط العملات، Overflow |
 | DebtLedgerTest | الأصل، الجزئي، النهائي، العكس، التكرار، الاستحقاق، ترتيب الأحداث، والنسخ الدفاعي للسجل |
 | BalanceSummaryTest | فصل الاتجاهات والعملات |
+| MoneyInputParserTest | Parsing دقيق للأرقام العربية والفواصل ودقة YER/SAR/USD دون Double |
+| HomeViewModelTest | المسار السريع، أخطاء المبلغ، وثبات IDs عبر إعادة محاولة غير مؤكدة |
+| RoomWaslRepositoryInstrumentedTest | Restart، الذرية، Idempotency، Overpayment، التزامن، Foreign keys، الإغلاق والعكس |
+| WaslDatabaseBaselineTest | فتح Schema v1 المصدّر والتحقق منه بواسطة Room |
 
 ## CI
 
@@ -85,6 +89,7 @@
 - app:testDebugUnitTest.
 - app:lintDebug.
 - app:assembleDebug.
+- app:connectedDebugAndroidTest على Emulator API 35 بعد نجاح Job البناء.
 
 لا يبنى Release موقعع في Foundation، ولا تحفظ مفاتيح توقيع في المستودع.
 
@@ -93,6 +98,7 @@
 - لا اختبارات حمراء.
 - لا Lint errors.
 - Debug APK يبنى.
+- اختبارات Room على Android Emulator تنجح.
 - Git diff مراجع.
 - SPEC وHANDOFF محدثان.
 - أي Test غير ممكن مذكور مع السبب والخطر.

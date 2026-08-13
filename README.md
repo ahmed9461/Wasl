@@ -6,14 +6,16 @@
 
 ## الحالة الحالية
 
-المشروع في المرحلة التأسيسية للـMVP:
+المشروع في المرحلة الأولى للـMVP، وقد اكتملت قاعدة الحفظ لأول مسار فعلي:
 
 - المرجع التأسيسي محفوظ في WASL_MASTER_PROJECT_PROMPT.md.
 - Stack ومعمارية المنتج موثقان.
-- يوجد Android skeleton قابل للبناء.
+- يوجد تطبيق Android قابل للبناء بواجهة عربية RTL.
 - يوجد Domain مالي مستقل يحفظ أصل الدين ويشتق الرصيد من الدفعات والعكس الموثق.
-- توجد اختبارات لوحدة المال والسداد الجزئي والكامل والعكس وفصل العملات.
-- لم تُربط قاعدة البيانات بعد، لذلك لا تعرض الواجهة إجراءات مالية توهم بحفظ دائم.
+- توجد قاعدة Room v1 للأشخاص والديون وLedger append-only مع Schema مصدّر.
+- يحفظ المسار السريع من الواجهة شخصًا ودينًا فعليين، ثم يعرضهما من قاعدة البيانات بعد إعادة الفتح.
+- يدعم Repository تسجيل الدفعة وعكسها ذرّيًا مع Idempotency وإغلاق/إعادة فتح مشتقين؛ واجهتهما للمستخدم هي الخطوة التالية.
+- تغطي الاختبارات المال، Parsing العربي الدقيق، إعادة فتح قاعدة البيانات، التزامن، القيود وMigration baseline.
 
 اقرأ HANDOFF.md لمعرفة الوضع الحي والخطوة التالية الوحيدة.
 
@@ -41,10 +43,12 @@
 الأوامر:
 
 - ./gradlew :core:domain:test
+- ./gradlew :app:testDebugUnitTest
 - ./gradlew :app:lintDebug
 - ./gradlew :app:assembleDebug
+- ./gradlew :app:connectedDebugAndroidTest
 
-GitHub Actions يشغّل اختبارات الدومين واختبارات Android المحلية وLint وبناء Debug في كل Push وPull Request.
+GitHub Actions يشغّل اختبارات الدومين والـViewModel وLint وبناء Debug، ثم اختبارات Room على Android Emulator فعلي في كل Push وPull Request.
 
 ## خريطة المستودع
 
@@ -59,7 +63,7 @@ GitHub Actions يشغّل اختبارات الدومين واختبارات And
 | CHANGELOG.md | التغييرات المهمة |
 | docs/ | المعمارية وSchema والتنقل والتصميم والأمان والاختبارات |
 | core/domain/ | مصدر الحقيقة المالي الخالي من Android |
-| app/ | تطبيق Android وواجهة Compose |
+| app/ | تطبيق Android وواجهة Compose وRoom وRepository واختبارات الجهاز |
 
 ## مبادئ غير قابلة للتفاوض
 

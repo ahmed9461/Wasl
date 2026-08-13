@@ -60,6 +60,7 @@
 - اختبارات Android المحلية: ./gradlew :app:testDebugUnitTest
 - Lint: ./gradlew :app:lintDebug
 - بناء Debug: ./gradlew :app:assembleDebug
+- اختبارات Room على جهاز/محاكي: ./gradlew :app:connectedDebugAndroidTest
 - التحقق الكامل: ./gradlew :core:domain:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 
 إذا تعذر تشغيل أمر بسبب بيئة العمل، اذكر ذلك صراحة ولا تدّع نجاحه. يعمل GitHub Actions كحاجز تحقق إضافي، لا كبديل عن فهم الفشل.

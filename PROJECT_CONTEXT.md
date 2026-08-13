@@ -1,6 +1,6 @@
 # سياق مشروع وَصل
 
-آخر تحديث: 2026-08-12
+آخر تحديث: 2026-08-13
 
 ## الهوية
 
@@ -22,23 +22,26 @@
 
 ## المرحلة الحالية
 
-Foundation / بداية المرحلة الأولى.
+MVP Phase 1 / Persistence foundation وأول مسار إدخال فعلي.
 
 ما يعمل الآن:
 
 - Gradle project بوحدتي app وcore:domain.
-- واجهة Compose تأسيسية عربية وRTL مع Light/Dark.
+- واجهة Compose عربية وRTL مع Light/Dark وحالات Loading وEmpty وError وSuccess.
 - تمثيل دقيق للمال بالوحدات الصغرى Long.
 - Debt ledger يحتفظ بالأصل ويضيف PaymentRecorded وPaymentReversed.
 - اشتقاق الرصيد وحالة الدين والاستحقاق من Domain واحد.
 - تجميع الأرصدة حسب الاتجاه والعملة دون خلط العملات.
-- Unit tests لهذه القواعد.
-- CI للبناء والاختبارات وLint.
+- Room 2.8.4 Schema v1 للجداول persons وdebts وledger_entries مع Schema JSON مصدّر.
+- Repository ذري لإنشاء شخص ودين وتسجيل دفعة وعكسها مع Idempotency وReplay بعد القراءة.
+- أول مسار UI يحفظ شخصًا ودينًا ويعرض الحسابات والإجماليات حسب العملة.
+- Unit tests واختبارات Room على Emulator للإغلاق وإعادة الفتح والتزامن والقيود.
+- CI للبناء والاختبارات وLint واختبارات الجهاز.
 
 ما لا يعمل بعد:
 
-- Persistence وRoom.
-- إنشاء الأشخاص والديون من الواجهة.
+- واجهة تفاصيل الحساب وتسجيل الدفعات وعكسها.
+- اختيار شخص موجود وإنشاء أكثر من دين له من الواجهة.
 - التذكيرات والمنبهات.
 - المستندات وPDF.
 - النسخ الاحتياطي والاستعادة.
@@ -53,7 +56,7 @@ Foundation / بداية المرحلة الأولى.
 | UI | Jetpack Compose + Material 3 |
 | المعمارية | UI / Domain / Data مع UDF وRepositories |
 | المنطق المالي | وحدة JVM مستقلة core:domain |
-| قاعدة البيانات | Room 2.8.4 في الخطوة التالية، بعد Schema v1 واختبارات Migration |
+| قاعدة البيانات | Room 2.8.4 + KSP 2.3.11، Schema v1 مصدّر واختبار baseline |
 | الإعدادات | DataStore عند الحاجة |
 | التنقل | Navigation 3 عند إضافة الوجهات الفعلية |
 | الأعمال المؤجلة | WorkManager |
@@ -66,7 +69,7 @@ Foundation / بداية المرحلة الأولى.
 
 ## البنية الحالية
 
-- app: Android entry point، Theme، واجهة Compose.
+- app: Android entry point، Compose، ViewModel، Room، Repository واختبارات الجهاز.
 - core:domain: Money، CurrencyCode، Debt aggregate، ledger، summary.
 - docs: عقود التصميم والهندسة.
 - .github/workflows/ci.yml: حاجز التحقق الآلي.
@@ -78,9 +81,9 @@ Foundation / بداية المرحلة الأولى.
 - لا يعتمد Domain على Android أو Room أو Compose.
 - PDF والتقارير يستهلكان نفس Read models الناتجة من Domain، ولا يعيدان حساب المال.
 
-## نموذج البيانات المخطط
+## نموذج البيانات
 
-التفاصيل في docs/DATABASE_SCHEMA.md. الجداول الأساسية المخططة: persons، debts، ledger_entries، promises، reminders، installments، attachments، document_identities، documents، audit_events.
+التفاصيل في docs/DATABASE_SCHEMA.md. نُفذت persons وdebts وledger_entries في Schema v1. تبقى promises وreminders وinstallments وattachments وdocument_identities وdocuments وaudit_events مخططة لشرائحها، ولا تضاف كجداول فارغة قبل وجود سلوك واختبارات.
 
 ## التشغيل
 

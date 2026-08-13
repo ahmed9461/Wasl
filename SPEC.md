@@ -1,7 +1,7 @@
 # مواصفات منتج وَصل
 
 الإصدار: 0.1 — Foundation
-آخر تحديث: 2026-08-12
+آخر تحديث: 2026-08-13
 
 WASL_MASTER_PROJECT_PROMPT.md هو المرجع التأسيسي الأعلى. هذه الوثيقة تحوّل محتواه إلى متطلبات تشغيلية قابلة للتنفيذ والاختبار، ولا تلغي أي تفصيل وارد فيه.
 
@@ -480,15 +480,19 @@ Logs تقنية فقط بلا PII أو مبالغ أو أوصاف ديون أو 
 
 | المتطلب | الحالة | الدليل |
 |---|---|---|
-| INV-002 وINV-003 | منفذ جزئيًا | core/domain |
+| INV-002 وINV-003 | منفذ في Domain ومسار الحفظ الحالي | core/domain وRoomWaslRepository |
+| INV-004 | منفذ لعمليات الدين الحالية | Room transactions واختبارات Rollback/Concurrency |
+| PER-001 وDEBT-001 | منفذ للمسار السريع لشخص جديد | HomeViewModel وWaslApp واختبار إعادة الفتح |
 | DEBT-003 | منفذ في Domain | DebtLedger |
-| PAY-001 إلى PAY-004 | منفذ في الذاكرة واختبارات | DebtLedgerTest |
+| DEBT-004 وDEBT-005 | منفذ في Repository، بلا UI بعد | closed_at projection واختبار الدفع النهائي والعكس |
+| PAY-001 إلى PAY-005 | منفذ في Domain وPersistence، بلا UI بعد | DebtLedgerTest واختبارات Room |
 | CUR-001 إلى CUR-003 | منفذ في Domain واختبارات | BalanceSummaryTest |
-| UX-001 وUX-002 | Skeleton | app/WaslApp.kt |
-| Persistence | غير منفذ | الخطوة التالية |
+| UX-001 وUX-002 | منفذان في أول شاشة فعلية | app/WaslApp.kt |
+| FAIL-003 | متحقق للمسار المؤكد الحالي | اختبار إغلاق Room وإعادة فتحها |
+| Persistence v1 | منفذ للجداول المالية الأساسية | Schema JSON وWaslDatabaseBaselineTest |
 | باقي MVP | غير منفذ | HANDOFF.md |
 
-لا تعني حالة Domain أن Feature للمستخدم مكتملة؛ لا تكتمل حتى Persistence وUI واختبارات Restart.
+واجهة إنشاء الدين مكتملة لأول مسار سريع فقط. Repository الدفعات والعكس موثوق ومختبر، لكن Feature المستخدم لا تكتمل حتى تضاف شاشة تفاصيل الحساب وإجراءاتها.
 
 ## 24. تتبع المرجع التأسيسي
 

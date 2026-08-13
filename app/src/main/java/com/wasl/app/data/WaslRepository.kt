@@ -1,0 +1,17 @@
+package com.wasl.app.data
+
+import com.wasl.domain.DebtId
+import com.wasl.domain.DebtLedger
+import kotlinx.coroutines.flow.Flow
+
+interface WaslRepository {
+    fun observeAccounts(): Flow<List<AccountOverview>>
+
+    suspend fun createPersonWithDebt(command: CreatePersonWithDebtCommand): AccountOverview
+
+    suspend fun getAccount(debtId: DebtId): AccountOverview?
+
+    suspend fun recordPayment(command: RecordPaymentCommand): DebtLedger
+
+    suspend fun reversePayment(command: ReversePaymentCommand): DebtLedger
+}

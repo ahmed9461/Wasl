@@ -1,6 +1,6 @@
 # القرارات المعمارية والتقنية
 
-آخر تحديث: 2026-08-12
+آخر تحديث: 2026-08-13
 
 أي تغيير في قرار معتمد هنا يحتاج سببًا موثقًا واختبارات أثر. لا تُرقّى المكتبات لمجرد وجود إصدار أحدث.
 
@@ -60,8 +60,8 @@
 
 ## ADR-006 — Room 2.8.4 لـSchema v1
 
-- الحالة: معتمد للخطوة التالية، غير منفذ بعد
-- القرار: استخدام Room 2.8.4 مع تصدير Schema واختبارات Migration.
+- الحالة: معتمد ومنفذ للجداول المالية الأساسية
+- القرار: استخدام Room 2.8.4 مع KSP 2.3.11 وتصدير Schema واختبارات Migration. يبدأ v1 بـpersons وdebts وledger_entries فقط؛ تضاف الجداول اللاحقة مع سلوكها الفعلي وMigration صريحة.
 - السبب: Android-only يحتاج حلًا مستقرًا ومجربًا، والتحقق وقت الترجمة من SQL ومسار Migrations. Room موصى به رسميًا بدل SQLite المباشر.
 - البدائل:
   - SQLite API مباشرة: مرفوضة لكثرة Boilerplate وضعف التحقق وقت البناء.
@@ -71,6 +71,11 @@
   - [Room موصى به بدل SQLite المباشر](https://developer.android.com/training/data-storage/room)
   - [Room 2 release notes](https://developer.android.com/jetpack/androidx/releases/room)
   - [Room 3.0 والفروق الجوهرية](https://developer.android.com/jetpack/androidx/releases/room3)
+  - [KSP](https://github.com/google/ksp)
+- النتيجة التنفيذية:
+  - `app/schemas/com.wasl.app.data.local.WaslDatabase/1.json` جزء دائم من المستودع.
+  - لا يوجد `fallbackToDestructiveMigration` في Production.
+  - Version 1 هو Baseline ولا يحتاج Migration سابقة؛ كل Version تالٍ يضاف إلى `ALL_MIGRATIONS` ويختبر من أقدم إصدار مدعوم.
 
 ## ADR-007 — Compose وMaterial 3 وNavigation 3
 
@@ -163,10 +168,10 @@
 
 ## ADR-012 — عدم إدخال Hilt في أول Slice
 
-- الحالة: معتمد مؤقتًا
+- الحالة: معتمد ومطبق مؤقتًا
 - القرار: Constructor injection يدوي في البداية. يضاف Hilt فقط عندما توجد عدة Implementations أو Workers أو ViewModels تجعل Composition root اليدوي عبئًا حقيقيًا.
 - السبب: لا توجد Dependencies تشغيلية الآن تبرر Annotation processing وتعقيده.
 - البدائل:
   - Service locator عالمي: مرفوض.
   - Hilt من أول ملف: غير ضروري في هذه المرحلة.
-- النتيجة: يجب أن تبقى Constructors قابلة للحقن كي لا يتحول القرار المؤقت إلى اقتران.
+- النتيجة: `WaslApplication` هو Composition root الصغير، و`RoomWaslRepository` و`HomeViewModel` يقبلان Dependencies من Constructors. يعاد تقييم Hilt عند دخول Workers أو تعدد Implementations.

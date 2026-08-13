@@ -1,7 +1,7 @@
 # تصميم قاعدة البيانات
 
-الحالة: تصميم Schema v1 قبل التنفيذ
-المحرك المخطط: Room 2.8.4 فوق SQLite
+الحالة: Schema v1 منفذ ومصدّر للجداول المالية الأساسية
+المحرك: Room 2.8.4 فوق SQLite، وتوليد الكود عبر KSP 2.3.11
 المبدأ: Ledger هو مصدر الحقيقة، والجداول المشتقة Projections فقط.
 
 ## قواعد عامة
@@ -14,6 +14,8 @@
 - لا Cascade delete لسجل مالي.
 - كل Migration تصدر Schema JSON وتملك اختبارًا.
 - لا تخزن صور أو PDF كبيرة داخل BLOB؛ تخزن ملفات خاصة بالتطبيق وMetadata في DB.
+- ملف Schema المصدّر: `app/schemas/com.wasl.app.data.local.WaslDatabase/1.json`.
+- لا توجد Migration إلى v1 لأنه Baseline. Registry الحالية فارغة عمدًا، وأي v2 يحتاج Migration واختبارًا قبل الدمج.
 
 ## persons
 
@@ -86,6 +88,13 @@ Constraints منطقية داخل Transaction وDomain:
 - Unique على reverses_entry_id غير الفارغ يمنع عكس الدفعة مرتين.
 - recorded_at للعكس لا يسبق Payment.
 - لا Update أو Delete لصف مالي في التشغيل العادي.
+
+## Idempotency في المسار المركب
+
+- `debt_id` هو مفتاح Idempotency لإنشاء الشخص والدين معًا في v1، ويولد قبل الكتابة ويبقى ثابتًا عبر Retry.
+- تكرار الأمر نفسه يعيد الحساب الموجود، واستخدام `debt_id` نفسه مع Payload مختلف يفشل بـCommandConflict.
+- `command_id` الفريد هو مفتاح دفعات وعكس الدفعات.
+- لا تعرض DAOs أي Update أو Delete لـledger_entries.
 
 Index: debt_id مع sequence_number فريد.
 
@@ -224,3 +233,7 @@ Snapshots Versioned ولا تعاد قراءتها من الهوية الحال�
 3. Migration test يبدأ من أقدم إصدار مدعوم إلى الحالي.
 4. بعد Migration يعاد Replay للأرصدة وتفحص Foreign keys وUnique constraints.
 5. Backup قبل Migration الكبرى عند توفر مساحة، دون تخزين نسخة غير مشفرة خارجيًا.
+
+## نطاق التنفيذ الحالي
+
+نُفذت persons وdebts وledger_entries لأنها تكفي لمسار الدين والسداد الموثوق. بقية الجداول في هذه الوثيقة تصميم معتمد لشرائح لاحقة، وليست جزءًا من Schema v1 الفعلية حتى الآن.

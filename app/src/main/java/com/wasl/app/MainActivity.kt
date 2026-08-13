@@ -10,7 +10,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            WaslApp()
+            WaslApp(
+                repository = (application as WaslApplication).repository,
+            )
         }
     }
 }

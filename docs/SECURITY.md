@@ -25,11 +25,12 @@
 
 - Android sandbox.
 - usesCleartextTraffic=false.
-- allowBackup=false.
+- allowBackup=false، مع dataExtractionRules وfullBackupContent تستبعد كل Domains من Cloud backup وDevice transfer حتى بناء Backup تطبيقي مشفر.
 - Activity الوحيدة مصدرة فقط لأنها Launcher.
 - .gitignore يمنع Keystores وenv.
 - لا Backend ولا Analytics.
 - Domain يرفض عملة مختلفة وOverpayment وOverflow.
+- Room يفعّل Foreign keys، والسجل المالي بلا Update/Delete DAO، والكتابات المركبة داخل Transactions.
 
 ## الضوابط المطلوبة قبل MVP
 

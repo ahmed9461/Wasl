@@ -23,6 +23,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Rule
 import org.junit.runner.RunWith
 
@@ -67,7 +68,12 @@ class PaymentFlowUiInstrumentedTest {
         composeRule.onNodeWithTag("create-debt-save").performClick()
         waitForText("أحمد")
         val debtId = runBlocking {
-            repositoryState.value.observeAccounts().first().single().ledger.header.id.value
+            withTimeout(10_000) {
+                repositoryState.value.observeAccounts()
+                    .first { it.isNotEmpty() }
+                    .single()
+                    .ledger.header.id.value
+            }
         }
 
         composeRule.onNodeWithTag("account-$debtId").assertIsDisplayed().performClick()

@@ -77,7 +77,7 @@ class PaymentFlowUiInstrumentedTest {
 
         waitForTagToDisappear("create-debt-save")
         waitForTag("account-$debtId")
-        composeRule.onNodeWithTag("account-$debtId").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("أحمد").assertIsDisplayed().performClick()
         waitForTag("record-payment")
         composeRule.onNodeWithTag("record-payment").performClick()
         composeRule.onNodeWithTag("payment-amount").performTextInput("20000")
@@ -97,7 +97,7 @@ class PaymentFlowUiInstrumentedTest {
         }
 
         waitForTag("account-$debtId")
-        composeRule.onNodeWithTag("account-$debtId").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("أحمد").assertIsDisplayed().performClick()
         waitForText("دفعة مسجلة")
         composeRule.onNodeWithTag("account-remaining")
             .assertTextContains("80,000 YER", substring = true)

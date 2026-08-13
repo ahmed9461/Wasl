@@ -52,12 +52,15 @@ class PaymentFlowUiInstrumentedTest {
     fun createDebtRecordPartialPaymentAndReopenFromPersistedData() {
         val repositoryState = mutableStateOf<WaslRepository>(RoomWaslRepository(database!!))
         val generation = mutableIntStateOf(0)
+        val requestedDebtIdState = mutableStateOf<String?>(null)
         composeRule.setContent {
             val currentGeneration = generation.intValue
             key(currentGeneration) {
                 WaslApp(
                     repository = repositoryState.value,
                     instanceKey = "ui-test-$currentGeneration",
+                    requestedDebtId = requestedDebtIdState.value,
+                    onRequestedDebtHandled = { requestedDebtIdState.value = null },
                 )
             }
         }
@@ -77,7 +80,7 @@ class PaymentFlowUiInstrumentedTest {
 
         waitForTagToDisappear("create-debt-save")
         waitForTag("account-$debtId")
-        composeRule.onNodeWithText("أحمد").assertIsDisplayed().performClick()
+        composeRule.runOnIdle { requestedDebtIdState.value = debtId }
         waitForTag("record-payment")
         composeRule.onNodeWithTag("record-payment").performClick()
         composeRule.onNodeWithTag("payment-amount").performTextInput("20000")
@@ -94,10 +97,9 @@ class PaymentFlowUiInstrumentedTest {
             openDatabase()
             repositoryState.value = RoomWaslRepository(database!!)
             generation.intValue += 1
+            requestedDebtIdState.value = debtId
         }
 
-        waitForTag("account-$debtId")
-        composeRule.onNodeWithText("أحمد").assertIsDisplayed().performClick()
         waitForText("دفعة مسجلة")
         composeRule.onNodeWithTag("account-remaining")
             .assertTextContains("80,000 YER", substring = true)

@@ -3,6 +3,8 @@ package com.wasl.app.reminder
 import android.Manifest
 import android.app.NotificationManager
 import android.content.Context
+import android.os.SystemClock
+import android.service.notification.StatusBarNotification
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
@@ -78,10 +80,21 @@ class ReminderNotificationPublisherInstrumentedTest {
 
         publisher.publish(reminder, account)
 
-        val posted = context.getSystemService(NotificationManager::class.java)
-            .activeNotifications
-            .firstOrNull { it.tag == reminderId }
+        val posted = awaitPostedNotification(
+            context.getSystemService(NotificationManager::class.java),
+        )
         assertNotNull(posted)
         assertNotNull(posted.notification.contentIntent)
+    }
+
+    private fun awaitPostedNotification(
+        manager: NotificationManager,
+    ): StatusBarNotification? {
+        val deadline = SystemClock.elapsedRealtime() + 5_000L
+        do {
+            manager.activeNotifications.firstOrNull { it.tag == reminderId }?.let { return it }
+            SystemClock.sleep(50L)
+        } while (SystemClock.elapsedRealtime() < deadline)
+        return null
     }
 }

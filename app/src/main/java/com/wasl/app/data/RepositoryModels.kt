@@ -40,7 +40,136 @@ data class AccountOverview(
     val closedAt: Instant? = null,
     val dueReminder: ReminderRecord? = null,
     val dueScheduleAuditEvents: List<DueScheduleAuditEvent> = emptyList(),
+    val issuedDocuments: List<IssuedDocumentRecord> = emptyList(),
 )
+
+enum class DocumentType {
+    PAYMENT_RECEIPT,
+}
+
+enum class DocumentStatus {
+    PENDING_PDF,
+    READY,
+    FAILED,
+}
+
+data class DocumentIdentityRecord(
+    val id: String,
+    val displayName: String,
+    val activityName: String? = null,
+    val phone: String? = null,
+    val footerText: String? = null,
+    val isDefault: Boolean,
+    val createdAt: Instant,
+    val updatedAt: Instant,
+) {
+    init {
+        require(id.isNotBlank()) { "Document identity ID cannot be blank." }
+        require(displayName.isNotBlank()) { "Document identity name cannot be blank." }
+    }
+}
+
+data class DocumentIdentitySnapshot(
+    val displayName: String,
+    val activityName: String? = null,
+    val phone: String? = null,
+    val footerText: String? = null,
+) {
+    init {
+        require(displayName.isNotBlank()) { "Document identity name cannot be blank." }
+    }
+}
+
+data class PaymentReceiptSnapshot(
+    val version: Int,
+    val documentId: String,
+    val documentNumber: String,
+    val issuedAt: Instant,
+    val issueZoneId: ZoneId,
+    val debtId: DebtId,
+    val paymentId: LedgerEntryId,
+    val personId: PersonId,
+    val personName: String,
+    val direction: DebtDirection,
+    val originalAmount: Money,
+    val balanceBefore: Money,
+    val paymentAmount: Money,
+    val balanceAfter: Money,
+    val paidAt: Instant,
+    val paymentNote: String? = null,
+    val debtDescription: String? = null,
+    val identity: DocumentIdentitySnapshot,
+) {
+    init {
+        require(version > 0) { "Snapshot version must be positive." }
+        require(documentId.isNotBlank()) { "Document ID cannot be blank." }
+        require(documentNumber.isNotBlank()) { "Document number cannot be blank." }
+        require(personName.isNotBlank()) { "Snapshot person name cannot be blank." }
+        require(originalAmount.currency == paymentAmount.currency) {
+            "Receipt currency must match the original debt currency."
+        }
+        require(balanceBefore.minus(paymentAmount) == balanceAfter) {
+            "Receipt balances must match the snapshotted payment."
+        }
+    }
+}
+
+data class IssuedDocumentRecord(
+    val id: String,
+    val commandId: String,
+    val type: DocumentType,
+    val status: DocumentStatus,
+    val documentNumber: String,
+    val debtId: DebtId,
+    val ledgerEntryId: LedgerEntryId,
+    val identityId: String,
+    val issuedAt: Instant,
+    val snapshot: PaymentReceiptSnapshot,
+    val pdfRelativePath: String,
+    val pdfSha256: String? = null,
+    val pageCount: Int? = null,
+    val failureCode: String? = null,
+    val createdAt: Instant,
+    val updatedAt: Instant,
+) {
+    init {
+        require(id.isNotBlank()) { "Document ID cannot be blank." }
+        require(commandId.isNotBlank()) { "Document command ID cannot be blank." }
+        require(documentNumber.isNotBlank()) { "Document number cannot be blank." }
+        require(pdfRelativePath.isNotBlank()) { "PDF path cannot be blank." }
+        require(snapshot.documentId == id) { "Snapshot document ID must match its record." }
+        require(snapshot.documentNumber == documentNumber) {
+            "Snapshot document number must match its record."
+        }
+        require(snapshot.debtId == debtId && snapshot.paymentId == ledgerEntryId) {
+            "Snapshot source must match its document record."
+        }
+        require(status != DocumentStatus.READY || !pdfSha256.isNullOrBlank()) {
+            "A ready document requires a PDF checksum."
+        }
+    }
+}
+
+data class PreparePaymentReceiptCommand(
+    val commandId: String,
+    val documentId: String,
+    val identityId: String,
+    val debtId: DebtId,
+    val paymentId: LedgerEntryId,
+    val issuerDisplayName: String,
+    val issuerActivityName: String? = null,
+    val issuerPhone: String? = null,
+    val footerText: String? = null,
+    val issuedAt: Instant,
+    val issueZoneId: ZoneId,
+) {
+    init {
+        require(commandId.isNotBlank()) { "Document command ID cannot be blank." }
+        require(documentId.isNotBlank()) { "Document ID cannot be blank." }
+        require(identityId.isNotBlank()) { "Document identity ID cannot be blank." }
+        require(issuerDisplayName.isNotBlank()) { "Issuer name cannot be blank." }
+    }
+}
 
 enum class ReminderStatus {
     SCHEDULED,

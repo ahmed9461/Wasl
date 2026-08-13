@@ -55,6 +55,8 @@ import com.wasl.app.data.AccountOverview
 import com.wasl.app.data.DueReminderRequest
 import com.wasl.app.data.DueScheduleAuditEvent
 import com.wasl.app.data.ReminderStatus
+import com.wasl.app.data.DocumentStatus
+import com.wasl.app.data.IssuedDocumentRecord
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtState
 import com.wasl.domain.LedgerEntryId
@@ -86,6 +88,17 @@ internal fun AccountDetailsScreen(
     onDismissReversal: () -> Unit,
     onReversalReasonChange: (String) -> Unit,
     onConfirmReversal: () -> Unit,
+    onOpenReceiptDialog: (LedgerEntryId) -> Unit,
+    onDismissReceiptDialog: () -> Unit,
+    onReceiptIssuerNameChange: (String) -> Unit,
+    onReceiptActivityNameChange: (String) -> Unit,
+    onReceiptPhoneChange: (String) -> Unit,
+    onReceiptFooterChange: (String) -> Unit,
+    onConfirmPaymentReceipt: () -> Unit,
+    onRetryPaymentReceipt: (String) -> Unit,
+    onOpenReceipt: (IssuedDocumentRecord) -> Unit,
+    onShareReceipt: (IssuedDocumentRecord) -> Unit,
+    onReceiptReadyHandled: () -> Unit,
     onOpenDueSchedule: () -> Unit,
     onDismissDueSchedule: () -> Unit,
     onDueScheduleDateChange: (LocalDate?) -> Unit,
@@ -99,6 +112,11 @@ internal fun AccountDetailsScreen(
         val notice = state.notice ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(notice.toDisplayText())
         onNoticeShown()
+    }
+    LaunchedEffect(state.receiptReadyToOpen) {
+        val document = state.receiptReadyToOpen ?: return@LaunchedEffect
+        onOpenReceipt(document)
+        onReceiptReadyHandled()
     }
 
     val account = state.account
@@ -165,6 +183,12 @@ internal fun AccountDetailsScreen(
                     scaffoldPadding = scaffoldPadding,
                     onRetry = onRetry,
                     onOpenReversal = onOpenReversal,
+                    onOpenReceiptDialog = onOpenReceiptDialog,
+                    onRetryPaymentReceipt = onRetryPaymentReceipt,
+                    onOpenReceipt = onOpenReceipt,
+                    onShareReceipt = onShareReceipt,
+                    retryingReceiptId = state.retryingReceiptId,
+                    receiptRecoveryErrorDocumentId = state.receiptRecoveryErrorDocumentId,
                     onOpenDueSchedule = onOpenDueSchedule,
                 )
             }
@@ -204,6 +228,27 @@ internal fun AccountDetailsScreen(
         )
     }
 
+    val receiptPayment = account
+        ?.ledger
+        ?.entries
+        ?.filterIsInstance<PaymentRecorded>()
+        ?.firstOrNull { it.id == state.receiptPaymentId }
+    if (state.receiptPaymentId != null && receiptPayment != null) {
+        PaymentReceiptDialog(
+            payment = receiptPayment,
+            form = state.receiptIdentityForm,
+            isLoadingIdentity = state.isLoadingReceiptIdentity,
+            isSaving = state.isIssuingReceipt,
+            error = state.receiptError,
+            onDismiss = onDismissReceiptDialog,
+            onIssuerNameChange = onReceiptIssuerNameChange,
+            onActivityNameChange = onReceiptActivityNameChange,
+            onPhoneChange = onReceiptPhoneChange,
+            onFooterChange = onReceiptFooterChange,
+            onConfirm = onConfirmPaymentReceipt,
+        )
+    }
+
 
     if (state.isDueScheduleDialogOpen && account != null) {
         DueScheduleDialog(
@@ -226,12 +271,19 @@ private fun AccountDetailsContent(
     scaffoldPadding: PaddingValues,
     onRetry: () -> Unit,
     onOpenReversal: (LedgerEntryId) -> Unit,
+    onOpenReceiptDialog: (LedgerEntryId) -> Unit,
+    onRetryPaymentReceipt: (String) -> Unit,
+    onOpenReceipt: (IssuedDocumentRecord) -> Unit,
+    onShareReceipt: (IssuedDocumentRecord) -> Unit,
+    retryingReceiptId: String?,
+    receiptRecoveryErrorDocumentId: String?,
     onOpenDueSchedule: () -> Unit,
 ) {
     val payments = account.ledger.entries
         .filterIsInstance<PaymentRecorded>()
         .associateBy { it.id }
     val reversedPaymentIds = account.ledger.reversedPaymentIds
+    val documentsByPayment = account.issuedDocuments.associateBy { it.ledgerEntryId }
     val timelineItems = buildList<AccountTimelineItem> {
         account.ledger.entries.forEach { entry ->
             add(AccountTimelineItem.Ledger(entry))
@@ -296,7 +348,15 @@ private fun AccountDetailsContent(
                     is PaymentRecorded -> PaymentTimelineCard(
                         payment = entry,
                         isReversed = entry.id in reversedPaymentIds,
+                        document = documentsByPayment[entry.id],
+                        isRetryingReceipt = retryingReceiptId == documentsByPayment[entry.id]?.id,
+                        receiptRecoveryFailed = receiptRecoveryErrorDocumentId ==
+                            documentsByPayment[entry.id]?.id,
                         onReverse = { onOpenReversal(entry.id) },
+                        onIssueReceipt = { onOpenReceiptDialog(entry.id) },
+                        onRetryReceipt = { documentId -> onRetryPaymentReceipt(documentId) },
+                        onOpenReceipt = onOpenReceipt,
+                        onShareReceipt = onShareReceipt,
                     )
 
                     is PaymentReversed -> ReversalTimelineCard(
@@ -681,6 +741,116 @@ private fun PaymentDialog(
 }
 
 @Composable
+private fun PaymentReceiptDialog(
+    payment: PaymentRecorded,
+    form: ReceiptIdentityForm,
+    isLoadingIdentity: Boolean,
+    isSaving: Boolean,
+    error: String?,
+    onDismiss: () -> Unit,
+    onIssuerNameChange: (String) -> Unit,
+    onActivityNameChange: (String) -> Unit,
+    onPhoneChange: (String) -> Unit,
+    onFooterChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("إصدار إيصال سداد") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    "ستُثبّت بيانات الدفعة والهوية في نسخة تاريخية لا تتغير لاحقًا.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                DetailMoneyRow("مبلغ السداد", payment.amount)
+                MetadataRow("وقت السداد", formatInstant(payment.paidAt))
+                HorizontalDivider()
+                OutlinedTextField(
+                    value = form.displayName,
+                    onValueChange = onIssuerNameChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("receipt-issuer-name"),
+                    label = { Text("اسم مُصدر الإيصال") },
+                    singleLine = true,
+                    enabled = !isSaving && !isLoadingIdentity,
+                )
+                OutlinedTextField(
+                    value = form.activityName,
+                    onValueChange = onActivityNameChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("النشاط — اختياري") },
+                    singleLine = true,
+                    enabled = !isSaving && !isLoadingIdentity,
+                )
+                OutlinedTextField(
+                    value = form.phone,
+                    onValueChange = onPhoneChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("الهاتف — اختياري") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    singleLine = true,
+                    enabled = !isSaving && !isLoadingIdentity,
+                )
+                OutlinedTextField(
+                    value = form.footerText,
+                    onValueChange = onFooterChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("عبارة الإيصال — اختياري") },
+                    minLines = 2,
+                    maxLines = 4,
+                    enabled = !isSaving && !isLoadingIdentity,
+                )
+                if (isLoadingIdentity) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Text("جارٍ تحميل الهوية المحفوظة")
+                    }
+                }
+                error?.let {
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = !isSaving && !isLoadingIdentity,
+                modifier = Modifier.testTag("receipt-confirm"),
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                }
+                Text(if (isSaving) "جارٍ تجهيز PDF" else if (error != null) "إعادة المحاولة" else "إصدار وفتح")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isSaving) {
+                Text("إلغاء")
+            }
+        },
+    )
+}
+
+@Composable
 private fun ReversalDialog(
     payment: PaymentRecorded,
     reason: String,
@@ -752,7 +922,14 @@ private fun ReversalDialog(
 private fun PaymentTimelineCard(
     payment: PaymentRecorded,
     isReversed: Boolean,
+    document: IssuedDocumentRecord?,
+    isRetryingReceipt: Boolean,
+    receiptRecoveryFailed: Boolean,
     onReverse: () -> Unit,
+    onIssueReceipt: () -> Unit,
+    onRetryReceipt: (String) -> Unit,
+    onOpenReceipt: (IssuedDocumentRecord) -> Unit,
+    onShareReceipt: (IssuedDocumentRecord) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -782,14 +959,89 @@ private fun PaymentTimelineCard(
             DetailMoneyRow("المبلغ", payment.amount)
             MetadataRow("وقت السداد", formatInstant(payment.paidAt))
             payment.note?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            document?.let { receipt ->
+                HorizontalDivider()
+                MetadataRow("إيصال السداد", receipt.documentNumber)
+                when (receipt.status) {
+                    DocumentStatus.READY -> {
+                        if (isReversed) {
+                            Text(
+                                "صدر هذا الإيصال قبل عكس الدفعة، وتبقى نسخته التاريخية محفوظة.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.align(Alignment.End),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            TextButton(
+                                onClick = { onShareReceipt(receipt) },
+                                modifier = Modifier.testTag("share-receipt-${receipt.id}"),
+                            ) {
+                                Text("مشاركة")
+                            }
+                            TextButton(
+                                onClick = { onOpenReceipt(receipt) },
+                                modifier = Modifier.testTag("open-receipt-${receipt.id}"),
+                            ) {
+                                Text("فتح PDF")
+                            }
+                        }
+                    }
+
+                    DocumentStatus.PENDING_PDF, DocumentStatus.FAILED -> {
+                        Text(
+                            if (receiptRecoveryFailed) {
+                                "تعذر تجهيز PDF. بيانات الإيصال محفوظة ويمكن إعادة المحاولة."
+                            } else {
+                                "بيانات الإيصال محفوظة، وملف PDF يحتاج إلى تجهيز."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (receiptRecoveryFailed) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                        TextButton(
+                            onClick = { onRetryReceipt(receipt.id) },
+                            enabled = !isRetryingReceipt,
+                            modifier = Modifier
+                                .align(Alignment.End)
+                                .testTag("retry-receipt-${receipt.id}"),
+                        ) {
+                            if (isRetryingReceipt) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                                Spacer(modifier = Modifier.size(6.dp))
+                            }
+                            Text(if (isRetryingReceipt) "جارٍ التجهيز" else "إعادة تجهيز PDF")
+                        }
+                    }
+                }
+            }
             if (!isReversed) {
-                TextButton(
-                    onClick = onReverse,
-                    modifier = Modifier
-                        .align(Alignment.End)
-                        .testTag("reverse-payment-${payment.id.value}"),
+                Row(
+                    modifier = Modifier.align(Alignment.End),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Text("عكس الدفعة")
+                    if (document == null) {
+                        TextButton(
+                            onClick = onIssueReceipt,
+                            modifier = Modifier.testTag("issue-receipt-${payment.id.value}"),
+                        ) {
+                            Text("إصدار إيصال")
+                        }
+                    }
+                    TextButton(
+                        onClick = onReverse,
+                        modifier = Modifier.testTag("reverse-payment-${payment.id.value}"),
+                    ) {
+                        Text("عكس الدفعة")
+                    }
                 }
             }
         }
@@ -968,4 +1220,7 @@ private fun AccountOperationNotice.toDisplayText(): String = when (this) {
         reminderEnabled -> "تم تحديث موعد الاستحقاق وجدولة التذكير في حساب $personName."
         else -> "تم تحديث موعد الاستحقاق دون تذكير في حساب $personName."
     }
+
+    is AccountOperationNotice.PaymentReceiptIssuedNotice ->
+        "تم تجهيز إيصال السداد $documentNumber وحفظه في سجل الدفعة."
 }

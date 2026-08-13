@@ -17,6 +17,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.data.local.RoomWaslRepository
 import com.wasl.app.data.local.WaslDatabase
+import com.wasl.app.document.AndroidPaymentReceiptService
+import com.wasl.app.document.PaymentReceiptService
+import com.wasl.domain.PaymentRecorded
+import java.io.File
 import java.util.UUID
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -46,11 +50,16 @@ class PaymentFlowUiInstrumentedTest {
     fun tearDown() {
         database?.close()
         context.deleteDatabase(databaseName)
+        File(context.filesDir, "documents").listFiles()?.forEach { file -> file.delete() }
     }
 
     @Test
-    fun createDebtRecordPartialPaymentAndReopenFromPersistedData() {
-        val repositoryState = mutableStateOf<WaslRepository>(RoomWaslRepository(database!!))
+    fun createDebtRecordPaymentReceiptAndReopenFromPersistedData() {
+        val initialRepository = RoomWaslRepository(database!!)
+        val repositoryState = mutableStateOf<WaslRepository>(initialRepository)
+        val receiptServiceState = mutableStateOf<PaymentReceiptService>(
+            AndroidPaymentReceiptService(context, initialRepository),
+        )
         val generation = mutableIntStateOf(0)
         val requestedDebtIdState = mutableStateOf<String?>(null)
         composeRule.setContent {
@@ -58,6 +67,7 @@ class PaymentFlowUiInstrumentedTest {
             key(currentGeneration) {
                 WaslApp(
                     repository = repositoryState.value,
+                    paymentReceiptService = receiptServiceState.value,
                     instanceKey = "ui-test-$currentGeneration",
                     requestedDebtId = requestedDebtIdState.value,
                     onRequestedDebtHandled = { requestedDebtIdState.value = null },
@@ -91,11 +101,39 @@ class PaymentFlowUiInstrumentedTest {
         composeRule.onNodeWithTag("account-remaining")
             .assertTextContains("80,000 YER", substring = true)
         composeRule.onNodeWithText("دفعة مسجلة").assertIsDisplayed()
+        val paymentId = runBlocking {
+            withTimeout(10_000) {
+                repositoryState.value.observeAccount(com.wasl.domain.DebtId(debtId))
+                    .first { it?.ledger?.entries?.filterIsInstance<PaymentRecorded>()?.isNotEmpty() == true }
+                    ?.ledger
+                    ?.entries
+                    ?.filterIsInstance<PaymentRecorded>()
+                    ?.single()
+                    ?.id
+                    ?.value
+            }
+        } ?: error("Persisted payment was not found.")
+        composeRule.onNodeWithTag("issue-receipt-$paymentId").performClick()
+        waitForTag("receipt-issuer-name")
+        composeRule.onNodeWithTag("receipt-issuer-name").performTextInput("متجر أحمد")
+        composeRule.onNodeWithTag("receipt-confirm").performClick()
+        val document = runBlocking {
+            withTimeout(10_000) {
+                repositoryState.value.observeAccount(com.wasl.domain.DebtId(debtId))
+                    .first { account -> account?.issuedDocuments?.singleOrNull()?.pdfSha256 != null }
+                    ?.issuedDocuments
+                    ?.single()
+            }
+        } ?: error("Ready payment receipt was not found.")
+        waitForText(document.documentNumber)
+        composeRule.onNodeWithTag("open-receipt-${document.id}").assertIsDisplayed()
 
         composeRule.runOnIdle {
             database!!.close()
             openDatabase()
-            repositoryState.value = RoomWaslRepository(database!!)
+            val reopenedRepository = RoomWaslRepository(database!!)
+            repositoryState.value = reopenedRepository
+            receiptServiceState.value = AndroidPaymentReceiptService(context, reopenedRepository)
             generation.intValue += 1
             requestedDebtIdState.value = debtId
         }
@@ -104,6 +142,8 @@ class PaymentFlowUiInstrumentedTest {
         composeRule.onNodeWithTag("account-remaining")
             .assertTextContains("80,000 YER", substring = true)
         composeRule.onNodeWithText("دفعة مسجلة").assertIsDisplayed()
+        composeRule.onNodeWithText(document.documentNumber).assertIsDisplayed()
+        composeRule.onNodeWithTag("open-receipt-${document.id}").assertIsDisplayed()
     }
 
     private fun openDatabase() {

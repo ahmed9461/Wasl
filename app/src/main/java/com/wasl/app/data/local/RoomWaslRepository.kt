@@ -11,6 +11,14 @@ import com.wasl.app.data.DueScheduleAuditEvent
 import com.wasl.app.data.DueScheduleSnapshot
 import com.wasl.app.data.LocalSearchQuery
 import com.wasl.app.data.PersonRecord
+import com.wasl.app.data.DocumentIdentityRecord
+import com.wasl.app.data.DocumentIdentitySnapshot
+import com.wasl.app.data.DocumentStatus
+import com.wasl.app.data.DocumentType
+import com.wasl.app.data.IssuedDocumentRecord
+import com.wasl.app.data.PaymentReceiptSnapshot
+import com.wasl.app.data.PaymentReceiptStore
+import com.wasl.app.data.PreparePaymentReceiptCommand
 import com.wasl.app.data.RecordNotFoundException
 import com.wasl.app.data.RecordPaymentCommand
 import com.wasl.app.data.ReminderRecord
@@ -25,6 +33,8 @@ import com.wasl.app.data.local.entity.DebtEntity
 import com.wasl.app.data.local.entity.LedgerEntryEntity
 import com.wasl.app.data.local.entity.PersonEntity
 import com.wasl.app.data.local.entity.ReminderEntity
+import com.wasl.app.data.local.entity.DocumentIdentityEntity
+import com.wasl.app.data.local.entity.IssuedDocumentEntity
 import com.wasl.domain.CurrencyCode
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtHeader
@@ -46,12 +56,14 @@ import kotlinx.coroutines.flow.map
 
 class RoomWaslRepository(
     private val database: WaslDatabase,
-) : WaslRepository, ReminderStore {
+) : WaslRepository, ReminderStore, PaymentReceiptStore {
     private val personDao = database.personDao()
     private val debtDao = database.debtDao()
     private val ledgerDao = database.ledgerDao()
     private val reminderDao = database.reminderDao()
     private val auditEventDao = database.auditEventDao()
+    private val documentIdentityDao = database.documentIdentityDao()
+    private val issuedDocumentDao = database.issuedDocumentDao()
 
     override fun observeAccounts(): Flow<List<AccountOverview>> =
         debtDao.observeActiveAggregates().map { aggregates ->
@@ -158,6 +170,168 @@ class RoomWaslRepository(
 
     override suspend fun getAccount(debtId: DebtId): AccountOverview? =
         debtDao.findAggregateById(debtId.value)?.let(::toAccountOverview)
+
+    override suspend fun getDefaultDocumentIdentity(): DocumentIdentityRecord? =
+        documentIdentityDao.findDefault()?.toRecord()
+
+    override suspend fun preparePaymentReceipt(
+        command: PreparePaymentReceiptCommand,
+    ): IssuedDocumentRecord = database.withTransaction {
+        issuedDocumentDao.findByCommandId(command.commandId)?.let { persisted ->
+            validatePaymentReceiptReplay(command, persisted)
+            return@withTransaction persisted.toRecord()
+        }
+        issuedDocumentDao.findBySource(
+            documentType = DocumentType.PAYMENT_RECEIPT.name,
+            ledgerEntryId = command.paymentId.value,
+        )?.let { existing ->
+            require(existing.debtId == command.debtId.value) {
+                "Payment receipt source is linked to another debt."
+            }
+            return@withTransaction existing.toRecord()
+        }
+
+        val account = requireAccount(command.debtId)
+        require(account.lifecycleState == DebtLifecycleState.ACTIVE) {
+            "Only an active debt can issue a payment receipt."
+        }
+        val paymentIndex = account.ledger.entries.indexOfFirst { it.id == command.paymentId }
+        if (paymentIndex < 0) {
+            throw RecordNotFoundException(
+                "Payment ${command.paymentId.value} was not found for debt ${command.debtId.value}.",
+            )
+        }
+        val payment = account.ledger.entries[paymentIndex] as? PaymentRecorded
+            ?: throw IllegalArgumentException("A payment receipt requires a payment entry.")
+        require(payment.id !in account.ledger.reversedPaymentIds) {
+            "A reversed payment cannot receive a new receipt."
+        }
+        require(!command.issuedAt.isBefore(payment.recordedAt)) {
+            "A receipt cannot be issued before its payment was recorded."
+        }
+
+        val normalizedIdentity = DocumentIdentitySnapshot(
+            displayName = command.issuerDisplayName.trim(),
+            activityName = command.issuerActivityName.normalizedOptional(),
+            phone = command.issuerPhone.normalizedOptional(),
+            footerText = command.footerText.normalizedOptional(),
+        )
+        saveDefaultIdentity(command, normalizedIdentity)
+
+        val issueYear = command.issuedAt.atZone(command.issueZoneId).year
+        val sequenceNumber = issuedDocumentDao.nextSequenceNumber(issueYear)
+        val documentNumber = "PAY-$issueYear-${sequenceNumber.toString().padStart(5, '0')}"
+        val balanceBefore = DebtLedger(
+            header = account.ledger.header,
+            entries = account.ledger.entries.take(paymentIndex),
+        ).balance
+        val balanceAfter = DebtLedger(
+            header = account.ledger.header,
+            entries = account.ledger.entries.take(paymentIndex + 1),
+        ).balance
+        val snapshot = PaymentReceiptSnapshot(
+            version = PAYMENT_RECEIPT_SNAPSHOT_VERSION,
+            documentId = command.documentId,
+            documentNumber = documentNumber,
+            issuedAt = command.issuedAt,
+            issueZoneId = command.issueZoneId,
+            debtId = command.debtId,
+            paymentId = payment.id,
+            personId = account.person.id,
+            personName = account.person.displayName,
+            direction = account.ledger.header.direction,
+            originalAmount = account.ledger.header.originalAmount,
+            balanceBefore = balanceBefore,
+            paymentAmount = payment.amount,
+            balanceAfter = balanceAfter,
+            paidAt = payment.paidAt,
+            paymentNote = payment.note,
+            debtDescription = account.ledger.header.description,
+            identity = normalizedIdentity,
+        )
+        val entity = IssuedDocumentEntity(
+            id = command.documentId,
+            commandId = command.commandId,
+            documentType = DocumentType.PAYMENT_RECEIPT.name,
+            status = DocumentStatus.PENDING_PDF.name,
+            documentNumber = documentNumber,
+            issueYear = issueYear,
+            sequenceNumber = sequenceNumber,
+            debtId = command.debtId.value,
+            ledgerEntryId = payment.id.value,
+            identityId = command.identityId,
+            personId = account.person.id.value,
+            personNameSnapshot = account.person.displayName,
+            amountMinor = payment.amount.minorUnits,
+            currencyCode = payment.amount.currency.value,
+            issuedAt = command.issuedAt.toEpochMilli(),
+            snapshotVersion = PAYMENT_RECEIPT_SNAPSHOT_VERSION,
+            snapshotJson = PaymentReceiptSnapshotCodec.encode(snapshot),
+            pdfRelativePath = "documents/$documentNumber.pdf",
+            pdfSha256 = null,
+            pageCount = null,
+            failureCode = null,
+            createdAt = command.issuedAt.toEpochMilli(),
+            updatedAt = command.issuedAt.toEpochMilli(),
+        )
+        issuedDocumentDao.insert(entity)
+        entity.toRecord()
+    }
+
+    override suspend fun getIssuedDocument(documentId: String): IssuedDocumentRecord? =
+        issuedDocumentDao.findById(documentId)?.toRecord()
+
+    override suspend fun markDocumentReady(
+        documentId: String,
+        pdfSha256: String,
+        pageCount: Int,
+        updatedAt: Instant,
+    ): IssuedDocumentRecord = database.withTransaction {
+        require(pdfSha256.matches(Regex("[0-9a-f]{64}"))) {
+            "PDF checksum must be a lowercase SHA-256 value."
+        }
+        require(pageCount > 0) { "A PDF must contain at least one page." }
+        val existing = issuedDocumentDao.findById(documentId)
+            ?: throw RecordNotFoundException("Document $documentId was not found.")
+        if (existing.status == DocumentStatus.READY.name) {
+            if (existing.pdfSha256 != pdfSha256 || existing.pageCount != pageCount) {
+                throw CommandConflictException("Ready document metadata cannot be replaced.")
+            }
+            return@withTransaction existing.toRecord()
+        }
+        check(
+            issuedDocumentDao.markReady(
+                id = documentId,
+                pdfSha256 = pdfSha256,
+                pageCount = pageCount,
+                updatedAt = updatedAt.toEpochMilli(),
+            ) == 1,
+        ) { "Document $documentId was not marked ready." }
+        requireNotNull(issuedDocumentDao.findById(documentId)).toRecord()
+    }
+
+    override suspend fun markDocumentFailed(
+        documentId: String,
+        failureCode: String,
+        updatedAt: Instant,
+    ): IssuedDocumentRecord = database.withTransaction {
+        require(failureCode.matches(Regex("[A-Z0-9_]{1,48}"))) {
+            "Document failure code is invalid."
+        }
+        val existing = issuedDocumentDao.findById(documentId)
+            ?: throw RecordNotFoundException("Document $documentId was not found.")
+        if (existing.status == DocumentStatus.READY.name) {
+            return@withTransaction existing.toRecord()
+        }
+        check(
+            issuedDocumentDao.markFailed(
+                id = documentId,
+                failureCode = failureCode,
+                updatedAt = updatedAt.toEpochMilli(),
+            ) == 1,
+        ) { "Document $documentId was not marked failed." }
+        requireNotNull(issuedDocumentDao.findById(documentId)).toRecord()
+    }
 
     override suspend fun getReminder(reminderId: String): ReminderRecord? =
         reminderDao.findById(reminderId)?.toRecord()
@@ -613,8 +787,116 @@ class RoomWaslRepository(
                 .sortedWith(
                     compareBy<DueScheduleAuditEvent> { it.occurredAt }.thenBy { it.id },
                 ),
+            issuedDocuments = aggregate.issuedDocuments
+                .map { it.toRecord() }
+                .sortedWith(
+                    compareBy<IssuedDocumentRecord> { it.issuedAt }.thenBy { it.id },
+                ),
         )
     }
+
+    private suspend fun saveDefaultIdentity(
+        command: PreparePaymentReceiptCommand,
+        snapshot: DocumentIdentitySnapshot,
+    ) {
+        documentIdentityDao.clearOtherDefaults(command.identityId)
+        val existing = documentIdentityDao.findById(command.identityId)
+        if (existing == null) {
+            documentIdentityDao.insert(
+                DocumentIdentityEntity(
+                    id = command.identityId,
+                    displayName = snapshot.displayName,
+                    activityName = snapshot.activityName,
+                    phone = snapshot.phone,
+                    footerText = snapshot.footerText,
+                    isDefault = true,
+                    createdAt = command.issuedAt.toEpochMilli(),
+                    updatedAt = command.issuedAt.toEpochMilli(),
+                ),
+            )
+        } else {
+            check(
+                documentIdentityDao.updateDefault(
+                    id = command.identityId,
+                    displayName = snapshot.displayName,
+                    activityName = snapshot.activityName,
+                    phone = snapshot.phone,
+                    footerText = snapshot.footerText,
+                    updatedAt = command.issuedAt.toEpochMilli(),
+                ) == 1,
+            ) { "Document identity ${command.identityId} was not updated." }
+        }
+    }
+
+    private fun validatePaymentReceiptReplay(
+        command: PreparePaymentReceiptCommand,
+        persisted: IssuedDocumentEntity,
+    ) {
+        val snapshot = PaymentReceiptSnapshotCodec.decode(persisted.snapshotJson)
+        val matches = persisted.id == command.documentId &&
+            persisted.documentType == DocumentType.PAYMENT_RECEIPT.name &&
+            persisted.debtId == command.debtId.value &&
+            persisted.ledgerEntryId == command.paymentId.value &&
+            persisted.identityId == command.identityId &&
+            persisted.issuedAt == command.issuedAt.toEpochMilli() &&
+            snapshot.issueZoneId == command.issueZoneId &&
+            snapshot.identity == DocumentIdentitySnapshot(
+                displayName = command.issuerDisplayName.trim(),
+                activityName = command.issuerActivityName.normalizedOptional(),
+                phone = command.issuerPhone.normalizedOptional(),
+                footerText = command.footerText.normalizedOptional(),
+            )
+        if (!matches) {
+            throw CommandConflictException(
+                "Document command ID was reused with different receipt data.",
+            )
+        }
+    }
+
+    private fun IssuedDocumentEntity.toRecord(): IssuedDocumentRecord {
+        val snapshot = PaymentReceiptSnapshotCodec.decode(snapshotJson)
+        check(snapshotVersion == snapshot.version) { "Document snapshot version is corrupt." }
+        check(personId == snapshot.personId.value) { "Document person metadata is corrupt." }
+        check(personNameSnapshot == snapshot.personName) { "Document person snapshot is corrupt." }
+        check(amountMinor == snapshot.paymentAmount.minorUnits) {
+            "Document amount metadata is corrupt."
+        }
+        check(currencyCode == snapshot.paymentAmount.currency.value) {
+            "Document currency metadata is corrupt."
+        }
+        return IssuedDocumentRecord(
+            id = id,
+            commandId = commandId,
+            type = DocumentType.valueOf(documentType),
+            status = DocumentStatus.valueOf(status),
+            documentNumber = documentNumber,
+            debtId = DebtId(debtId),
+            ledgerEntryId = LedgerEntryId(ledgerEntryId),
+            identityId = identityId,
+            issuedAt = Instant.ofEpochMilli(issuedAt),
+            snapshot = snapshot,
+            pdfRelativePath = pdfRelativePath,
+            pdfSha256 = pdfSha256,
+            pageCount = pageCount,
+            failureCode = failureCode,
+            createdAt = Instant.ofEpochMilli(createdAt),
+            updatedAt = Instant.ofEpochMilli(updatedAt),
+        )
+    }
+
+    private fun DocumentIdentityEntity.toRecord(): DocumentIdentityRecord =
+        DocumentIdentityRecord(
+            id = id,
+            displayName = displayName,
+            activityName = activityName,
+            phone = phone,
+            footerText = footerText,
+            isDefault = isDefault,
+            createdAt = Instant.ofEpochMilli(createdAt),
+            updatedAt = Instant.ofEpochMilli(updatedAt),
+        )
+
+    private fun String?.normalizedOptional(): String? = this?.trim()?.ifEmpty { null }
 
     private fun toDueScheduleAuditEvent(entity: AuditEventEntity): DueScheduleAuditEvent {
         check(entity.aggregateType == AuditAggregateType.DEBT.name) {
@@ -813,5 +1095,6 @@ class RoomWaslRepository(
 
     private companion object {
         const val FAILURE_NOTIFICATIONS_DISABLED = "NOTIFICATIONS_DISABLED"
+        const val PAYMENT_RECEIPT_SNAPSHOT_VERSION = 1
     }
 }

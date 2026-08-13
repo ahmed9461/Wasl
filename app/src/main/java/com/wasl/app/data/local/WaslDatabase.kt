@@ -10,11 +10,15 @@ import com.wasl.app.data.local.dao.AuditEventDao
 import com.wasl.app.data.local.dao.LedgerDao
 import com.wasl.app.data.local.dao.PersonDao
 import com.wasl.app.data.local.dao.ReminderDao
+import com.wasl.app.data.local.dao.DocumentIdentityDao
+import com.wasl.app.data.local.dao.IssuedDocumentDao
 import com.wasl.app.data.local.entity.DebtEntity
 import com.wasl.app.data.local.entity.AuditEventEntity
 import com.wasl.app.data.local.entity.LedgerEntryEntity
 import com.wasl.app.data.local.entity.PersonEntity
 import com.wasl.app.data.local.entity.ReminderEntity
+import com.wasl.app.data.local.entity.DocumentIdentityEntity
+import com.wasl.app.data.local.entity.IssuedDocumentEntity
 
 @Database(
     entities = [
@@ -23,8 +27,10 @@ import com.wasl.app.data.local.entity.ReminderEntity
         LedgerEntryEntity::class,
         ReminderEntity::class,
         AuditEventEntity::class,
+        DocumentIdentityEntity::class,
+        IssuedDocumentEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class WaslDatabase : RoomDatabase() {
@@ -37,6 +43,10 @@ abstract class WaslDatabase : RoomDatabase() {
     abstract fun reminderDao(): ReminderDao
 
     abstract fun auditEventDao(): AuditEventDao
+
+    abstract fun documentIdentityDao(): DocumentIdentityDao
+
+    abstract fun issuedDocumentDao(): IssuedDocumentDao
 
     companion object {
         const val DATABASE_NAME = "wasl.db"
@@ -107,7 +117,88 @@ abstract class WaslDatabase : RoomDatabase() {
             }
         }
 
-        val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `document_identities` (
+                        `id` TEXT NOT NULL,
+                        `display_name` TEXT NOT NULL,
+                        `activity_name` TEXT,
+                        `phone` TEXT,
+                        `footer_text` TEXT,
+                        `is_default` INTEGER NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        `updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_document_identities_is_default` ON `document_identities` (`is_default`)",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `issued_documents` (
+                        `id` TEXT NOT NULL,
+                        `command_id` TEXT NOT NULL,
+                        `document_type` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `document_number` TEXT NOT NULL,
+                        `issue_year` INTEGER NOT NULL,
+                        `sequence_number` INTEGER NOT NULL,
+                        `debt_id` TEXT NOT NULL,
+                        `ledger_entry_id` TEXT NOT NULL,
+                        `identity_id` TEXT NOT NULL,
+                        `person_id` TEXT NOT NULL,
+                        `person_name_snapshot` TEXT NOT NULL,
+                        `amount_minor` INTEGER NOT NULL,
+                        `currency_code` TEXT NOT NULL,
+                        `issued_at` INTEGER NOT NULL,
+                        `snapshot_version` INTEGER NOT NULL,
+                        `snapshot_json` TEXT NOT NULL,
+                        `pdf_relative_path` TEXT NOT NULL,
+                        `pdf_sha256` TEXT,
+                        `page_count` INTEGER,
+                        `failure_code` TEXT,
+                        `created_at` INTEGER NOT NULL,
+                        `updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`debt_id`) REFERENCES `debts`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT,
+                        FOREIGN KEY(`ledger_entry_id`) REFERENCES `ledger_entries`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT,
+                        FOREIGN KEY(`identity_id`) REFERENCES `document_identities`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_command_id` ON `issued_documents` (`command_id`)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_document_number` ON `issued_documents` (`document_number`)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_document_type_ledger_entry_id` ON `issued_documents` (`document_type`, `ledger_entry_id`)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_issue_year_sequence_number` ON `issued_documents` (`issue_year`, `sequence_number`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_debt_id_issued_at` ON `issued_documents` (`debt_id`, `issued_at`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_identity_id` ON `issued_documents` (`identity_id`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_person_id` ON `issued_documents` (`person_id`)",
+                )
+            }
+        }
+
+        val ALL_MIGRATIONS: Array<Migration> = arrayOf(
+            MIGRATION_1_2,
+            MIGRATION_2_3,
+            MIGRATION_3_4,
+        )
 
         fun create(context: Context): WaslDatabase =
             Room.databaseBuilder(

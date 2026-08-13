@@ -15,6 +15,15 @@ import com.wasl.app.data.ReminderRecord
 import com.wasl.app.data.ReminderStatus
 import com.wasl.app.data.UpdateDueScheduleCommand
 import com.wasl.app.data.WaslRepository
+import com.wasl.app.data.DocumentIdentityRecord
+import com.wasl.app.data.DocumentIdentitySnapshot
+import com.wasl.app.data.DocumentStatus
+import com.wasl.app.data.DocumentType
+import com.wasl.app.data.IssuedDocumentRecord
+import com.wasl.app.data.PaymentReceiptSnapshot
+import com.wasl.app.data.PreparePaymentReceiptCommand
+import com.wasl.app.document.PaymentReceiptService
+import com.wasl.app.document.UnavailablePaymentReceiptService
 import com.wasl.app.reminder.ReminderScheduler
 import com.wasl.domain.CurrencyCode
 import com.wasl.domain.DebtDirection
@@ -178,6 +187,42 @@ class AccountDetailsViewModelTest {
     }
 
     @Test
+    fun issuesReceiptWithReusableIdentityAndExposesReadyDocumentForOpening() = runTest {
+        val paymentId = LedgerEntryId("existing-payment")
+        val repository = PaymentFakeRepository(accountWithPayment(paymentId))
+        val receiptService = RecordingPaymentReceiptService()
+        val ids = ArrayDeque(listOf("receipt-command", "receipt-document"))
+        val viewModel = detailsViewModel(
+            repository = repository,
+            ids = ids,
+            receiptService = receiptService,
+        )
+        advanceUntilIdle()
+
+        viewModel.openReceiptDialog(paymentId)
+        advanceUntilIdle()
+        assertEquals("identity-default", viewModel.uiState.value.receiptIdentityForm.identityId)
+        assertEquals("متجر أحمد", viewModel.uiState.value.receiptIdentityForm.displayName)
+
+        viewModel.updateReceiptFooter("تم الاستلام")
+        viewModel.confirmPaymentReceipt()
+        advanceUntilIdle()
+
+        val command = receiptService.issueCalls.single()
+        assertEquals("receipt-command", command.commandId)
+        assertEquals("receipt-document", command.documentId)
+        assertEquals(paymentId, command.paymentId)
+        assertEquals(DebtId("debt-1"), command.debtId)
+        assertEquals("متجر أحمد", command.issuerDisplayName)
+        assertEquals("تم الاستلام", command.footerText)
+        assertEquals("PAY-2026-00001", viewModel.uiState.value.receiptReadyToOpen?.documentNumber)
+        assertIs<AccountOperationNotice.PaymentReceiptIssuedNotice>(viewModel.uiState.value.notice)
+
+        viewModel.receiptReadyHandled()
+        assertNull(viewModel.uiState.value.receiptReadyToOpen)
+    }
+
+    @Test
     fun reschedulesDueDateWithStableReminderAndAppendsAudit() = runTest {
         val repository = PaymentFakeRepository(accountWithDueSchedule())
         val scheduler = RecordingAccountReminderScheduler()
@@ -297,12 +342,14 @@ class AccountDetailsViewModelTest {
         repository: PaymentFakeRepository,
         ids: ArrayDeque<String>,
         scheduler: ReminderScheduler = RecordingAccountReminderScheduler(),
+        receiptService: PaymentReceiptService = UnavailablePaymentReceiptService,
     ) = AccountDetailsViewModel(
         repository = repository,
         debtId = DebtId("debt-1"),
         clock = Clock.fixed(Instant.parse("2026-08-13T00:05:00Z"), ZoneOffset.UTC),
         zoneIdProvider = { ZoneOffset.UTC },
         reminderScheduler = scheduler,
+        paymentReceiptService = receiptService,
         idFactory = { ids.removeFirst() },
     )
 
@@ -524,6 +571,74 @@ private class PaymentFakeRepository(
             error("Simulated unknown schedule result after commit.")
         }
         return account
+    }
+}
+
+private class RecordingPaymentReceiptService : PaymentReceiptService {
+    val issueCalls = mutableListOf<PreparePaymentReceiptCommand>()
+    private val documents = mutableMapOf<String, IssuedDocumentRecord>()
+
+    override suspend fun getDefaultIdentity(): DocumentIdentityRecord = DocumentIdentityRecord(
+        id = "identity-default",
+        displayName = "متجر أحمد",
+        activityName = "تجارة عامة",
+        phone = null,
+        footerText = null,
+        isDefault = true,
+        createdAt = Instant.parse("2026-08-13T00:00:00Z"),
+        updatedAt = Instant.parse("2026-08-13T00:00:00Z"),
+    )
+
+    override suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord {
+        issueCalls += command
+        return documents.getOrPut(command.documentId) { command.toReadyDocument() }
+    }
+
+    override suspend fun retry(documentId: String): IssuedDocumentRecord =
+        requireNotNull(documents[documentId])
+
+    private fun PreparePaymentReceiptCommand.toReadyDocument(): IssuedDocumentRecord {
+        val currency = CurrencyCode.YER
+        val snapshot = PaymentReceiptSnapshot(
+            version = 1,
+            documentId = documentId,
+            documentNumber = "PAY-2026-00001",
+            issuedAt = issuedAt,
+            issueZoneId = issueZoneId,
+            debtId = debtId,
+            paymentId = paymentId,
+            personId = PersonId("person-1"),
+            personName = "أحمد",
+            direction = DebtDirection.RECEIVABLE,
+            originalAmount = Money(100_000L, currency),
+            balanceBefore = Money(100_000L, currency),
+            paymentAmount = Money(20_000L, currency),
+            balanceAfter = Money(80_000L, currency),
+            paidAt = Instant.parse("2026-08-13T00:01:00Z"),
+            identity = DocumentIdentitySnapshot(
+                displayName = issuerDisplayName,
+                activityName = issuerActivityName,
+                phone = issuerPhone,
+                footerText = footerText,
+            ),
+        )
+        return IssuedDocumentRecord(
+            id = documentId,
+            commandId = commandId,
+            type = DocumentType.PAYMENT_RECEIPT,
+            status = DocumentStatus.READY,
+            documentNumber = snapshot.documentNumber,
+            debtId = debtId,
+            ledgerEntryId = paymentId,
+            identityId = identityId,
+            issuedAt = issuedAt,
+            snapshot = snapshot,
+            pdfRelativePath = "documents/${snapshot.documentNumber}.pdf",
+            pdfSha256 = "b".repeat(64),
+            pageCount = 1,
+            createdAt = issuedAt,
+            updatedAt = issuedAt,
+        )
     }
 }
 

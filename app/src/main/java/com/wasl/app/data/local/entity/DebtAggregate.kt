@@ -26,4 +26,9 @@ data class DebtAggregate(
         entityColumn = "aggregate_id",
     )
     val auditEvents: List<AuditEventEntity>,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "debt_id",
+    )
+    val issuedDocuments: List<IssuedDocumentEntity>,
 )

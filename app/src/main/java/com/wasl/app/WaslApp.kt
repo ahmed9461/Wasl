@@ -85,6 +85,9 @@ import com.wasl.app.data.WaslRepository
 import com.wasl.app.reminder.NoOpReminderScheduler
 import com.wasl.app.reminder.ReminderNotificationPublisher
 import com.wasl.app.reminder.ReminderScheduler
+import com.wasl.app.document.PaymentReceiptService
+import com.wasl.app.document.UnavailablePaymentReceiptService
+import com.wasl.app.document.ReceiptFileAccess
 import com.wasl.app.ui.theme.WaslTheme
 import com.wasl.domain.CurrencyCode
 import com.wasl.domain.DebtDirection
@@ -133,6 +136,7 @@ fun WaslApp(
     repository: WaslRepository,
     instanceKey: String = "production",
     reminderScheduler: ReminderScheduler = NoOpReminderScheduler,
+    paymentReceiptService: PaymentReceiptService = UnavailablePaymentReceiptService,
     todayClock: Clock = Clock.systemUTC(),
     todayZoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
     requestedDebtId: String? = null,
@@ -296,6 +300,7 @@ fun WaslApp(
                                     repository = repository,
                                     debtId = debtId,
                                     reminderScheduler = reminderScheduler,
+                                    paymentReceiptService = paymentReceiptService,
                                 ),
                             )
                             val state by detailsViewModel.uiState.collectAsStateWithLifecycle()
@@ -314,6 +319,35 @@ fun WaslApp(
                                 onDismissReversal = detailsViewModel::dismissReversalDialog,
                                 onReversalReasonChange = detailsViewModel::updateReversalReason,
                                 onConfirmReversal = detailsViewModel::confirmReversal,
+                                onOpenReceiptDialog = detailsViewModel::openReceiptDialog,
+                                onDismissReceiptDialog = detailsViewModel::dismissReceiptDialog,
+                                onReceiptIssuerNameChange = detailsViewModel::updateReceiptIssuerName,
+                                onReceiptActivityNameChange = detailsViewModel::updateReceiptActivityName,
+                                onReceiptPhoneChange = detailsViewModel::updateReceiptPhone,
+                                onReceiptFooterChange = detailsViewModel::updateReceiptFooter,
+                                onConfirmPaymentReceipt = detailsViewModel::confirmPaymentReceipt,
+                                onRetryPaymentReceipt = detailsViewModel::retryPaymentReceipt,
+                                onOpenReceipt = { document ->
+                                    runCatching { ReceiptFileAccess.open(context, document) }
+                                        .onFailure {
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "لا يوجد تطبيق متاح لفتح ملف PDF.",
+                                                android.widget.Toast.LENGTH_SHORT,
+                                            ).show()
+                                        }
+                                },
+                                onShareReceipt = { document ->
+                                    runCatching { ReceiptFileAccess.share(context, document) }
+                                        .onFailure {
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "تعذرت مشاركة ملف الإيصال.",
+                                                android.widget.Toast.LENGTH_SHORT,
+                                            ).show()
+                                        }
+                                },
+                                onReceiptReadyHandled = detailsViewModel::receiptReadyHandled,
                                 onOpenDueSchedule = detailsViewModel::openDueScheduleDialog,
                                 onDismissDueSchedule = detailsViewModel::dismissDueScheduleDialog,
                                 onDueScheduleDateChange = detailsViewModel::updateDueScheduleDate,

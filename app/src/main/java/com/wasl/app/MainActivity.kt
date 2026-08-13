@@ -19,6 +19,7 @@ class MainActivity : ComponentActivity() {
             WaslApp(
                 repository = application.repository,
                 reminderScheduler = application.reminderScheduler,
+                paymentReceiptService = application.paymentReceiptService,
                 requestedDebtId = requestedDebtId.value,
                 onRequestedDebtHandled = { requestedDebtId.value = null },
             )

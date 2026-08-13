@@ -20,7 +20,7 @@ class WaslDatabaseBaselineTest {
     )
 
     @Test
-    fun versionOneMigratesToVersionThreeWithoutLosingDebtData() {
+    fun versionOneMigratesToVersionFourWithoutLosingDebtData() {
         val databaseName = "wasl-schema-v1.db"
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.deleteDatabase(databaseName)
@@ -47,10 +47,11 @@ class WaslDatabaseBaselineTest {
 
         migrationHelper.runMigrationsAndValidate(
             databaseName,
-            3,
+            4,
             true,
             WaslDatabase.MIGRATION_1_2,
             WaslDatabase.MIGRATION_2_3,
+            WaslDatabase.MIGRATION_3_4,
         ).use { migrated ->
             migrated.query("SELECT original_amount_minor, due_date_epoch_day FROM debts").use {
                 check(it.moveToFirst())
@@ -62,6 +63,14 @@ class WaslDatabaseBaselineTest {
                 assertEquals(0L, it.getLong(0))
             }
             migrated.query("SELECT COUNT(*) FROM audit_events").use {
+                check(it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM document_identities").use {
+                check(it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM issued_documents").use {
                 check(it.moveToFirst())
                 assertEquals(0L, it.getLong(0))
             }
@@ -77,7 +86,7 @@ class WaslDatabaseBaselineTest {
     }
 
     @Test
-    fun versionTwoMigratesToVersionThreeWithoutLosingReminderData() {
+    fun versionTwoMigratesToVersionFourWithoutLosingReminderData() {
         val databaseName = "wasl-schema-v2.db"
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.deleteDatabase(databaseName)
@@ -113,9 +122,10 @@ class WaslDatabaseBaselineTest {
 
         migrationHelper.runMigrationsAndValidate(
             databaseName,
-            3,
+            4,
             true,
             WaslDatabase.MIGRATION_2_3,
+            WaslDatabase.MIGRATION_3_4,
         ).use { migrated ->
             migrated.query("SELECT id, status FROM reminders").use {
                 check(it.moveToFirst())
@@ -123,6 +133,55 @@ class WaslDatabaseBaselineTest {
                 assertEquals("SCHEDULED", it.getString(1))
             }
             migrated.query("SELECT COUNT(*) FROM audit_events").use {
+                check(it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+        }
+
+        context.deleteDatabase(databaseName)
+    }
+
+    @Test
+    fun versionThreeMigratesToVersionFourAndCreatesDocumentStorage() {
+        val databaseName = "wasl-schema-v3.db"
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.deleteDatabase(databaseName)
+
+        migrationHelper.createDatabase(databaseName, 3).apply {
+            execSQL(
+                """
+                INSERT INTO persons (
+                    id, display_name, created_at, updated_at
+                ) VALUES ('person-v3', 'سجل قبل المستندات', 1, 1)
+                """.trimIndent(),
+            )
+            execSQL(
+                """
+                INSERT INTO debts (
+                    id, person_id, direction, original_amount_minor, currency_code,
+                    opened_at, lifecycle_state, created_at, updated_at
+                ) VALUES ('debt-v3', 'person-v3', 'RECEIVABLE', 12000, 'YER',
+                    1, 'ACTIVE', 1, 1)
+                """.trimIndent(),
+            )
+            close()
+        }
+
+        migrationHelper.runMigrationsAndValidate(
+            databaseName,
+            4,
+            true,
+            WaslDatabase.MIGRATION_3_4,
+        ).use { migrated ->
+            migrated.query("SELECT original_amount_minor FROM debts WHERE id = 'debt-v3'").use {
+                check(it.moveToFirst())
+                assertEquals(12000L, it.getLong(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM document_identities").use {
+                check(it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM issued_documents").use {
                 check(it.moveToFirst())
                 assertEquals(0L, it.getLong(0))
             }

@@ -12,6 +12,10 @@ import com.wasl.app.data.ReversePaymentCommand
 import com.wasl.app.data.ReminderStatus
 import com.wasl.app.data.UpdateDueScheduleCommand
 import com.wasl.app.data.WaslRepository
+import com.wasl.app.data.IssuedDocumentRecord
+import com.wasl.app.data.PreparePaymentReceiptCommand
+import com.wasl.app.document.PaymentReceiptService
+import com.wasl.app.document.UnavailablePaymentReceiptService
 import com.wasl.app.reminder.NoOpReminderScheduler
 import com.wasl.app.reminder.ReminderScheduler
 import com.wasl.app.reminder.ReminderTime
@@ -49,6 +53,14 @@ data class DueScheduleForm(
     val remindOnDueDate: Boolean = false,
 )
 
+data class ReceiptIdentityForm(
+    val identityId: String? = null,
+    val displayName: String = "",
+    val activityName: String = "",
+    val phone: String = "",
+    val footerText: String = "",
+)
+
 sealed interface AccountOperationNotice {
     data class PaymentRecordedNotice(
         val personName: String,
@@ -65,6 +77,10 @@ sealed interface AccountOperationNotice {
         val dueDate: LocalDate?,
         val reminderEnabled: Boolean,
         val platformSyncPending: Boolean,
+    ) : AccountOperationNotice
+
+    data class PaymentReceiptIssuedNotice(
+        val documentNumber: String,
     ) : AccountOperationNotice
 }
 
@@ -85,6 +101,14 @@ data class AccountDetailsUiState(
     val dueScheduleForm: DueScheduleForm = DueScheduleForm(),
     val isUpdatingDueSchedule: Boolean = false,
     val dueScheduleError: String? = null,
+    val receiptPaymentId: LedgerEntryId? = null,
+    val receiptIdentityForm: ReceiptIdentityForm = ReceiptIdentityForm(),
+    val isLoadingReceiptIdentity: Boolean = false,
+    val isIssuingReceipt: Boolean = false,
+    val receiptError: String? = null,
+    val retryingReceiptId: String? = null,
+    val receiptRecoveryErrorDocumentId: String? = null,
+    val receiptReadyToOpen: IssuedDocumentRecord? = null,
     val notice: AccountOperationNotice? = null,
 )
 
@@ -94,6 +118,7 @@ class AccountDetailsViewModel(
     private val clock: Clock = Clock.systemUTC(),
     private val zoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
     private val reminderScheduler: ReminderScheduler = NoOpReminderScheduler,
+    private val paymentReceiptService: PaymentReceiptService = UnavailablePaymentReceiptService,
     private val idFactory: () -> String = { UUID.randomUUID().toString() },
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AccountDetailsUiState())
@@ -104,6 +129,7 @@ class AccountDetailsViewModel(
     private var pendingReversalCommand: ReversePaymentCommand? = null
     private var pendingReversalAmount: Money? = null
     private var pendingDueScheduleCommand: UpdateDueScheduleCommand? = null
+    private var pendingReceiptCommand: PreparePaymentReceiptCommand? = null
 
     init {
         observeAccount()
@@ -433,6 +459,231 @@ class AccountDetailsViewModel(
         }
     }
 
+    fun openReceiptDialog(paymentId: LedgerEntryId) {
+        val account = _uiState.value.account ?: return
+        val payment = account.findPayment(paymentId) ?: return
+        if (payment.id in account.ledger.reversedPaymentIds) return
+        account.issuedDocuments.firstOrNull { it.ledgerEntryId == paymentId }?.let { document ->
+            if (document.status == com.wasl.app.data.DocumentStatus.READY) {
+                _uiState.update { it.copy(receiptReadyToOpen = document) }
+            } else {
+                retryPaymentReceipt(document.id)
+            }
+            return
+        }
+
+        pendingReceiptCommand = null
+        _uiState.update {
+            it.copy(
+                receiptPaymentId = paymentId,
+                receiptIdentityForm = ReceiptIdentityForm(),
+                isLoadingReceiptIdentity = true,
+                receiptError = null,
+                notice = null,
+            )
+        }
+        viewModelScope.launch {
+            try {
+                val identity = paymentReceiptService.getDefaultIdentity()
+                _uiState.update { current ->
+                    if (current.receiptPaymentId != paymentId) current else {
+                        current.copy(
+                            receiptIdentityForm = identity?.let {
+                                ReceiptIdentityForm(
+                                    identityId = it.id,
+                                    displayName = it.displayName,
+                                    activityName = it.activityName.orEmpty(),
+                                    phone = it.phone.orEmpty(),
+                                    footerText = it.footerText.orEmpty(),
+                                )
+                            } ?: ReceiptIdentityForm(),
+                            isLoadingReceiptIdentity = false,
+                        )
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _uiState.update { current ->
+                    if (current.receiptPaymentId != paymentId) current else {
+                        current.copy(
+                            isLoadingReceiptIdentity = false,
+                            receiptError = "تعذر قراءة الهوية المحفوظة. يمكنك إدخال الاسم والمتابعة.",
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun dismissReceiptDialog() {
+        if (_uiState.value.isIssuingReceipt) return
+        pendingReceiptCommand = null
+        _uiState.update {
+            it.copy(
+                receiptPaymentId = null,
+                receiptIdentityForm = ReceiptIdentityForm(),
+                isLoadingReceiptIdentity = false,
+                receiptError = null,
+            )
+        }
+    }
+
+    fun updateReceiptIssuerName(value: String) = updateReceiptForm {
+        copy(displayName = value)
+    }
+
+    fun updateReceiptActivityName(value: String) = updateReceiptForm {
+        copy(activityName = value)
+    }
+
+    fun updateReceiptPhone(value: String) = updateReceiptForm {
+        copy(phone = value)
+    }
+
+    fun updateReceiptFooter(value: String) = updateReceiptForm {
+        copy(footerText = value)
+    }
+
+    fun confirmPaymentReceipt() {
+        val state = _uiState.value
+        if (state.isIssuingReceipt || state.isLoadingReceiptIdentity) return
+        val account = state.account ?: return
+        val paymentId = state.receiptPaymentId ?: return
+        val payment = account.findPayment(paymentId)
+        if (payment == null || paymentId in account.ledger.reversedPaymentIds) {
+            _uiState.update { it.copy(receiptError = "لم تعد هذه الدفعة صالحة لإصدار إيصال.") }
+            return
+        }
+        val issuerName = state.receiptIdentityForm.displayName.trim()
+        if (issuerName.isEmpty()) {
+            _uiState.update { it.copy(receiptError = "اكتب اسم مُصدر الإيصال.") }
+            return
+        }
+
+        val command = pendingReceiptCommand ?: run {
+            val issuedAt = operationTimestamp(account) ?: run {
+                _uiState.update {
+                    it.copy(receiptError = "وقت الجهاز أقدم من آخر عملية. صحح الوقت ثم أعد المحاولة.")
+                }
+                return
+            }
+            PreparePaymentReceiptCommand(
+                commandId = idFactory(),
+                documentId = idFactory(),
+                identityId = state.receiptIdentityForm.identityId ?: idFactory(),
+                debtId = debtId,
+                paymentId = paymentId,
+                issuerDisplayName = issuerName,
+                issuerActivityName = state.receiptIdentityForm.activityName.trim().ifEmpty { null },
+                issuerPhone = state.receiptIdentityForm.phone.trim().ifEmpty { null },
+                footerText = state.receiptIdentityForm.footerText.trim().ifEmpty { null },
+                issuedAt = issuedAt,
+                issueZoneId = zoneIdProvider(),
+            ).also { pendingReceiptCommand = it }
+        }
+
+        _uiState.update { it.copy(isIssuingReceipt = true, receiptError = null) }
+        viewModelScope.launch {
+            try {
+                val document = paymentReceiptService.issue(command)
+                pendingReceiptCommand = null
+                _uiState.update {
+                    it.copy(
+                        receiptPaymentId = null,
+                        receiptIdentityForm = ReceiptIdentityForm(),
+                        isIssuingReceipt = false,
+                        receiptError = null,
+                        receiptReadyToOpen = document,
+                        notice = AccountOperationNotice.PaymentReceiptIssuedNotice(
+                            documentNumber = document.documentNumber,
+                        ),
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: IllegalArgumentException) {
+                pendingReceiptCommand = null
+                _uiState.update {
+                    it.copy(
+                        isIssuingReceipt = false,
+                        receiptError = "تعذر إصدار الإيصال من هذه الدفعة. حدّث الحساب وراجع السجل.",
+                    )
+                }
+            } catch (_: RecordNotFoundException) {
+                pendingReceiptCommand = null
+                _uiState.update {
+                    it.copy(isIssuingReceipt = false, receiptError = "تعذر العثور على الدفعة.")
+                }
+            } catch (_: CommandConflictException) {
+                pendingReceiptCommand = null
+                _uiState.update {
+                    it.copy(
+                        isIssuingReceipt = false,
+                        receiptError = "تعذر تأكيد إصدار الإيصال بأمان. أعد فتح الحساب وحاول مجددًا.",
+                    )
+                }
+            } catch (_: Exception) {
+                // The snapshot may already exist. Reuse the exact command to recover the PDF safely.
+                _uiState.update {
+                    it.copy(
+                        isIssuingReceipt = false,
+                        receiptError = "حُفظت محاولة الإيصال، لكن تعذر تجهيز PDF. أعد المحاولة للاسترداد.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun retryPaymentReceipt(documentId: String) {
+        if (_uiState.value.retryingReceiptId != null) return
+        _uiState.update {
+            it.copy(
+                retryingReceiptId = documentId,
+                receiptRecoveryErrorDocumentId = null,
+                notice = null,
+            )
+        }
+        viewModelScope.launch {
+            try {
+                val document = paymentReceiptService.retry(documentId)
+                _uiState.update {
+                    it.copy(
+                        retryingReceiptId = null,
+                        receiptRecoveryErrorDocumentId = null,
+                        receiptReadyToOpen = document,
+                        notice = AccountOperationNotice.PaymentReceiptIssuedNotice(
+                            documentNumber = document.documentNumber,
+                        ),
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _uiState.update {
+                    it.copy(
+                        retryingReceiptId = null,
+                        receiptRecoveryErrorDocumentId = documentId,
+                    )
+                }
+            }
+        }
+    }
+
+    fun receiptReadyHandled() {
+        _uiState.update { it.copy(receiptReadyToOpen = null) }
+    }
+
+    private fun updateReceiptForm(transform: ReceiptIdentityForm.() -> ReceiptIdentityForm) {
+        pendingReceiptCommand = null
+        _uiState.update {
+            it.copy(
+                receiptIdentityForm = it.receiptIdentityForm.transform(),
+                receiptError = null,
+            )
+        }
+    }
+
     fun openDueScheduleDialog() {
         val account = _uiState.value.account ?: return
         if (account.ledger.balance.isZero) return
@@ -677,6 +928,8 @@ class AccountDetailsViewModel(
         private val repository: WaslRepository,
         private val debtId: DebtId,
         private val reminderScheduler: ReminderScheduler = NoOpReminderScheduler,
+        private val paymentReceiptService: PaymentReceiptService =
+            UnavailablePaymentReceiptService,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -687,6 +940,7 @@ class AccountDetailsViewModel(
                 repository = repository,
                 debtId = debtId,
                 reminderScheduler = reminderScheduler,
+                paymentReceiptService = paymentReceiptService,
             ) as T
         }
     }

@@ -43,15 +43,6 @@ jobs:
       - name: Run unit tests, lint, and debug build
         run: gradle --no-daemon :core:domain:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 
-      - name: Verify committed Room schema is current
-        run: |
-          git show HEAD:app/schemas/com.wasl.app.data.local.WaslDatabase/3.json \
-            | jq -S . > "$RUNNER_TEMP/room-schema-committed.json"
-          jq -S . app/schemas/com.wasl.app.data.local.WaslDatabase/3.json \
-            > "$RUNNER_TEMP/room-schema-generated.json"
-          diff -u "$RUNNER_TEMP/room-schema-committed.json" \
-            "$RUNNER_TEMP/room-schema-generated.json"
-
       - name: Upload debug APK
         if: success()
         uses: actions/upload-artifact@v4
@@ -61,12 +52,21 @@ jobs:
           if-no-files-found: error
 
       - name: Upload exported Room schema
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Wasl-room-schema
-          path: app/schemas/com.wasl.app.data.local.WaslDatabase/3.json
+          path: app/schemas/com.wasl.app.data.local.WaslDatabase/4.json
           if-no-files-found: error
+
+      - name: Verify committed Room schema is current
+        run: |
+          git show HEAD:app/schemas/com.wasl.app.data.local.WaslDatabase/4.json \
+            | jq -S . > "$RUNNER_TEMP/room-schema-committed.json"
+          jq -S . app/schemas/com.wasl.app.data.local.WaslDatabase/4.json \
+            > "$RUNNER_TEMP/room-schema-generated.json"
+          diff -u "$RUNNER_TEMP/room-schema-committed.json" \
+            "$RUNNER_TEMP/room-schema-generated.json"
 
   database-tests:
     needs: verify
@@ -104,7 +104,35 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: gradle --no-daemon :app:connectedDebugAndroidTest
+          script: |
+            gradle --no-daemon :app:connectedDebugAndroidTest
+            mkdir -p app/build/outputs/payment-receipt
+            adb exec-out run-as com.wasl.app cat \
+              files/test-artifacts/wasl-payment-receipt-sample.pdf \
+              > app/build/outputs/payment-receipt/wasl-payment-receipt-sample.pdf
+
+      - name: Install PDF inspection tools
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+
+      - name: Inspect Arabic payment receipt artifact
+        run: |
+          PDF="app/build/outputs/payment-receipt/wasl-payment-receipt-sample.pdf"
+          PAGES="$(pdfinfo "$PDF" | awk '/^Pages:/ { print $2 }')"
+          test "$PAGES" -ge 2
+          pdftotext -layout "$PDF" app/build/outputs/payment-receipt/receipt-text.txt
+          grep -F "PAY-2026-00042" app/build/outputs/payment-receipt/receipt-text.txt
+          grep -F "AL NOOR TRADING" app/build/outputs/payment-receipt/receipt-text.txt
+          grep -F "123,456.78 USD" app/build/outputs/payment-receipt/receipt-text.txt
+          pdftoppm -png -r 144 "$PDF" \
+            app/build/outputs/payment-receipt/receipt-page
+
+      - name: Upload payment receipt PDF evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wasl-payment-receipt-evidence
+          path: app/build/outputs/payment-receipt/
+          if-no-files-found: warn
 
       - name: Upload instrumentation test reports
         if: always()

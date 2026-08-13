@@ -73,7 +73,7 @@
   - [Room 3.0 والفروق الجوهرية](https://developer.android.com/jetpack/androidx/releases/room3)
   - [KSP](https://github.com/google/ksp)
 - النتيجة التنفيذية:
-  - `app/schemas/com.wasl.app.data.local.WaslDatabase/1.json` جزء دائم من المستودع.
+  - ملفات `1.json` و`2.json` تحت `app/schemas/com.wasl.app.data.local.WaslDatabase/` جزء دائم من المستودع، ويمنع CI أي انحراف في Schema المولدة.
   - لا يوجد `fallbackToDestructiveMigration` في Production.
   - يُحاذى kotlinx-serialization Core وJSON معًا عبر BOM 1.9.0؛ Navigation 3 يحتاج Serialization للمفاتيح المحفوظة، وفرض BOM يمنع خلط Room JSON 1.8.1 مع Core مختلف في AndroidTest runtime.
   - Version 1 هو Baseline؛ `MIGRATION_1_2` أول انتقال فعلي ومسجل في `ALL_MIGRATIONS`.

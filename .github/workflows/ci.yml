@@ -43,6 +43,15 @@ jobs:
       - name: Run unit tests, lint, and debug build
         run: gradle --no-daemon :core:domain:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 
+      - name: Verify committed Room schema is current
+        run: |
+          git show HEAD:app/schemas/com.wasl.app.data.local.WaslDatabase/2.json \
+            | jq -S . > "$RUNNER_TEMP/room-schema-committed.json"
+          jq -S . app/schemas/com.wasl.app.data.local.WaslDatabase/2.json \
+            > "$RUNNER_TEMP/room-schema-generated.json"
+          diff -u "$RUNNER_TEMP/room-schema-committed.json" \
+            "$RUNNER_TEMP/room-schema-generated.json"
+
       - name: Upload debug APK
         if: success()
         uses: actions/upload-artifact@v4

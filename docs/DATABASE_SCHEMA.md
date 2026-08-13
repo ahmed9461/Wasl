@@ -61,6 +61,8 @@ Indexes:
 - lifecycle_state مع due_date_epoch_day.
 - currency_code مع direction.
 
+استعلام Today يستخدم الفهرس المركب الأول لاختيار `ACTIVE` ذات `due_date_epoch_day <= LocalDate` و`closed_at IS NULL` قبل تحميل العلاقات، فلا يحمل الديون القادمة أو المسددة ثم يصفيها في الواجهة.
+
 لا يخزن current_balance كمصدر حقيقة. إذا أضيف Projection للأداء فيكون قابلًا لإعادة البناء وتوجد مقارنة آلية مع Replay.
 
 ## ledger_entries

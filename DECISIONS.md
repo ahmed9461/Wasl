@@ -80,7 +80,7 @@
 
 ## ADR-007 — Compose وMaterial 3 وNavigation 3
 
-- الحالة: معتمد ومطبق لأول مسار متعدد الوجهات
+- الحالة: معتمد ومطبق لمسارات الرئيسية وToday وتفاصيل الحساب
 - القرار: Single-activity وJetpack Compose وMaterial 3. تستخدم الواجهة Navigation 3 stable 1.1.6 بدل Router خاص، مع `NavKey` Serializable وBack stack واحد مملوك للتطبيق.
 - السبب: Compose هو Toolkit الحديث الموصى به، وNavigation 3 يمنح Back stack صريحًا ويدعم الواجهات التكيفية.
 - البدائل:
@@ -90,8 +90,9 @@
 - المصادر:
   - [توصيات Android: Compose وSingle activity وNavigation 3](https://developer.android.com/topic/architecture/recommendations)
   - [Navigation 3](https://developer.android.com/guide/navigation/navigation-3)
+  - [Navigation bar في Compose](https://developer.android.com/develop/ui/compose/components/navigation-bar)
   - [Compose BOM](https://developer.android.com/develop/ui/compose/bom)
-- النتيجة التنفيذية: `HomeRoute` و`AccountDetailsRoute` يحملان المعرف الصغير فقط؛ تفاصيل الحساب تقرأ من Repository، و`rememberNavBackStack` يحفظ مفاتيح المسار القابلة للتسلسل.
+- النتيجة التنفيذية: `HomeRoute` و`TodayRoute` وجهتان علويتان بتنقل سفلي مدمج، و`AccountDetailsRoute` يحمل المعرف الصغير فقط. تفاصيل الحساب وToday تقرآن Reactive من Repository، و`rememberNavBackStack` يحفظ مفاتيح المسار القابلة للتسلسل.
 
 ## ADR-008 — سياسة التذكيرات والمنبهات
 
@@ -103,6 +104,7 @@
   - التحقق من صلاحية Exact Alarm وتقديم Fallback واضح.
   - WorkManager يتولى بقاء العمل عبر إعادة التشغيل. يشغّل التطبيق Recovery idempotent عند بدء العملية وبعد تغيير الوقت أو المنطقة الزمنية، ويعيد بناء Instant من الوقت المدني المحفوظ عند تغير المنطقة.
   - إذن POST_NOTIFICATIONS يطلب عند تفعيل التذكير على Android 13+؛ رفضه لا يلغي الدين أو التذكير، بل يسجل BLOCKED_PERMISSION ويعاد الاسترداد بعد السماح.
+  - يتحقق التطبيق من إذن التطبيق ومن تعطيل الإشعارات أو قناة المستحقات. تبقى BLOCKED_PERMISSION دون جدولة ما دام الحظر قائمًا؛ وبعد السماح أو Retry للفشل يعيد Recovery الحالة إلى SCHEDULED قبل Unique Work.
   - قناة `wasl_due_accounts` مستقلة، والإشعار الخاص يملك نسخة عامة لا تكشف الشخص أو المبلغ على شاشة القفل ويفتح الحساب المقصود.
 - السبب: Exact alarms مكلفة ومقيدة، ووثائق Android توصي بعدم استخدامها للأعمال الدورية.
 - البدائل:

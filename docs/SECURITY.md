@@ -32,6 +32,7 @@
 - Domain يرفض عملة مختلفة وOverpayment وOverflow.
 - Room يفعّل Foreign keys، والسجل المالي بلا Update/Delete DAO، والكتابات المركبة داخل Transactions.
 - إذن POST_NOTIFICATIONS يطلب في سياق تفعيل التذكير ولا يؤدي رفضه إلى فقد البيانات.
+- تتحقق شاشة Today من إذن التطبيق ومن تعطيل إشعارات التطبيق أو قناة المستحقات، وتفتح إعدادات الإشعارات الرسمية عند تعذر الطلب المباشر.
 - إشعار موعد الدين `VISIBILITY_PRIVATE` وله Public version عامة لا تعرض اسمًا أو مبلغًا على شاشة القفل.
 - PendingIntent غير قابل للتعديل ويحمل debt id فقط؛ تفاصيل الحساب تقرأ من Repository.
 

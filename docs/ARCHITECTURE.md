@@ -42,6 +42,8 @@ Notifications وAlarmManager وWorkManager وBiometrics وKeystore وFileProvide
 4. Compose تجمع الحالة بطريقة Lifecycle-aware.
 5. Formatting للمبلغ يحدث في UI باستخدام Currency definition.
 
+في Today يمر LocalDate الحالي إلى استعلام Room محدد يستخدم فهرس `lifecycle_state, due_date_epoch_day` ويعيد فقط ACTIVE غير المسدد المستحق حتى ذلك اليوم. يعيد Repository بناء DebtLedger للعناصر المرشحة، ثم يشتق ViewModel حالة DUE_TODAY/OVERDUE وعدد الأيام دون تخزين نص حالة في القاعدة.
+
 ## تدفق الكتابة المالية
 
 مثال تسجيل دفعة:
@@ -86,12 +88,12 @@ Notifications وAlarmManager وWorkManager وBiometrics وKeystore وFileProvide
 ## بنية الحزم الحالية
 
 - `com.wasl.domain`: القواعد المالية وParsing الدقيق للإدخال.
-- `com.wasl.app`: Application entry وComposition root وHome/Account details ViewModels وشاشات Compose وNavigation keys.
+- `com.wasl.app`: Application entry وComposition root وHome/Today/Account details ViewModels وشاشات Compose وNavigation keys.
 - `com.wasl.app.data`: عقود Repository وRead/Command models.
 - `com.wasl.app.data.local`: Room database وRepository الذري وMappers الداخلية.
 - `com.wasl.app.data.local.entity`: persons وdebts وledger_entries وreminders وعلاقات القراءة.
 - `com.wasl.app.data.local.dao`: واجهات الإدخال والاستعلام بلا Update/Delete للسجل المالي، مع انتقالات حالة محدودة للتذكير.
-- `com.wasl.app.reminder`: حساب الزمن المدني، WorkManager scheduler/workers، القناة وناشر الإشعار وRecovery receiver.
+- `com.wasl.app.reminder`: حساب الزمن المدني، سياسة Recovery قابلة لاختبار JVM، WorkManager scheduler/workers، القناة وناشر الإشعار وRecovery receiver.
 - `com.wasl.app.ui`: Theme، وتستقبل الشاشات الجديدة عند توسعها.
 
 لا تنشأ وحدة Gradle جديدة قبل وجود سبب مثل زمن بناء أو إعادة استخدام أو فصل Platform واضح.

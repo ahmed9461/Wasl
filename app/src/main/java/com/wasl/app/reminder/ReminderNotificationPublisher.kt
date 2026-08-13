@@ -38,13 +38,19 @@ class ReminderNotificationPublisher(
     }
 
     fun canNotify(): Boolean {
+        ensureChannels()
         val runtimePermissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.POST_NOTIFICATIONS,
             ) == PackageManager.PERMISSION_GRANTED
+        val channelEnabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            context.getSystemService(NotificationManager::class.java)
+                .getNotificationChannel(DUE_ACCOUNTS_CHANNEL_ID)
+                ?.importance != NotificationManager.IMPORTANCE_NONE
         return runtimePermissionGranted &&
-            NotificationManagerCompat.from(context).areNotificationsEnabled()
+            NotificationManagerCompat.from(context).areNotificationsEnabled() &&
+            channelEnabled
     }
 
     @SuppressLint("MissingPermission")

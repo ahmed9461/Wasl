@@ -1,6 +1,7 @@
 package com.wasl.app
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -59,7 +60,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -81,6 +82,7 @@ import androidx.navigation3.ui.NavDisplay
 import com.wasl.app.data.AccountOverview
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.reminder.NoOpReminderScheduler
+import com.wasl.app.reminder.ReminderNotificationPublisher
 import com.wasl.app.reminder.ReminderScheduler
 import com.wasl.app.ui.theme.WaslTheme
 import com.wasl.domain.CurrencyCode
@@ -775,9 +777,17 @@ private fun hasNotificationRuntimePermission(context: Context): Boolean =
             Manifest.permission.POST_NOTIFICATIONS,
         ) == PackageManager.PERMISSION_GRANTED
 
-private fun canPostNotifications(context: Context): Boolean =
-    hasNotificationRuntimePermission(context) &&
-        NotificationManagerCompat.from(context).areNotificationsEnabled()
+private fun canPostNotifications(context: Context): Boolean {
+    if (!hasNotificationRuntimePermission(context) ||
+        !NotificationManagerCompat.from(context).areNotificationsEnabled()
+    ) {
+        return false
+    }
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
+    val channel = context.getSystemService(NotificationManager::class.java)
+        .getNotificationChannel(ReminderNotificationPublisher.DUE_ACCOUNTS_CHANNEL_ID)
+    return channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE
+}
 
 private fun openNotificationSettings(context: Context) {
     context.startActivity(

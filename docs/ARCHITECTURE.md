@@ -46,6 +46,8 @@ Notifications وAlarmManager وWorkManager وBiometrics وKeystore وFileProvide
 
 في Search تطبع `LocalSearchQuery` مدخل المستخدم وتحوّل محارف SQLite LIKE إلى قيم حرفية. ينفذ DAO استعلامًا محدودًا يصل debts بـpersons ويعيد 51 Aggregate فقط؛ يعرض ViewModel أول 50 ويستخدم العنصر الإضافي لإظهار وجود المزيد. تبقى العلاقات والLedger تحت Room Flow نفسها، لذلك ينعكس إنشاء دين أو تسجيل دفعة على النتائج الحالية دون نسخة بحث منفصلة أو مصدر رصيد جديد.
 
+في اختيار الشخص الموجود يستخدم HomeViewModel استعلام `persons` مستقلًا ومحدودًا بـ21 سجلًا؛ يعرض أول 20 وينبه إلى وجود المزيد. البحث بالاسم للعثور والعرض فقط، بينما يحفظ الاختيار `PersonId` ويُرسل إلى أمر Repository، فلا يتحول تشابه الأسماء إلى ربط مالي خاطئ.
+
 ## تدفق الكتابة المالية
 
 مثال تسجيل دفعة:
@@ -63,6 +65,8 @@ Notifications وAlarmManager وWorkManager وBiometrics وKeystore وFileProvide
 11. بعد نجاح Commit فقط تُجدول آثار جانبية قابلة لإعادة المحاولة مثل Reminder أو اقتراح PDF.
 
 لا يُنشأ PDF أو Notification داخل Transaction قاعدة البيانات.
+
+إنشاء دين لشخص موجود يمر بمسار كتابة مستقل: يتحقق Repository من وجود `PersonId` وأنه غير مؤرشف، ثم يضيف الدين والتذكير الاختياري في Transaction واحدة دون Insert أو Update للشخص. يبقى لكل دين ID وLedger مستقلان، وتعيد إعادة المحاولة بالـDebt ID النتيجة نفسها أو ترفض Payload المتعارض.
 
 ## Idempotency والتزامن
 

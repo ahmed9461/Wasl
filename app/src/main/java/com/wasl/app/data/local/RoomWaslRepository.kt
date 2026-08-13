@@ -3,8 +3,10 @@ package com.wasl.app.data.local
 import androidx.room.withTransaction
 import com.wasl.app.data.AccountOverview
 import com.wasl.app.data.CommandConflictException
+import com.wasl.app.data.CreateDebtForExistingPersonCommand
 import com.wasl.app.data.CreatePersonWithDebtCommand
 import com.wasl.app.data.DebtLifecycleState
+import com.wasl.app.data.DueReminderRequest
 import com.wasl.app.data.LocalSearchQuery
 import com.wasl.app.data.PersonRecord
 import com.wasl.app.data.RecordNotFoundException
@@ -67,6 +69,17 @@ class RoomWaslRepository(
         }
     }
 
+    override fun observePeople(
+        query: String,
+        limit: Int,
+    ): Flow<List<PersonRecord>> {
+        require(limit > 0) { "People limit must be positive." }
+        val pattern = LocalSearchQuery.toSqlLikePattern(query)
+        return personDao.observeActiveForSelection(pattern, limit).map { people ->
+            people.map { it.toRecord() }
+        }
+    }
+
     override fun observeAccount(debtId: DebtId): Flow<AccountOverview?> =
         debtDao.observeAggregateById(debtId.value).map { aggregate ->
             aggregate?.let(::toAccountOverview)
@@ -77,7 +90,7 @@ class RoomWaslRepository(
     ): AccountOverview = database.withTransaction {
         val existingDebt = debtDao.findAggregateById(command.debtId.value)
         if (existingDebt != null) {
-            validateCreateReplay(command, existingDebt)
+            validateCreatePersonReplay(command, existingDebt)
             return@withTransaction toAccountOverview(existingDebt)
         }
 
@@ -101,45 +114,36 @@ class RoomWaslRepository(
             ),
         )
 
-        debtDao.insert(
-            DebtEntity(
-                id = command.debtId.value,
-                personId = command.personId.value,
-                direction = command.direction.name,
-                originalAmountMinor = command.originalAmount.minorUnits,
-                currencyCode = command.originalAmount.currency.value,
-                openedAt = command.openedAt.toEpochMilli(),
-                dueDateEpochDay = command.dueDate?.toEpochDay(),
-                description = command.description?.trim(),
-                notes = command.debtNotes?.trim(),
-                lifecycleState = DebtLifecycleState.ACTIVE.name,
-                createdAt = command.createdAt.toEpochMilli(),
-                updatedAt = command.createdAt.toEpochMilli(),
-                closedAt = null,
-            ),
-        )
+        insertDebtWithReminder(command.toDebtCreation())
 
-        command.dueReminder?.let { reminder ->
-            reminderDao.insert(
-                ReminderEntity(
-                    id = reminder.id,
-                    subjectType = ReminderSubjectType.DEBT.name,
-                    subjectId = command.debtId.value,
-                    reminderType = ReminderType.DUE_DATE.name,
-                    scheduleType = ReminderScheduleType.WORK.name,
-                    triggerAt = reminder.triggerAt.toEpochMilli(),
-                    zoneId = reminder.zoneId.id,
-                    repeatRule = null,
-                    status = ReminderStatus.SCHEDULED.name,
-                    platformRequestCode = null,
-                    lastFailureCode = null,
-                    deliveredAt = null,
-                    createdAt = command.createdAt.toEpochMilli(),
-                    updatedAt = command.createdAt.toEpochMilli(),
-                ),
+        toAccountOverview(
+            requireNotNull(debtDao.findAggregateById(command.debtId.value)) {
+                "Created debt could not be read back."
+            },
+        )
+    }
+
+    override suspend fun createDebtForExistingPerson(
+        command: CreateDebtForExistingPersonCommand,
+    ): AccountOverview = database.withTransaction {
+        val creation = command.toDebtCreation()
+        val existingDebt = debtDao.findAggregateById(command.debtId.value)
+        if (existingDebt != null) {
+            validateExistingPersonDebtReplay(creation, existingDebt)
+            return@withTransaction toAccountOverview(existingDebt)
+        }
+
+        val person = personDao.findById(command.personId.value)
+            ?: throw RecordNotFoundException(
+                "Person ${command.personId.value} was not found.",
+            )
+        if (person.archivedAt != null) {
+            throw RecordNotFoundException(
+                "Person ${command.personId.value} is archived.",
             )
         }
 
+        insertDebtWithReminder(creation)
         toAccountOverview(
             requireNotNull(debtDao.findAggregateById(command.debtId.value)) {
                 "Created debt could not be read back."
@@ -312,42 +316,101 @@ class RoomWaslRepository(
         ) { "Debt closure projection was not updated." }
     }
 
-    private fun validateCreateReplay(
+    private suspend fun insertDebtWithReminder(creation: DebtCreation) {
+        debtDao.insert(
+            DebtEntity(
+                id = creation.debtId.value,
+                personId = creation.personId.value,
+                direction = creation.direction.name,
+                originalAmountMinor = creation.originalAmount.minorUnits,
+                currencyCode = creation.originalAmount.currency.value,
+                openedAt = creation.openedAt.toEpochMilli(),
+                dueDateEpochDay = creation.dueDate?.toEpochDay(),
+                description = creation.description,
+                notes = creation.debtNotes,
+                lifecycleState = DebtLifecycleState.ACTIVE.name,
+                createdAt = creation.createdAt.toEpochMilli(),
+                updatedAt = creation.createdAt.toEpochMilli(),
+                closedAt = null,
+            ),
+        )
+
+        creation.dueReminder?.let { reminder ->
+            reminderDao.insert(
+                ReminderEntity(
+                    id = reminder.id,
+                    subjectType = ReminderSubjectType.DEBT.name,
+                    subjectId = creation.debtId.value,
+                    reminderType = ReminderType.DUE_DATE.name,
+                    scheduleType = ReminderScheduleType.WORK.name,
+                    triggerAt = reminder.triggerAt.toEpochMilli(),
+                    zoneId = reminder.zoneId.id,
+                    repeatRule = null,
+                    status = ReminderStatus.SCHEDULED.name,
+                    platformRequestCode = null,
+                    lastFailureCode = null,
+                    deliveredAt = null,
+                    createdAt = creation.createdAt.toEpochMilli(),
+                    updatedAt = creation.createdAt.toEpochMilli(),
+                ),
+            )
+        }
+    }
+
+    private fun validateCreatePersonReplay(
         command: CreatePersonWithDebtCommand,
         aggregate: DebtAggregate,
     ) {
         val persisted = toAccountOverview(aggregate)
-        val expectedDescription = command.description?.trim()
         val expectedPersonNotes = command.personNotes?.trim()
-        val expectedDebtNotes = command.debtNotes?.trim()
-        val expectedReminder = command.dueReminder
-        val persistedReminder = persisted.dueReminder
-        val reminderMatches = when {
-            expectedReminder == null -> persistedReminder == null
-            persistedReminder == null -> false
-            else -> persistedReminder.id == expectedReminder.id &&
-                persistedReminder.debtId == command.debtId &&
-                persistedReminder.triggerAt == expectedReminder.triggerAt &&
-                persistedReminder.zoneId == expectedReminder.zoneId &&
-                persistedReminder.createdAt == command.createdAt
-        }
-        val matches = persisted.person.id == command.personId &&
+        val matches = debtCreationMatches(command.toDebtCreation(), aggregate, persisted) &&
             persisted.person.displayName == command.personName.trim() &&
             persisted.person.notes == expectedPersonNotes &&
-            persisted.person.createdAt == command.createdAt &&
-            persisted.ledger.header.direction == command.direction &&
-            persisted.ledger.header.originalAmount == command.originalAmount &&
-            persisted.ledger.header.openedAt == command.openedAt &&
-            persisted.ledger.header.dueDate == command.dueDate &&
-            persisted.ledger.header.description == expectedDescription &&
-            persisted.notes == expectedDebtNotes &&
-            aggregate.debt.createdAt == command.createdAt.toEpochMilli() &&
-            reminderMatches
+            persisted.person.createdAt == command.createdAt
         if (!matches) {
             throw CommandConflictException(
                 "Debt ID ${command.debtId.value} is already used by a different command.",
             )
         }
+    }
+
+    private fun validateExistingPersonDebtReplay(
+        creation: DebtCreation,
+        aggregate: DebtAggregate,
+    ) {
+        val persisted = toAccountOverview(aggregate)
+        if (!debtCreationMatches(creation, aggregate, persisted)) {
+            throw CommandConflictException(
+                "Debt ID ${creation.debtId.value} is already used by a different command.",
+            )
+        }
+    }
+
+    private fun debtCreationMatches(
+        creation: DebtCreation,
+        aggregate: DebtAggregate,
+        persisted: AccountOverview,
+    ): Boolean {
+        val expectedReminder = creation.dueReminder
+        val persistedReminder = persisted.dueReminder
+        val reminderMatches = when {
+            expectedReminder == null -> persistedReminder == null
+            persistedReminder == null -> false
+            else -> persistedReminder.id == expectedReminder.id &&
+                persistedReminder.debtId == creation.debtId &&
+                persistedReminder.triggerAt == expectedReminder.triggerAt &&
+                persistedReminder.zoneId == expectedReminder.zoneId &&
+                persistedReminder.createdAt == creation.createdAt
+        }
+        return persisted.person.id == creation.personId &&
+            persisted.ledger.header.direction == creation.direction &&
+            persisted.ledger.header.originalAmount == creation.originalAmount &&
+            persisted.ledger.header.openedAt == creation.openedAt &&
+            persisted.ledger.header.dueDate == creation.dueDate &&
+            persisted.ledger.header.description == creation.description &&
+            persisted.notes == creation.debtNotes &&
+            aggregate.debt.createdAt == creation.createdAt.toEpochMilli() &&
+            reminderMatches
     }
 
     private fun validatePaymentReplay(
@@ -511,6 +574,45 @@ class RoomWaslRepository(
         createdAt = Instant.ofEpochMilli(createdAt),
         updatedAt = Instant.ofEpochMilli(updatedAt),
         archivedAt = archivedAt?.let(Instant::ofEpochMilli),
+    )
+
+    private fun CreatePersonWithDebtCommand.toDebtCreation() = DebtCreation(
+        personId = personId,
+        debtId = debtId,
+        direction = direction,
+        originalAmount = originalAmount,
+        openedAt = openedAt,
+        createdAt = createdAt,
+        dueDate = dueDate,
+        description = description?.trim(),
+        debtNotes = debtNotes?.trim(),
+        dueReminder = dueReminder,
+    )
+
+    private fun CreateDebtForExistingPersonCommand.toDebtCreation() = DebtCreation(
+        personId = personId,
+        debtId = debtId,
+        direction = direction,
+        originalAmount = originalAmount,
+        openedAt = openedAt,
+        createdAt = createdAt,
+        dueDate = dueDate,
+        description = description?.trim(),
+        debtNotes = debtNotes?.trim(),
+        dueReminder = dueReminder,
+    )
+
+    private data class DebtCreation(
+        val personId: PersonId,
+        val debtId: DebtId,
+        val direction: DebtDirection,
+        val originalAmount: Money,
+        val openedAt: Instant,
+        val createdAt: Instant,
+        val dueDate: LocalDate?,
+        val description: String?,
+        val debtNotes: String?,
+        val dueReminder: DueReminderRequest?,
     )
 
     private enum class LedgerKind {

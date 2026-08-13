@@ -107,6 +107,32 @@ data class CreatePersonWithDebtCommand(
     }
 }
 
+data class CreateDebtForExistingPersonCommand(
+    val personId: PersonId,
+    val debtId: DebtId,
+    val direction: DebtDirection,
+    val originalAmount: Money,
+    val openedAt: Instant,
+    val createdAt: Instant,
+    val dueDate: LocalDate? = null,
+    val description: String? = null,
+    val debtNotes: String? = null,
+    val dueReminder: DueReminderRequest? = null,
+) {
+    init {
+        require(originalAmount.minorUnits > 0L) { "Original amount must be positive." }
+        require(description == null || description.isNotBlank()) {
+            "Description must be null or non-blank."
+        }
+        require(debtNotes == null || debtNotes.isNotBlank()) {
+            "Debt notes must be null or non-blank."
+        }
+        require(dueReminder == null || dueDate != null) {
+            "A due reminder requires a due date."
+        }
+    }
+}
+
 data class RecordPaymentCommand(
     val commandId: String,
     val entryId: LedgerEntryId,

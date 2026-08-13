@@ -6,8 +6,10 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.wasl.app.data.CommandConflictException
+import com.wasl.app.data.CreateDebtForExistingPersonCommand
 import com.wasl.app.data.CreatePersonWithDebtCommand
 import com.wasl.app.data.DueReminderRequest
+import com.wasl.app.data.RecordNotFoundException
 import com.wasl.app.data.ReminderStatus
 import com.wasl.app.data.RecordPaymentCommand
 import com.wasl.app.data.ReversePaymentCommand
@@ -89,6 +91,87 @@ class RoomWaslRepositoryInstrumentedTest {
 
         assertEquals(1, database!!.personDao().count())
         assertEquals(1, database!!.debtDao().count())
+    }
+
+    @Test
+    fun existingPersonCanOwnIndependentIdempotentDebtsWithoutDuplicatePerson() = runTest {
+        repository.createPersonWithDebt(baseCommand())
+        val secondDebt = existingPersonDebtCommand().copy(
+            dueDate = LocalDate.parse("2026-08-15"),
+            dueReminder = DueReminderRequest(
+                id = "reminder-existing-person-debt",
+                triggerAt = Instant.parse("2026-08-15T06:00:00Z"),
+                zoneId = ZoneId.of("Asia/Riyadh"),
+            ),
+        )
+
+        repository.createDebtForExistingPerson(secondDebt)
+        repository.createDebtForExistingPerson(secondDebt)
+        reopenDatabase()
+
+        assertEquals(1, database!!.personDao().count())
+        assertEquals(2, database!!.debtDao().count())
+        assertEquals(1, database!!.reminderDao().count())
+        assertEquals(
+            "reminder-existing-person-debt",
+            repository.getAccount(DebtId("debt-2"))?.dueReminder?.id,
+        )
+        val accounts = repository.observeAccounts().first()
+        assertEquals(setOf("debt-1", "debt-2"), accounts.map { it.ledger.header.id.value }.toSet())
+        assertEquals(setOf(PersonId("person-1")), accounts.map { it.person.id }.toSet())
+        assertEquals(
+            setOf("debt-1", "debt-2"),
+            repository.observeSearchAccounts("أحمد", 10).first()
+                .map { it.ledger.header.id.value }
+                .toSet(),
+        )
+    }
+
+    @Test
+    fun existingPersonDebtRejectsMissingPersonAndConflictingReplayWithoutPartialWrite() = runTest {
+        repository.createPersonWithDebt(baseCommand())
+
+        assertFailsWith<RecordNotFoundException> {
+            repository.createDebtForExistingPerson(
+                existingPersonDebtCommand().copy(
+                    personId = PersonId("missing-person"),
+                    debtId = DebtId("missing-person-debt"),
+                ),
+            )
+        }
+
+        val command = existingPersonDebtCommand()
+        repository.createDebtForExistingPerson(command)
+        assertFailsWith<CommandConflictException> {
+            repository.createDebtForExistingPerson(
+                command.copy(originalAmount = Money(40_000L, CurrencyCode.SAR)),
+            )
+        }
+        assertEquals(1, database!!.personDao().count())
+        assertEquals(2, database!!.debtDao().count())
+    }
+
+    @Test
+    fun peopleSelectionIsReactiveLimitedAndTreatsWildcardsLiterally() = runTest {
+        repository.createPersonWithDebt(searchCommand("first", "متجر ALPHA", "أول", 10))
+        repository.createPersonWithDebt(searchCommand("literal", "اسم %_خاص", "ثانٍ", 11))
+        repository.createPersonWithDebt(searchCommand("decoy", "اسم XXخاص", "ثالث", 12))
+
+        assertEquals(
+            listOf("person-first"),
+            repository.observePeople("alpha", 10).first().map { it.id.value },
+        )
+        assertEquals(
+            listOf("person-literal"),
+            repository.observePeople("%_", 10).first().map { it.id.value },
+        )
+        assertEquals(2, repository.observePeople("", 2).first().size)
+
+        val observesNewPerson = async(start = CoroutineStart.UNDISPATCHED) {
+            repository.observePeople("جديد", 5).first { it.size == 1 }
+        }
+        repository.createPersonWithDebt(searchCommand("new", "شخص جديد", "رابع", 13))
+        assertEquals("person-new", observesNewPerson.await().single().id.value)
     }
 
     @Test
@@ -455,6 +538,16 @@ class RoomWaslRepositoryInstrumentedTest {
         openedAt = Instant.parse("2026-08-13T00:00:00Z"),
         createdAt = Instant.parse("2026-08-13T00:00:00Z"),
         description = "دين تجريبي",
+    )
+
+    private fun existingPersonDebtCommand() = CreateDebtForExistingPersonCommand(
+        personId = PersonId("person-1"),
+        debtId = DebtId("debt-2"),
+        direction = DebtDirection.PAYABLE,
+        originalAmount = Money(50_000L, CurrencyCode.SAR),
+        openedAt = Instant.parse("2026-08-13T00:01:00Z"),
+        createdAt = Instant.parse("2026-08-13T00:01:00Z"),
+        description = "دين مستقل ثانٍ",
     )
 
     private fun datedCommand(

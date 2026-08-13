@@ -1,6 +1,7 @@
 package com.wasl.app
 
 import com.wasl.app.data.AccountOverview
+import com.wasl.app.data.CreateDebtForExistingPersonCommand
 import com.wasl.app.data.CreatePersonWithDebtCommand
 import com.wasl.app.data.DebtLifecycleState
 import com.wasl.app.data.ReminderRecord
@@ -59,7 +60,7 @@ class HomeViewModelTest {
         viewModel.openCreateDialog()
         viewModel.updatePersonName("أحمد")
         viewModel.updateAmount("١٠٠٬٠٠٠")
-        viewModel.createPersonWithDebt()
+        viewModel.createDebt()
         advanceUntilIdle()
 
         val command = assertNotNull(repository.lastCreateCommand)
@@ -78,7 +79,7 @@ class HomeViewModelTest {
         viewModel.openCreateDialog()
         viewModel.updatePersonName("شخص")
         viewModel.updateAmount("0")
-        viewModel.createPersonWithDebt()
+        viewModel.createDebt()
         advanceUntilIdle()
 
         assertNull(repository.lastCreateCommand)
@@ -102,9 +103,9 @@ class HomeViewModelTest {
         viewModel.openCreateDialog()
         viewModel.updatePersonName("أحمد")
         viewModel.updateAmount("1000")
-        viewModel.createPersonWithDebt()
+        viewModel.createDebt()
         advanceUntilIdle()
-        viewModel.createPersonWithDebt()
+        viewModel.createDebt()
         advanceUntilIdle()
 
         assertEquals(2, repository.createCommands.size)
@@ -131,7 +132,7 @@ class HomeViewModelTest {
         viewModel.updateAmount("1000")
         viewModel.updateDueDate(LocalDate.parse("2026-08-14"))
         viewModel.updateRemindOnDueDate(true)
-        viewModel.createPersonWithDebt()
+        viewModel.createDebt()
         advanceUntilIdle()
 
         val command = assertNotNull(repository.lastCreateCommand)
@@ -157,7 +158,7 @@ class HomeViewModelTest {
         viewModel.updatePersonName("أحمد")
         viewModel.updateAmount("1000")
         viewModel.updateDueDate(LocalDate.parse("2026-08-12"))
-        viewModel.createPersonWithDebt()
+        viewModel.createDebt()
         advanceUntilIdle()
 
         assertNull(repository.lastCreateCommand)
@@ -182,7 +183,7 @@ class HomeViewModelTest {
         viewModel.updateAmount("1000")
         viewModel.updateDueDate(LocalDate.parse("2026-08-14"))
         viewModel.updateRemindOnDueDate(true)
-        viewModel.createPersonWithDebt()
+        viewModel.createDebt()
         advanceUntilIdle()
 
         assertNotNull(repository.lastCreateCommand?.dueReminder)
@@ -191,6 +192,70 @@ class HomeViewModelTest {
             "تم حفظ الحساب والتذكير، وستُعاد محاولة الجدولة تلقائيًا.",
             viewModel.uiState.value.successMessage,
         )
+    }
+
+    @Test
+    fun createsIndependentDebtForSelectedExistingPersonId() = runTest {
+        val person = person("person-existing", "أحمد")
+        val repository = FakeWaslRepository(initialPeople = listOf(person))
+        val ids = ArrayDeque(listOf("debt-existing"))
+        val viewModel = HomeViewModel(
+            repository = repository,
+            clock = Clock.fixed(Instant.parse("2026-08-13T00:00:00Z"), ZoneOffset.UTC),
+            idFactory = { ids.removeFirst() },
+        )
+        advanceUntilIdle()
+
+        viewModel.openCreateDialog()
+        viewModel.updatePersonMode(DebtPersonMode.EXISTING)
+        viewModel.selectExistingPerson(person.id)
+        viewModel.updateAmount("50000")
+        viewModel.updateDescription("دين مستقل ثانٍ")
+        viewModel.createDebt()
+        advanceUntilIdle()
+
+        val command = assertNotNull(repository.lastExistingPersonCommand)
+        assertEquals(person.id, command.personId)
+        assertEquals(DebtId("debt-existing"), command.debtId)
+        assertEquals("دين مستقل ثانٍ", command.description)
+        assertNull(repository.lastCreateCommand)
+        assertEquals(
+            "تم حفظ دين جديد للشخص أحمد بنجاح.",
+            viewModel.uiState.value.successMessage,
+        )
+    }
+
+    @Test
+    fun existingPersonModeRequiresAnExplicitSelection() = runTest {
+        val repository = FakeWaslRepository(initialPeople = listOf(person("person-1", "أحمد")))
+        val viewModel = HomeViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.openCreateDialog()
+        viewModel.updatePersonMode(DebtPersonMode.EXISTING)
+        viewModel.updateAmount("1000")
+        viewModel.createDebt()
+        advanceUntilIdle()
+
+        assertNull(repository.lastExistingPersonCommand)
+        assertEquals("اختر شخصًا محفوظًا.", viewModel.uiState.value.formError)
+    }
+
+    @Test
+    fun peoplePickerUsesAVisibleLimitAndFiltersByName() = runTest {
+        val people = (0..20).map { index -> person("person-$index", "شخص $index") }
+        val repository = FakeWaslRepository(initialPeople = people)
+        val viewModel = HomeViewModel(repository)
+        advanceUntilIdle()
+
+        assertEquals(20, viewModel.uiState.value.selectablePeople.size)
+        assertEquals(true, viewModel.uiState.value.hasMorePeople)
+
+        viewModel.updatePeopleQuery("شخص 20")
+        advanceUntilIdle()
+
+        assertEquals(listOf("person-20"), viewModel.uiState.value.selectablePeople.map { it.id.value })
+        assertFalse(viewModel.uiState.value.hasMorePeople)
     }
 }
 
@@ -209,9 +274,12 @@ class MainDispatcherRule(
 
 private class FakeWaslRepository(
     private var createFailuresRemaining: Int = 0,
+    initialPeople: List<PersonRecord> = emptyList(),
 ) : WaslRepository {
     private val accounts = MutableStateFlow<List<AccountOverview>>(emptyList())
+    private val people = MutableStateFlow(initialPeople)
     var lastCreateCommand: CreatePersonWithDebtCommand? = null
+    var lastExistingPersonCommand: CreateDebtForExistingPersonCommand? = null
     val createCommands = mutableListOf<CreatePersonWithDebtCommand>()
 
     override fun observeAccounts(): Flow<List<AccountOverview>> = accounts
@@ -234,6 +302,12 @@ private class FakeWaslRepository(
         }.take(limit)
     }
 
+    override fun observePeople(query: String, limit: Int): Flow<List<PersonRecord>> =
+        people.map { values ->
+            values.filter { it.displayName.contains(query.trim(), ignoreCase = true) }
+                .take(limit)
+        }
+
     override fun observeAccount(debtId: DebtId): Flow<AccountOverview?> =
         accounts.map { values ->
             values.firstOrNull { it.ledger.header.id == debtId }
@@ -248,26 +322,22 @@ private class FakeWaslRepository(
             createFailuresRemaining -= 1
             error("Simulated unknown persistence result.")
         }
-        return AccountOverview(
-            person = PersonRecord(
-                id = command.personId,
-                displayName = command.personName,
-                createdAt = command.createdAt,
-                updatedAt = command.createdAt,
-            ),
-            ledger = DebtLedger(
-                DebtHeader(
-                    id = command.debtId,
-                    personId = command.personId,
-                    direction = command.direction,
-                    originalAmount = command.originalAmount,
-                    openedAt = command.openedAt,
-                    dueDate = command.dueDate,
-                    description = command.description,
-                ),
-            ),
-            lifecycleState = DebtLifecycleState.ACTIVE,
-            dueReminder = command.dueReminder?.let { reminder ->
+        val person = PersonRecord(
+            id = command.personId,
+            displayName = command.personName,
+            createdAt = command.createdAt,
+            updatedAt = command.createdAt,
+        )
+        if (people.value.none { it.id == person.id }) people.value += person
+        return account(
+            person = person,
+            debtId = command.debtId,
+            direction = command.direction,
+            amount = command.originalAmount,
+            openedAt = command.openedAt,
+            dueDate = command.dueDate,
+            description = command.description,
+            reminder = command.dueReminder?.let { reminder ->
                 ReminderRecord(
                     id = reminder.id,
                     debtId = command.debtId,
@@ -278,8 +348,61 @@ private class FakeWaslRepository(
                     updatedAt = command.createdAt,
                 )
             },
-        )
+        ).also { created -> accounts.value += created }
     }
+
+    override suspend fun createDebtForExistingPerson(
+        command: CreateDebtForExistingPersonCommand,
+    ): AccountOverview {
+        lastExistingPersonCommand = command
+        val person = people.value.first { it.id == command.personId }
+        return account(
+            person = person,
+            debtId = command.debtId,
+            direction = command.direction,
+            amount = command.originalAmount,
+            openedAt = command.openedAt,
+            dueDate = command.dueDate,
+            description = command.description,
+            reminder = command.dueReminder?.let { reminder ->
+                ReminderRecord(
+                    id = reminder.id,
+                    debtId = command.debtId,
+                    triggerAt = reminder.triggerAt,
+                    zoneId = reminder.zoneId,
+                    status = ReminderStatus.SCHEDULED,
+                    createdAt = command.createdAt,
+                    updatedAt = command.createdAt,
+                )
+            },
+        ).also { created -> accounts.value += created }
+    }
+
+    private fun account(
+        person: PersonRecord,
+        debtId: DebtId,
+        direction: com.wasl.domain.DebtDirection,
+        amount: Money,
+        openedAt: Instant,
+        dueDate: LocalDate?,
+        description: String?,
+        reminder: ReminderRecord?,
+    ) = AccountOverview(
+            person = person,
+            ledger = DebtLedger(
+                DebtHeader(
+                    id = debtId,
+                    personId = person.id,
+                    direction = direction,
+                    originalAmount = amount,
+                    openedAt = openedAt,
+                    dueDate = dueDate,
+                    description = description,
+                ),
+            ),
+            lifecycleState = DebtLifecycleState.ACTIVE,
+            dueReminder = reminder,
+        )
 
     override suspend fun getAccount(debtId: DebtId): AccountOverview? =
         accounts.value.firstOrNull { it.ledger.header.id == debtId }
@@ -291,6 +414,16 @@ private class FakeWaslRepository(
     override suspend fun reversePayment(command: ReversePaymentCommand): DebtLedger {
         error("Not used in this test.")
     }
+}
+
+private fun person(id: String, name: String): PersonRecord {
+    val now = Instant.parse("2026-08-13T00:00:00Z")
+    return PersonRecord(
+        id = com.wasl.domain.PersonId(id),
+        displayName = name,
+        createdAt = now,
+        updatedAt = now,
+    )
 }
 
 private class RecordingReminderScheduler : ReminderScheduler {

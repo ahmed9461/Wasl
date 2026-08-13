@@ -1,6 +1,7 @@
 package com.wasl.app
 
 import com.wasl.app.data.AccountOverview
+import com.wasl.app.data.CreateDebtForExistingPersonCommand
 import com.wasl.app.data.CreatePersonWithDebtCommand
 import com.wasl.app.data.DebtLifecycleState
 import com.wasl.app.data.PersonRecord
@@ -161,11 +162,23 @@ private class SearchFakeRepository(
         }
     }
 
+    override fun observePeople(query: String, limit: Int): Flow<List<PersonRecord>> =
+        accounts.map { values ->
+            values.map { it.person }
+                .distinctBy { it.id }
+                .filter { it.displayName.contains(query, ignoreCase = true) }
+                .take(limit)
+        }
+
     override fun observeAccount(debtId: DebtId): Flow<AccountOverview?> =
         accounts.map { values -> values.firstOrNull { it.ledger.header.id == debtId } }
 
     override suspend fun createPersonWithDebt(
         command: CreatePersonWithDebtCommand,
+    ): AccountOverview = error("Not used in this test.")
+
+    override suspend fun createDebtForExistingPerson(
+        command: CreateDebtForExistingPersonCommand,
     ): AccountOverview = error("Not used in this test.")
 
     override suspend fun getAccount(debtId: DebtId): AccountOverview? =

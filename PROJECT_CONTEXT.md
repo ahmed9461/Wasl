@@ -22,7 +22,7 @@
 
 ## المرحلة الحالية
 
-MVP Phase 1 / Core debt-payment + due reminder + Today + local search فوق Persistence موثوق.
+MVP Phase 1 / Core debt-payment + existing-person debts + due reminder + Today + local search فوق Persistence موثوق.
 
 ما يعمل الآن:
 
@@ -35,6 +35,8 @@ MVP Phase 1 / Core debt-payment + due reminder + Today + local search فوق Per
 - Room 2.8.4 Schema v2 للجداول persons وdebts وledger_entries وreminders مع Migration v1→v2 مختبرة.
 - Repository ذري لإنشاء شخص ودين وتسجيل دفعة وعكسها مع Idempotency وReplay بعد القراءة.
 - أول مسار UI يحفظ شخصًا ودينًا ويعرض الحسابات والإجماليات حسب العملة.
+- نموذج إنشاء الدين يختار شخصًا جديدًا أو شخصًا محفوظًا بالـID من استعلام Room محدود، ويضيف للشخص الموجود ديونًا مستقلة دون Person مكرر.
+- Repository يفصل أمر إنشاء الشخص والدين عن أمر إنشاء دين لشخص موجود، ويحفظ الدين وتذكيره ذريًا مع Idempotency بالـdebtId.
 - شاشة تفاصيل حساب تفاعلية تعرض الأصل والمدفوع والمتبقي والحالة والسجل المالي كاملًا.
 - تسجيل دفعة جزئية أو نهائية من UI عبر مراجعة ثم تأكيد، مع أخطاء قابلة للتصحيح وإعادة محاولة Idempotent عند غموض نتيجة الحفظ.
 - عكس دفعة من UI بسبب إلزامي دون حذف الحدث الأصلي، مع إغلاق الدين وإعادة فتحه بصورة مشتقة.
@@ -53,7 +55,6 @@ MVP Phase 1 / Core debt-payment + due reminder + Today + local search فوق Per
 
 ما لا يعمل بعد:
 
-- اختيار شخص موجود وإنشاء أكثر من دين له من الواجهة.
 - البحث في العمليات والمستندات وأرقامها والتواريخ والمبالغ؛ التنفيذ الحالي يغطي الأشخاص والديون والوصف فقط.
 - أنواع التذكير المتقدمة والتكرار وAlarmManager القوي/الدقيق.
 - المستندات وPDF.

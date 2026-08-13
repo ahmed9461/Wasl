@@ -80,6 +80,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.wasl.app.data.AccountOverview
+import com.wasl.app.data.PersonRecord
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.reminder.NoOpReminderScheduler
 import com.wasl.app.reminder.ReminderNotificationPublisher
@@ -90,6 +91,7 @@ import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtState
 import com.wasl.domain.Money
 import com.wasl.domain.MoneyInputParser
+import com.wasl.domain.PersonId
 import java.math.BigDecimal
 import java.text.NumberFormat
 import java.time.Clock
@@ -211,7 +213,11 @@ fun WaslApp(
                                     backStack.add(AccountDetailsRoute(debtId.value))
                                 },
                                 onDismissCreate = homeViewModel::dismissCreateDialog,
+                                onPersonModeChange = homeViewModel::updatePersonMode,
                                 onPersonNameChange = homeViewModel::updatePersonName,
+                                onPeopleQueryChange = homeViewModel::updatePeopleQuery,
+                                onSelectPerson = homeViewModel::selectExistingPerson,
+                                onRetryPeople = homeViewModel::retryPeople,
                                 onAmountChange = homeViewModel::updateAmount,
                                 onCurrencyChange = homeViewModel::updateCurrency,
                                 onDirectionChange = homeViewModel::updateDirection,
@@ -222,7 +228,7 @@ fun WaslApp(
                                     if (enabled && !notificationsAvailable) requestNotificationAccess()
                                 },
                                 notificationPermissionGranted = notificationsAvailable,
-                                onSave = homeViewModel::createPersonWithDebt,
+                                onSave = homeViewModel::createDebt,
                                 onSuccessShown = homeViewModel::clearSuccessMessage,
                             )
                         }
@@ -323,7 +329,11 @@ private fun WaslHomeScreen(
     onOpenCreate: () -> Unit,
     onOpenAccount: (com.wasl.domain.DebtId) -> Unit,
     onDismissCreate: () -> Unit,
+    onPersonModeChange: (DebtPersonMode) -> Unit,
     onPersonNameChange: (String) -> Unit,
+    onPeopleQueryChange: (String) -> Unit,
+    onSelectPerson: (PersonId) -> Unit,
+    onRetryPeople: () -> Unit,
     onAmountChange: (String) -> Unit,
     onCurrencyChange: (CurrencyCode) -> Unit,
     onDirectionChange: (DebtDirection) -> Unit,
@@ -451,8 +461,17 @@ private fun WaslHomeScreen(
             form = state.createForm,
             isSaving = state.isSaving,
             error = state.formError,
+            peopleQuery = state.peopleQuery,
+            selectablePeople = state.selectablePeople,
+            isPeopleLoading = state.isPeopleLoading,
+            peopleLoadError = state.peopleLoadError,
+            hasMorePeople = state.hasMorePeople,
             onDismiss = onDismissCreate,
+            onPersonModeChange = onPersonModeChange,
             onPersonNameChange = onPersonNameChange,
+            onPeopleQueryChange = onPeopleQueryChange,
+            onSelectPerson = onSelectPerson,
+            onRetryPeople = onRetryPeople,
             onAmountChange = onAmountChange,
             onCurrencyChange = onCurrencyChange,
             onDirectionChange = onDirectionChange,
@@ -471,8 +490,17 @@ private fun CreateDebtDialog(
     form: CreateDebtForm,
     isSaving: Boolean,
     error: String?,
+    peopleQuery: String,
+    selectablePeople: List<PersonRecord>,
+    isPeopleLoading: Boolean,
+    peopleLoadError: String?,
+    hasMorePeople: Boolean,
     onDismiss: () -> Unit,
+    onPersonModeChange: (DebtPersonMode) -> Unit,
     onPersonNameChange: (String) -> Unit,
+    onPeopleQueryChange: (String) -> Unit,
+    onSelectPerson: (PersonId) -> Unit,
+    onRetryPeople: () -> Unit,
     onAmountChange: (String) -> Unit,
     onCurrencyChange: (CurrencyCode) -> Unit,
     onDirectionChange: (DebtDirection) -> Unit,
@@ -485,22 +513,127 @@ private fun CreateDebtDialog(
     var showDatePicker by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("حساب جديد") },
+        title = { Text("دين جديد") },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                OutlinedTextField(
-                    value = form.personName,
-                    onValueChange = onPersonNameChange,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("create-person-name"),
-                    label = { Text("اسم الشخص") },
-                    singleLine = true,
-                    enabled = !isSaving,
-                )
+                Text("الشخص", fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = form.personMode == DebtPersonMode.NEW,
+                        onClick = { onPersonModeChange(DebtPersonMode.NEW) },
+                        label = { Text("شخص جديد") },
+                        enabled = !isSaving,
+                        modifier = Modifier.testTag("create-person-mode-new"),
+                    )
+                    FilterChip(
+                        selected = form.personMode == DebtPersonMode.EXISTING,
+                        onClick = { onPersonModeChange(DebtPersonMode.EXISTING) },
+                        label = { Text("شخص موجود") },
+                        enabled = !isSaving,
+                        modifier = Modifier.testTag("create-person-mode-existing"),
+                    )
+                }
+
+                if (form.personMode == DebtPersonMode.NEW) {
+                    OutlinedTextField(
+                        value = form.personName,
+                        onValueChange = onPersonNameChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("create-person-name"),
+                        label = { Text("اسم الشخص") },
+                        singleLine = true,
+                        enabled = !isSaving,
+                    )
+                } else {
+                    form.selectedPerson?.let { selected ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("selected-existing-person"),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            ),
+                        ) {
+                            Text(
+                                text = "الشخص المحدد: ${selected.displayName}",
+                                modifier = Modifier.padding(12.dp),
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                    OutlinedTextField(
+                        value = peopleQuery,
+                        onValueChange = onPeopleQueryChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("existing-person-query"),
+                        label = { Text("ابحث باسم الشخص") },
+                        singleLine = true,
+                        enabled = !isSaving,
+                    )
+                    when {
+                        isPeopleLoading -> Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        }
+
+                        peopleLoadError != null -> Column(
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                peopleLoadError,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            TextButton(
+                                onClick = onRetryPeople,
+                                enabled = !isSaving,
+                                modifier = Modifier.testTag("retry-existing-people"),
+                            ) {
+                                Text("إعادة المحاولة")
+                            }
+                        }
+
+                        selectablePeople.isEmpty() -> Text(
+                            text = if (peopleQuery.isBlank()) {
+                                "لا يوجد شخص محفوظ بعد. اختر «شخص جديد» أولًا."
+                            } else {
+                                "لا يوجد شخص مطابق لهذا الاسم."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+
+                        else -> {
+                            selectablePeople.forEach { person ->
+                                OutlinedButton(
+                                    onClick = { onSelectPerson(person.id) },
+                                    enabled = !isSaving,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("existing-person-${person.id.value}"),
+                                ) {
+                                    Text(person.displayName)
+                                }
+                            }
+                            if (hasMorePeople) {
+                                Text(
+                                    "توجد نتائج إضافية؛ اكتب جزءًا أدق من الاسم.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
 
                 Text("تاريخ الاستحقاق", fontWeight = FontWeight.SemiBold)
                 Row(

@@ -43,6 +43,11 @@ class RoomWaslRepository(
             aggregates.map(::toAccountOverview)
         }
 
+    override fun observeAccount(debtId: DebtId): Flow<AccountOverview?> =
+        debtDao.observeAggregateById(debtId.value).map { aggregate ->
+            aggregate?.let(::toAccountOverview)
+        }
+
     override suspend fun createPersonWithDebt(
         command: CreatePersonWithDebtCommand,
     ): AccountOverview = database.withTransaction {

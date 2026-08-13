@@ -22,7 +22,7 @@
 
 ## المرحلة الحالية
 
-MVP Phase 1 / Persistence foundation وأول مسار إدخال فعلي.
+MVP Phase 1 / Core debt-payment flow فوق Persistence موثوق.
 
 ما يعمل الآن:
 
@@ -35,12 +35,16 @@ MVP Phase 1 / Persistence foundation وأول مسار إدخال فعلي.
 - Room 2.8.4 Schema v1 للجداول persons وdebts وledger_entries مع Schema JSON مصدّر.
 - Repository ذري لإنشاء شخص ودين وتسجيل دفعة وعكسها مع Idempotency وReplay بعد القراءة.
 - أول مسار UI يحفظ شخصًا ودينًا ويعرض الحسابات والإجماليات حسب العملة.
+- شاشة تفاصيل حساب تفاعلية تعرض الأصل والمدفوع والمتبقي والحالة والسجل المالي كاملًا.
+- تسجيل دفعة جزئية أو نهائية من UI عبر مراجعة ثم تأكيد، مع أخطاء قابلة للتصحيح وإعادة محاولة Idempotent عند غموض نتيجة الحفظ.
+- عكس دفعة من UI بسبب إلزامي دون حذف الحدث الأصلي، مع إغلاق الدين وإعادة فتحه بصورة مشتقة.
+- Navigation 3 بمفاتيح Serializable صريحة بين الرئيسية وتفاصيل الحساب، وقراءة التفاصيل Reactive من Room.
 - Unit tests واختبارات Room على Emulator للإغلاق وإعادة الفتح والتزامن والقيود.
+- اختبار UI End-to-End ينشئ دينًا، يسجل دفعة جزئية، يعيد فتح قاعدة البيانات، ويتحقق من بقاء المتبقي والسجل.
 - CI للبناء والاختبارات وLint واختبارات الجهاز.
 
 ما لا يعمل بعد:
 
-- واجهة تفاصيل الحساب وتسجيل الدفعات وعكسها.
 - اختيار شخص موجود وإنشاء أكثر من دين له من الواجهة.
 - التذكيرات والمنبهات.
 - المستندات وPDF.
@@ -58,7 +62,7 @@ MVP Phase 1 / Persistence foundation وأول مسار إدخال فعلي.
 | المنطق المالي | وحدة JVM مستقلة core:domain |
 | قاعدة البيانات | Room 2.8.4 + KSP 2.3.11، Schema v1 مصدّر واختبار baseline |
 | الإعدادات | DataStore عند الحاجة |
-| التنقل | Navigation 3 عند إضافة الوجهات الفعلية |
+| التنقل | Navigation 3 1.1.6 بمفاتيح Serializable وBack stack مملوك للتطبيق |
 | الأعمال المؤجلة | WorkManager |
 | التذكير المحدد | AlarmManager غير دقيق افتراضيًا، Exact فقط بطلب مستخدم صريح |
 | مفاتيح التشفير | Android Keystore |
@@ -69,7 +73,7 @@ MVP Phase 1 / Persistence foundation وأول مسار إدخال فعلي.
 
 ## البنية الحالية
 
-- app: Android entry point، Compose، ViewModel، Room، Repository واختبارات الجهاز.
+- app: Android entry point، Compose، Home/Account details ViewModels، Navigation 3، Room، Repository واختبارات الجهاز.
 - core:domain: Money، CurrencyCode، Debt aggregate، ledger، summary.
 - docs: عقود التصميم والهندسة.
 - .github/workflows/ci.yml: حاجز التحقق الآلي.

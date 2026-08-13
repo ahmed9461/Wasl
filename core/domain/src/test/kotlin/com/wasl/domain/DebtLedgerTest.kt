@@ -25,6 +25,7 @@ class DebtLedgerTest {
 
         assertEquals(original, ledger.header.originalAmount)
         assertEquals(Money(75_00L, CurrencyCode.YER), ledger.balance)
+        assertEquals(Money(25_00L, CurrencyCode.YER), ledger.paidAmount)
         assertEquals(DebtState.PARTIALLY_PAID, ledger.state)
         assertEquals(2, ledger.entries.size)
     }
@@ -83,8 +84,10 @@ class DebtLedgerTest {
             )
 
         assertEquals(Money(10_00L, CurrencyCode.SAR), ledger.balance)
+        assertEquals(Money.zero(CurrencyCode.SAR), ledger.paidAmount)
         assertEquals(DebtState.OPEN, ledger.state)
         assertEquals(2, ledger.entries.size)
+        assertEquals(setOf(LedgerEntryId("payment-1")), ledger.reversedPaymentIds)
         assertTrue(ledger.entries[0] is PaymentRecorded)
         assertTrue(ledger.entries[1] is PaymentReversed)
     }

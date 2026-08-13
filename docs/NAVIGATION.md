@@ -1,6 +1,13 @@
 # معمارية التنقل
 
-الحالة: عقد تصميم قبل تنفيذ Navigation 3.
+الحالة: Navigation 3 منفذ لمسار الرئيسية → تفاصيل الحساب؛ الوجهات العليا التكيفية التالية ما زالت عقد تصميم.
+
+## المسار المنفذ
+
+- `HomeRoute`: جذر التطبيق وقائمة الحسابات.
+- `AccountDetailsRoute(debtId)`: يحمل Debt ID فقط، ثم يقرأ البيانات Reactive من Repository.
+- يملك `WaslApp` Back stack واحدًا عبر `rememberNavBackStack`، والمفاتيح `NavKey` قابلة للتسلسل.
+- يعيد Back من التفاصيل إلى القائمة الموجودة في المكدس؛ System back يمر عبر `NavDisplay`.
 
 ## الوجهات العليا
 
@@ -45,7 +52,8 @@
 
 ## المسارات
 
-- Person list → Person details → Debt details → Ledger entry details.
+- Home accounts → Account details منفذ حاليًا.
+- Person list → Person details → Debt details → Ledger entry details مستهدف عند بناء صفحات الأشخاص.
 - Today → Subject details → إجراء.
 - Documents → Document preview.
 - Search → نوع نتيجة → تفاصيل أصلية.

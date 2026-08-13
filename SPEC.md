@@ -484,15 +484,15 @@ Logs تقنية فقط بلا PII أو مبالغ أو أوصاف ديون أو 
 | INV-004 | منفذ لعمليات الدين الحالية | Room transactions واختبارات Rollback/Concurrency |
 | PER-001 وDEBT-001 | منفذ للمسار السريع لشخص جديد | HomeViewModel وWaslApp واختبار إعادة الفتح |
 | DEBT-003 | منفذ في Domain | DebtLedger |
-| DEBT-004 وDEBT-005 | منفذ في Repository، بلا UI بعد | closed_at projection واختبار الدفع النهائي والعكس |
-| PAY-001 إلى PAY-005 | منفذ في Domain وPersistence، بلا UI بعد | DebtLedgerTest واختبارات Room |
+| DEBT-004 وDEBT-005 | منفذ في Repository وواجهة التفاصيل | closed_at projection، Timeline، واختبارات الدفع والعكس |
+| PAY-001 إلى PAY-005 | منفذ في Domain وPersistence وUI | DebtLedgerTest وAccountDetailsViewModelTest واختبارات Android |
 | CUR-001 إلى CUR-003 | منفذ في Domain واختبارات | BalanceSummaryTest |
-| UX-001 وUX-002 | منفذان في أول شاشة فعلية | app/WaslApp.kt |
-| FAIL-003 | متحقق للمسار المؤكد الحالي | اختبار إغلاق Room وإعادة فتحها |
+| UX-001 وUX-002 | منفذان في الرئيسية وتفاصيل الحساب | WaslApp وAccountDetailsScreen |
+| FAIL-003 | متحقق لمسار الدين والدفعة الجزئية | PaymentFlowUiInstrumentedTest وإعادة فتح Room |
 | Persistence v1 | منفذ للجداول المالية الأساسية | Schema JSON وWaslDatabaseBaselineTest |
 | باقي MVP | غير منفذ | HANDOFF.md |
 
-واجهة إنشاء الدين مكتملة لأول مسار سريع فقط. Repository الدفعات والعكس موثوق ومختبر، لكن Feature المستخدم لا تكتمل حتى تضاف شاشة تفاصيل الحساب وإجراءاتها.
+اكتمل أول مسار مالي رأسي من إنشاء الدين إلى قراءة تفاصيله وتسجيل دفعة أو عكسها مع بقاء السجل بعد إعادة فتح قاعدة البيانات. يبقى إنشاء دين لشخص موجود وDue date والتذكيرات وبقية وظائف MVP كما هي في HANDOFF.
 
 ## 24. تتبع المرجع التأسيسي
 

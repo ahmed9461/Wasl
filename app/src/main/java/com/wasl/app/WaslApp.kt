@@ -40,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -49,6 +50,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.ui.NavDisplay
 import com.wasl.app.data.AccountOverview
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.ui.theme.WaslTheme
@@ -60,6 +65,15 @@ import com.wasl.domain.MoneyInputParser
 import java.math.BigDecimal
 import java.text.NumberFormat
 import java.util.Locale
+import kotlinx.serialization.Serializable
+
+@Serializable
+private data object HomeRoute : NavKey
+
+@Serializable
+private data class AccountDetailsRoute(
+    val debtId: String,
+) : NavKey
 
 private val supportedCurrencies = listOf(
     CurrencyCode.YER,
@@ -68,26 +82,68 @@ private val supportedCurrencies = listOf(
 )
 
 @Composable
-fun WaslApp(repository: WaslRepository) {
-    val homeViewModel: HomeViewModel = viewModel(
-        factory = HomeViewModel.Factory(repository),
-    )
-    val state by homeViewModel.uiState.collectAsStateWithLifecycle()
-
+fun WaslApp(
+    repository: WaslRepository,
+    instanceKey: String = "production",
+) {
+    val backStack = rememberNavBackStack(HomeRoute)
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         WaslTheme {
             Surface(modifier = Modifier.fillMaxSize()) {
-                WaslHomeScreen(
-                    state = state,
-                    onOpenCreate = homeViewModel::openCreateDialog,
-                    onDismissCreate = homeViewModel::dismissCreateDialog,
-                    onPersonNameChange = homeViewModel::updatePersonName,
-                    onAmountChange = homeViewModel::updateAmount,
-                    onCurrencyChange = homeViewModel::updateCurrency,
-                    onDirectionChange = homeViewModel::updateDirection,
-                    onDescriptionChange = homeViewModel::updateDescription,
-                    onSave = homeViewModel::createPersonWithDebt,
-                    onSuccessShown = homeViewModel::clearSuccessMessage,
+                NavDisplay(
+                    backStack = backStack,
+                    onBack = {
+                        if (backStack.size > 1) backStack.removeLastOrNull()
+                    },
+                    entryProvider = entryProvider {
+                        entry<HomeRoute> {
+                            val homeViewModel: HomeViewModel = viewModel(
+                                key = "home:$instanceKey",
+                                factory = HomeViewModel.Factory(repository),
+                            )
+                            val state by homeViewModel.uiState.collectAsStateWithLifecycle()
+                            WaslHomeScreen(
+                                state = state,
+                                onOpenCreate = homeViewModel::openCreateDialog,
+                                onOpenAccount = { debtId ->
+                                    backStack.add(AccountDetailsRoute(debtId.value))
+                                },
+                                onDismissCreate = homeViewModel::dismissCreateDialog,
+                                onPersonNameChange = homeViewModel::updatePersonName,
+                                onAmountChange = homeViewModel::updateAmount,
+                                onCurrencyChange = homeViewModel::updateCurrency,
+                                onDirectionChange = homeViewModel::updateDirection,
+                                onDescriptionChange = homeViewModel::updateDescription,
+                                onSave = homeViewModel::createPersonWithDebt,
+                                onSuccessShown = homeViewModel::clearSuccessMessage,
+                            )
+                        }
+                        entry<AccountDetailsRoute> { route ->
+                            val debtId = com.wasl.domain.DebtId(route.debtId)
+                            val detailsViewModel: AccountDetailsViewModel = viewModel(
+                                key = "account:$instanceKey:${route.debtId}",
+                                factory = AccountDetailsViewModel.Factory(repository, debtId),
+                            )
+                            val state by detailsViewModel.uiState.collectAsStateWithLifecycle()
+                            AccountDetailsScreen(
+                                state = state,
+                                onBack = { backStack.removeLastOrNull() },
+                                onRetry = detailsViewModel::retryLoad,
+                                onOpenPayment = detailsViewModel::openPaymentDialog,
+                                onDismissPayment = detailsViewModel::dismissPaymentDialog,
+                                onPaymentAmountChange = detailsViewModel::updatePaymentAmount,
+                                onPaymentNoteChange = detailsViewModel::updatePaymentNote,
+                                onReviewPayment = detailsViewModel::reviewPayment,
+                                onEditPayment = detailsViewModel::editPayment,
+                                onConfirmPayment = detailsViewModel::confirmPayment,
+                                onOpenReversal = detailsViewModel::openReversalDialog,
+                                onDismissReversal = detailsViewModel::dismissReversalDialog,
+                                onReversalReasonChange = detailsViewModel::updateReversalReason,
+                                onConfirmReversal = detailsViewModel::confirmReversal,
+                                onNoticeShown = detailsViewModel::clearNotice,
+                            )
+                        }
+                    },
                 )
             }
         }
@@ -98,6 +154,7 @@ fun WaslApp(repository: WaslRepository) {
 private fun WaslHomeScreen(
     state: HomeUiState,
     onOpenCreate: () -> Unit,
+    onOpenAccount: (com.wasl.domain.DebtId) -> Unit,
     onDismissCreate: () -> Unit,
     onPersonNameChange: (String) -> Unit,
     onAmountChange: (String) -> Unit,
@@ -201,7 +258,10 @@ private fun WaslHomeScreen(
                         items = state.accounts,
                         key = { it.ledger.header.id.value },
                     ) { account ->
-                        AccountCard(account)
+                        AccountCard(
+                            account = account,
+                            onClick = { onOpenAccount(account.ledger.header.id) },
+                        )
                     }
                 }
             }
@@ -245,7 +305,9 @@ private fun CreateDebtDialog(
                 OutlinedTextField(
                     value = form.personName,
                     onValueChange = onPersonNameChange,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("create-person-name"),
                     label = { Text("اسم الشخص") },
                     singleLine = true,
                     enabled = !isSaving,
@@ -270,7 +332,9 @@ private fun CreateDebtDialog(
                 OutlinedTextField(
                     value = form.amount,
                     onValueChange = onAmountChange,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("create-debt-amount"),
                     label = { Text("المبلغ") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
@@ -309,7 +373,11 @@ private fun CreateDebtDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onSave, enabled = !isSaving) {
+            Button(
+                onClick = onSave,
+                enabled = !isSaving,
+                modifier = Modifier.testTag("create-debt-save"),
+            ) {
                 if (isSaving) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(18.dp),
@@ -329,10 +397,16 @@ private fun CreateDebtDialog(
 }
 
 @Composable
-private fun AccountCard(account: AccountOverview) {
+private fun AccountCard(
+    account: AccountOverview,
+    onClick: () -> Unit,
+) {
     val header = account.ledger.header
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("account-${header.id.value}"),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ),
@@ -453,7 +527,7 @@ private fun summaryRows(values: Map<CurrencyCode, Money>): List<String> =
         formatMoney(values[currency] ?: Money.zero(currency))
     }
 
-private fun formatMoney(money: Money): String {
+internal fun formatMoney(money: Money): String {
     val fractionDigits = MoneyInputParser.fractionDigits(money.currency)
     val major = BigDecimal.valueOf(money.minorUnits, fractionDigits)
     val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
@@ -472,6 +546,7 @@ private fun WaslHomeScreenPreview() {
             WaslHomeScreen(
                 state = HomeUiState(isLoading = false),
                 onOpenCreate = {},
+                onOpenAccount = {},
                 onDismissCreate = {},
                 onPersonNameChange = {},
                 onAmountChange = {},

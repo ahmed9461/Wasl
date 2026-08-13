@@ -24,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -128,6 +129,11 @@ private class FakeWaslRepository(
     val createCommands = mutableListOf<CreatePersonWithDebtCommand>()
 
     override fun observeAccounts(): Flow<List<AccountOverview>> = accounts
+
+    override fun observeAccount(debtId: DebtId): Flow<AccountOverview?> =
+        accounts.map { values ->
+            values.firstOrNull { it.ledger.header.id == debtId }
+        }
 
     override suspend fun createPersonWithDebt(
         command: CreatePersonWithDebtCommand,

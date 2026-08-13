@@ -22,6 +22,16 @@ class DebtLedger(
     val balance: Money
         get() = Money(replay(entries).balanceMinorUnits, header.originalAmount.currency)
 
+    /** Amount currently paid after applying every recorded reversal. */
+    val paidAmount: Money
+        get() = header.originalAmount.minus(balance)
+
+    /** Payments whose effect has been cancelled by a later append-only reversal. */
+    val reversedPaymentIds: Set<LedgerEntryId>
+        get() = entries
+            .filterIsInstance<PaymentReversed>()
+            .mapTo(linkedSetOf()) { it.paymentId }
+
     val state: DebtState
         get() = when (balance.minorUnits) {
             0L -> DebtState.SETTLED

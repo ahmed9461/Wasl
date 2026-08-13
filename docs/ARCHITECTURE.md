@@ -13,7 +13,7 @@
 
 ### UI
 
-Compose screens وViewModels وUiState وUser actions. مسؤولة عن Parsing الإدخال والعرض وإدارة دورة حياة الشاشة، وليست مسؤولة عن حساب الرصيد.
+Compose screens وViewModels وUiState وUser actions. مسؤولة عن Parsing الإدخال والعرض وإدارة دورة حياة الشاشة، وليست مسؤولة عن حساب الرصيد. واجهة الدفع تعرض Review منفصلًا قبل التأكيد، وواجهة العكس تجمع سببًا إلزاميًا.
 
 ### Domain
 
@@ -66,6 +66,7 @@ Notifications وAlarmManager وWorkManager وBiometrics وKeystore وFileProvide
 - تكرار commandId يعيد النتيجة السابقة ولا يضيف حدثًا.
 - القراءة والتحقق والإضافة في Transaction واحدة لمنع دفعتين تتجاوزان المتبقي.
 - IDs تولد قبل الكتابة وتبقى ثابتة عبر Retry.
+- إذا فشل الرد بعد احتمال Commit، يحتفظ ViewModel بكائن Command نفسه كاملًا ويعيد إرساله؛ أي تعديل من المستخدم يلغي الأمر المعلّق ويولد أمرًا جديدًا بعد المراجعة.
 - لا تعتمد سلامة الكتابة على ترتيب وصول UI وحده.
 
 ## الزمن
@@ -85,7 +86,7 @@ Notifications وAlarmManager وWorkManager وBiometrics وKeystore وFileProvide
 ## بنية الحزم الحالية
 
 - `com.wasl.domain`: القواعد المالية وParsing الدقيق للإدخال.
-- `com.wasl.app`: Application entry وComposition root وHome ViewModel/Compose.
+- `com.wasl.app`: Application entry وComposition root وHome/Account details ViewModels وشاشات Compose وNavigation keys.
 - `com.wasl.app.data`: عقود Repository وRead/Command models.
 - `com.wasl.app.data.local`: Room database وRepository الذري وMappers الداخلية.
 - `com.wasl.app.data.local.entity`: persons وdebts وledger_entries وعلاقات القراءة.

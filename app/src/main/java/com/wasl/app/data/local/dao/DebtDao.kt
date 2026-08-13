@@ -26,6 +26,10 @@ interface DebtDao {
 
     @Transaction
     @Query("SELECT * FROM debts WHERE id = :id")
+    fun observeAggregateById(id: String): Flow<DebtAggregate?>
+
+    @Transaction
+    @Query("SELECT * FROM debts WHERE id = :id")
     suspend fun findAggregateById(id: String): DebtAggregate?
 
     @Query(

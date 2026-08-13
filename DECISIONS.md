@@ -56,7 +56,7 @@
 - البدائل:
   - تحديث حقل balance مباشرة: مرفوض لأنه يفقد كيفية الوصول إلى الرصيد.
   - حذف الدفعة: مرفوض لأنه يمحو أثرًا ماليًا.
-- النتيجة: Repository القادم يجب أن يحفظ إضافة الحدث وتحديث أي Projection داخل Transaction واحدة.
+- النتيجة: Repository يحفظ إضافة الحدث وتحديث Projection داخل Transaction واحدة، والواجهة تعرض العكس كحدث مستقل ولا توفر حذفًا ماليًا.
 
 ## ADR-006 — Room 2.8.4 لـSchema v1
 
@@ -75,13 +75,13 @@
 - النتيجة التنفيذية:
   - `app/schemas/com.wasl.app.data.local.WaslDatabase/1.json` جزء دائم من المستودع.
   - لا يوجد `fallbackToDestructiveMigration` في Production.
-  - يُحاذى kotlinx-serialization على BOM 1.8.1 لأن Room migration 2.8.4 يعتمد JSON 1.8.1 بينما Lifecycle 2.10 يطلب Core 1.7.3؛ تركهما غير متحاذيين سبب خطأً ثنائيًا فعليًا في MigrationTestHelper.
+  - يُحاذى kotlinx-serialization Core وJSON معًا عبر BOM 1.9.0؛ Navigation 3 يحتاج Serialization للمفاتيح المحفوظة، وفرض BOM يمنع خلط Room JSON 1.8.1 مع Core مختلف في AndroidTest runtime.
   - Version 1 هو Baseline ولا يحتاج Migration سابقة؛ كل Version تالٍ يضاف إلى `ALL_MIGRATIONS` ويختبر من أقدم إصدار مدعوم.
 
 ## ADR-007 — Compose وMaterial 3 وNavigation 3
 
-- الحالة: Compose معتمد؛ Navigation 3 معتمد عند إضافة أكثر من وجهة فعلية
-- القرار: Single-activity وJetpack Compose وMaterial 3. تستخدم الواجهة Navigation 3 stable بدل بناء Router خاص عندما يبدأ مسار الشاشات.
+- الحالة: معتمد ومطبق لأول مسار متعدد الوجهات
+- القرار: Single-activity وJetpack Compose وMaterial 3. تستخدم الواجهة Navigation 3 stable 1.1.6 بدل Router خاص، مع `NavKey` Serializable وBack stack واحد مملوك للتطبيق.
 - السبب: Compose هو Toolkit الحديث الموصى به، وNavigation 3 يمنح Back stack صريحًا ويدعم الواجهات التكيفية.
 - البدائل:
   - XML Views: مستقرة لكنها تزيد ازدواج UI state لمشروع جديد.
@@ -91,6 +91,7 @@
   - [توصيات Android: Compose وSingle activity وNavigation 3](https://developer.android.com/topic/architecture/recommendations)
   - [Navigation 3](https://developer.android.com/guide/navigation/navigation-3)
   - [Compose BOM](https://developer.android.com/develop/ui/compose/bom)
+- النتيجة التنفيذية: `HomeRoute` و`AccountDetailsRoute` يحملان المعرف الصغير فقط؛ تفاصيل الحساب تقرأ من Repository، و`rememberNavBackStack` يحفظ مفاتيح المسار القابلة للتسلسل.
 
 ## ADR-008 — سياسة التذكيرات والمنبهات
 
@@ -175,4 +176,4 @@
 - البدائل:
   - Service locator عالمي: مرفوض.
   - Hilt من أول ملف: غير ضروري في هذه المرحلة.
-- النتيجة: `WaslApplication` هو Composition root الصغير، و`RoomWaslRepository` و`HomeViewModel` يقبلان Dependencies من Constructors. يعاد تقييم Hilt عند دخول Workers أو تعدد Implementations.
+- النتيجة: `WaslApplication` هو Composition root الصغير، و`RoomWaslRepository` و`HomeViewModel` و`AccountDetailsViewModel` تقبل Dependencies من Constructors. يعاد تقييم Hilt عند دخول Workers أو تعدد Implementations.

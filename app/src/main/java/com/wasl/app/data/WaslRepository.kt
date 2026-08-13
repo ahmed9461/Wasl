@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.Flow
 interface WaslRepository {
     fun observeAccounts(): Flow<List<AccountOverview>>
 
+    fun observeAccount(debtId: DebtId): Flow<AccountOverview?>
+
     suspend fun createPersonWithDebt(command: CreatePersonWithDebtCommand): AccountOverview
 
     suspend fun getAccount(debtId: DebtId): AccountOverview?

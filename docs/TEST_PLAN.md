@@ -78,8 +78,10 @@
 | BalanceSummaryTest | فصل الاتجاهات والعملات |
 | MoneyInputParserTest | Parsing دقيق للأرقام العربية والفواصل ودقة YER/SAR/USD دون Double |
 | HomeViewModelTest | المسار السريع، أخطاء المبلغ، وثبات IDs عبر إعادة محاولة غير مؤكدة |
+| AccountDetailsViewModelTest | مراجعة الدفع، Overpayment قابل للتصحيح، العكس بسبب، وثبات Command عبر نتيجة غير مؤكدة |
 | RoomWaslRepositoryInstrumentedTest | Restart، الذرية، Idempotency، Overpayment، التزامن، Foreign keys، الإغلاق والعكس |
 | WaslDatabaseBaselineTest | فتح Schema v1 المصدّر والتحقق منه بواسطة Room |
+| PaymentFlowUiInstrumentedTest | إنشاء دين → دفع جزئي → إعادة فتح Room → بقاء المتبقي والدفعة في Timeline |
 
 ## CI
 
@@ -98,7 +100,7 @@
 - لا اختبارات حمراء.
 - لا Lint errors.
 - Debug APK يبنى.
-- اختبارات Room على Android Emulator تنجح.
+- اختبارات Room ورحلة الدفع على Android Emulator تنجح.
 - Git diff مراجع.
 - SPEC وHANDOFF محدثان.
 - أي Test غير ممكن مذكور مع السبب والخطر.

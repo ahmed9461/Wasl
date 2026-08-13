@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.room)
 }
@@ -69,17 +70,20 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.room.runtime)
-    // Lifecycle 2.10 requests serialization 1.7.3 while Room 2.8.4 migration
-    // bundles require 1.8.1. Align the runtime to prevent binary mismatch.
+    // Keep Navigation 3 keys and Room's migration reader on one serialization runtime.
     implementation(platform(libs.kotlinx.serialization.bom))
+    implementation(libs.kotlinx.serialization.core)
     ksp(libs.androidx.room.compiler)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.navigation3.runtime)
+    implementation(libs.androidx.navigation3.ui)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.junit)
@@ -89,6 +93,8 @@ dependencies {
     androidTestImplementation(libs.androidx.test.core.ktx)
     androidTestImplementation(libs.androidx.test.ext.junit.ktx)
     androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.kotlin.test.junit)
     androidTestImplementation(libs.kotlinx.coroutines.test)
 }

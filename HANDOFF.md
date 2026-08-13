@@ -51,6 +51,7 @@
 - استبدال Unique Work بعد إعادة الجدولة أو إلغاؤه بعد حذف الموعد، مع إبقاء أثر المنصة خارج Transaction وقابلًا للاسترداد.
 - إضافة محرر تاريخ/تذكير في تفاصيل الحساب، وإظهار تغييرات جدول الاستحقاق كأحداث مستقلة داخل Timeline.
 - إضافة اختبارات ViewModel وRoom وMigration وCompose وWorkManager لإعادة الجدولة والإلغاء وReplay وPayload conflict وRollback وإلغاء العمل.
+- جعل مزامنة WorkManager بعد Replay تتبع أحدث حالة أعادتها Room، فلا يلغي أمر قديم معادٌ موعدًا أحدث حفظته كتابة لاحقة.
 
 ## ما يعمل الآن
 
@@ -84,11 +85,11 @@
 
 ## آخر تحقق
 
-- نجح `core:domain`: 19/19 اختبارًا، ونجح `app` unit: 33/33 اختبارًا، ومنها اختيار Person ID وحد 20 نتيجة وإنشاء دين مستقل للشخص الموجود.
-- نجحت [GitHub Actions run #52](https://github.com/ahmed9461/Wasl/actions/runs/31743166245) على الرأس `3e98417`: اختبارات الوحدة وLint وDebug APK وحاجز تطابق Room Schema، ثم 27/27 اختبار Android على Emulator API 35.
-- تشمل اختبارات Android الجديدة تعدد الديون مع Person واحد، Idempotency ورفض الشخص المفقود وPayload المتعارض، استعلام الأشخاص المحدود والـwildcards، ورحلة Compose من الدين الأول إلى اختيار الشخص نفسه وظهور الدينين في البحث.
-- مخرجات الدورة: `Wasl-debug` SHA-256 `ff364b710da02844f62a5f1065d767b17f840691bbbc3ffde8be5d1c8685a0cf`، و`Wasl-room-schema` SHA-256 `f02ff5551af04e202f28eb5920b70a08109c4a860869cec5a42769ea2b0d1842`، وتقارير الجهاز SHA-256 `913c88cadeccab318bee1c5ca146a02a9256c179e73967fdd7d81086c211b543`.
-- تعذر تشغيل Gradle محليًا لأن wrapper لا يستطيع إنشاء lock تحت `/root/.gradle` في بيئة العمل؛ عوضت بوابة GitHub Actions ذلك ببناء واختبارات فعلية كاملة على بيئة نظيفة.
+- نجح `core:domain`: 19/19 اختبارًا، ونجح `app` unit: 37/37 اختبارًا، ومنها تعديل/إلغاء الاستحقاق وثبات الأمر ومصالحة أحدث حالة محفوظة بعد Replay.
+- نجحت [GitHub Actions run #64](https://github.com/ahmed9461/Wasl/actions/runs/31751161647) على الرأس `addda3c`: اختبارات الوحدة وLint وDebug APK وحاجز تطابق Room Schema v3، ثم 32/32 اختبار Android على Emulator API 35.
+- تشمل اختبارات Android الجديدة Migration v1/v2→v3، إعادة الجدولة والإلغاء مع Audit وRollback وPayload conflict، إلغاء Unique Work، ورحلة Compose لإلغاء الموعد وظهور الحدث في Timeline.
+- مخرجات الدورة: `Wasl-debug` SHA-256 `7b95653e1b2d64f5c9c96d8b7985b629f9e1bf71a9bb278df881c8066b5b71cf`، و`Wasl-room-schema` SHA-256 `05187a088383a652eda9bde941eb8e2948864474af32386d148ad2d35d77bc3d`، وتقارير الجهاز SHA-256 `8ded0ccdbceab1ece6d28b1c95ae36a5e1d6d1d36346a16553fdae6a5b1d6e35`.
+- تعذر تشغيل Gradle محليًا لأن بيئة العمل لا تصل إلى توزيع Gradle الخارجي؛ عوضت بوابة GitHub Actions ذلك ببناء واختبارات فعلية كاملة على بيئة نظيفة.
 
 ## غير منفذ
 

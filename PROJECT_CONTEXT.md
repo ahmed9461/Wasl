@@ -22,7 +22,7 @@
 
 ## المرحلة الحالية
 
-MVP Phase 1 / Core debt-payment + existing-person debts + due reminder + Today + local search فوق Persistence موثوق.
+MVP Phase 1 / Core debt-payment + audited due schedule + existing-person debts + Today + local search فوق Persistence موثوق.
 
 ما يعمل الآن:
 
@@ -32,7 +32,7 @@ MVP Phase 1 / Core debt-payment + existing-person debts + due reminder + Today +
 - Debt ledger يحتفظ بالأصل ويضيف PaymentRecorded وPaymentReversed.
 - اشتقاق الرصيد وحالة الدين والاستحقاق من Domain واحد.
 - تجميع الأرصدة حسب الاتجاه والعملة دون خلط العملات.
-- Room 2.8.4 Schema v2 للجداول persons وdebts وledger_entries وreminders مع Migration v1→v2 مختبرة.
+- Room 2.8.4 Schema v3 للجداول persons وdebts وledger_entries وreminders وaudit_events مع Migrations v1→v2→v3 مختبرة.
 - Repository ذري لإنشاء شخص ودين وتسجيل دفعة وعكسها مع Idempotency وReplay بعد القراءة.
 - أول مسار UI يحفظ شخصًا ودينًا ويعرض الحسابات والإجماليات حسب العملة.
 - نموذج إنشاء الدين يختار شخصًا جديدًا أو شخصًا محفوظًا بالـID من استعلام Room محدود، ويضيف للشخص الموجود ديونًا مستقلة دون Person مكرر.
@@ -44,6 +44,7 @@ MVP Phase 1 / Core debt-payment + existing-person debts + due reminder + Today +
 - Unit tests واختبارات Room على Emulator للإغلاق وإعادة الفتح والتزامن والقيود.
 - اختبار UI End-to-End ينشئ دينًا، يسجل دفعة جزئية، يعيد فتح قاعدة البيانات، ويتحقق من بقاء المتبقي والسجل.
 - تاريخ استحقاق اختياري في إنشاء الدين وتفاصيله، مع تذكير اختياري قرابة 09:00 حسب المنطقة الزمنية المدنية.
+- تعديل أو إلغاء الاستحقاق من التفاصيل داخل Transaction واحدة مع تذكير ذي ID ثابت وحدث تدقيق before/after؛ وتنعكس إعادة الجدولة أو الإلغاء على Unique Work بعد Commit.
 - تذكير WorkManager فريد وقابل للاسترداد، وقناة إشعار مستقلة وإذن Android 13+ وحالة واضحة عند رفضه.
 - إعادة جدولة Idempotent عند بدء التطبيق وتغيّر الوقت أو المنطقة الزمنية، وفتح الحساب مباشرة من الإشعار.
 - شاشة Today Reactive للديون النشطة غير المسددة المستحقة اليوم والمتأخرة، تفصل الحالتين وتحسب أيام التأخير من DueState وLocalDate الحاليين.
@@ -70,7 +71,7 @@ MVP Phase 1 / Core debt-payment + existing-person debts + due reminder + Today +
 | UI | Jetpack Compose + Material 3 |
 | المعمارية | UI / Domain / Data مع UDF وRepositories |
 | المنطق المالي | وحدة JVM مستقلة core:domain |
-| قاعدة البيانات | Room 2.8.4 + KSP 2.3.11، Schema v2 وMigration v1→v2 |
+| قاعدة البيانات | Room 2.8.4 + KSP 2.3.11، Schema v3 وMigrations v1→v2→v3 |
 | الإعدادات | DataStore عند الحاجة |
 | التنقل | Navigation 3 1.1.6 بمفاتيح Serializable وBack stack مملوك للتطبيق |
 | الأعمال المؤجلة | WorkManager 2.11.2 مع Unique Work بحسب reminder id |
@@ -97,7 +98,7 @@ MVP Phase 1 / Core debt-payment + existing-person debts + due reminder + Today +
 
 ## نموذج البيانات
 
-التفاصيل في docs/DATABASE_SCHEMA.md. نُفذت persons وdebts وledger_entries وreminders في Schema v2. يبقى من reminders حاليًا النوع DUE_DATE بجدولة WORK فقط؛ وتبقى promises وinstallments وattachments وdocument_identities وdocuments وaudit_events مخططة لشرائحها، ولا تضاف كجداول فارغة قبل وجود سلوك واختبارات.
+التفاصيل في docs/DATABASE_SCHEMA.md. نُفذت persons وdebts وledger_entries وreminders وaudit_events في Schema v3. يقتصر audit_events حاليًا على تغيير جدول استحقاق الدين، ويقتصر reminders على DUE_DATE بجدولة WORK؛ وتبقى promises وinstallments وattachments وdocument_identities وdocuments مخططة لشرائحها، ولا تضاف كجداول فارغة قبل وجود سلوك واختبارات.
 
 ## التشغيل
 

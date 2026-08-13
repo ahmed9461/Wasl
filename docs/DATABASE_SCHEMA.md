@@ -1,6 +1,6 @@
 # تصميم قاعدة البيانات
 
-الحالة: Schema v2 منفذ للجداول المالية الأساسية وأول تذكير محلي
+الحالة: Schema v3 منفذ للجداول المالية والتذكير المحلي وتدقيق تعديل الاستحقاق
 المحرك: Room 2.8.4 فوق SQLite، وتوليد الكود عبر KSP 2.3.11
 المبدأ: Ledger هو مصدر الحقيقة، والجداول المشتقة Projections فقط.
 
@@ -15,7 +15,7 @@
 - كل Migration تصدر Schema JSON وتملك اختبارًا.
 - لا تخزن صور أو PDF كبيرة داخل BLOB؛ تخزن ملفات خاصة بالتطبيق وMetadata في DB.
 - ملفات Schema المصدّرة تحفظ تحت `app/schemas/com.wasl.app.data.local.WaslDatabase/`.
-- v1 هو Baseline، و`MIGRATION_1_2` اليدوية تضيف reminders دون تغيير الأشخاص أو الديون أو Ledger.
+- v1 هو Baseline؛ `MIGRATION_1_2` تضيف reminders، و`MIGRATION_2_3` تضيف audit_events دون تغيير الأشخاص أو الديون أو Ledger.
 
 ## persons
 
@@ -135,7 +135,7 @@ Index: debt_id مع sequence_number فريد.
 
 ## reminders
 
-منفذ في Schema v2 لأول تذكير DUE_DATE غير متكرر. صُممت أعمدة subject وschedule لتوسعة الأنواع لاحقًا دون ادعاء تنفيذها الآن.
+منفذ منذ Schema v2 لأول تذكير DUE_DATE غير متكرر. صُممت أعمدة subject وschedule لتوسعة الأنواع لاحقًا دون ادعاء تنفيذها الآن.
 
 | العمود | النوع | الوصف |
 |---|---|---|
@@ -161,6 +161,8 @@ Index: debt_id مع sequence_number فريد.
 - Index على subject_id لقراءة علاقة الدين بالتذكير بكفاءة.
 - جدولة WorkManager فريدة باسم مشتق من reminder id وتستبدل العمل السابق فقط.
 - إنشاء الدين وصف reminder يتمان داخل Transaction واحدة؛ جدولة المنصة تحصل بعد Commit، وأي فشل يبقي السجل قابلًا للاسترداد ولا يلغي الدين.
+- تعديل due date وصف reminder وحدث audit يتم في Transaction واحدة. يحتفظ تغيير الموعد أو إعادة التفعيل بـreminder id، ويعيد الحالة إلى SCHEDULED ويمسح بيانات التسليم/الفشل؛ وإزالة الموعد تغيّر الحالة إلى CANCELLED.
+- بعد Commit يستبدل Scheduler الـUnique Work عند إعادة الجدولة، أو يلغيه عند إزالة الموعد. تكرار الإجراء بالـcommand id نفسه لا يضيف سجلًا أو عملًا ثانيًا.
 - trigger_at هو Instant تنفيذي، وzone_id يحفظ المعنى المدني. عند تغيير المنطقة الزمنية يعاد بناء اللحظة من التاريخ/الوقت المدني ثم تحفظ وتجدول Idempotently.
 
 ## installments
@@ -224,18 +226,27 @@ Snapshots Versioned ولا تعاد قراءتها من الهوية الحال�
 
 ## audit_events
 
-للأحداث غير الممثلة في Ledger:
+منفذ في Schema v3 لأول حدث غير مالي: `DUE_SCHEDULE_CHANGED` على Aggregate الدين. لا يغير Ledger ولا يستعمل كبديل له.
 
-- id.
-- aggregate_type وaggregate_id.
-- event_type.
-- occurred_at.
-- actor LOCAL_USER في MVP.
-- before_snapshot اختياري ومحدود.
-- after_snapshot اختياري ومحدود.
-- reason.
+| العمود | النوع | الوصف |
+|---|---|---|
+| id | TEXT | Primary key |
+| command_id | TEXT | Unique، مفتاح Idempotency للأمر |
+| aggregate_type | TEXT | DEBT حاليًا |
+| aggregate_id | TEXT | debt id |
+| event_type | TEXT | DUE_SCHEDULE_CHANGED حاليًا |
+| occurred_at | INTEGER | Instant التسجيل |
+| actor | TEXT | LOCAL_USER في MVP |
+| before_snapshot | TEXT | JSON محدود للحالة السابقة |
+| after_snapshot | TEXT | JSON محدود للحالة الجديدة |
+| reason | TEXT | اختياري؛ null لهذا الحدث حاليًا |
 
-لا يخزن Secret أو ملفًا أو بيانات أكثر من اللازم.
+Indexes:
+
+- Unique على command_id يمنع تكرار الحدث ويتيح التحقق من Replay المتطابق.
+- aggregate_id مع aggregate_type وoccurred_at لقراءة Timeline بكفاءة.
+
+يحمل Snapshot فقط due date وreminder id وtrigger instant وzone id؛ لا يخزن اسم شخص أو مبلغًا أو Secret أو ملفًا. يظهر قبل/بعد في Timeline، ويُرفض الأمر إذا أعيد command_id نفسه ببيانات مختلفة.
 
 ## Transactions المطلوبة
 
@@ -243,6 +254,7 @@ Snapshots Versioned ولا تعاد قراءتها من الهوية الحال�
 - إنشاء دين وتذكير استحقاق اختياري لشخص موجود بعد التحقق من ID وحالة الأرشفة، دون تكرار الشخص.
 - تسجيل دفعة وإغلاق Projection.
 - عكس دفعة وإعادة فتح Projection.
+- تعديل/إلغاء due date وصف reminder وإضافة audit event قبل/بعد.
 - إصدار رقم مستند وحفظ Snapshot.
 - تعديل جدول أقساط.
 - Restore النهائي.
@@ -257,4 +269,4 @@ Snapshots Versioned ولا تعاد قراءتها من الهوية الحال�
 
 ## نطاق التنفيذ الحالي
 
-نُفذت persons وdebts وledger_entries وreminders في Schema v2 لمسار الدين والسداد وتذكير الاستحقاق الأول. بقية الجداول في هذه الوثيقة تصميم معتمد لشرائح لاحقة وليست جزءًا من Schema الفعلية حتى الآن.
+نُفذت persons وdebts وledger_entries وreminders وaudit_events في Schema v3 لمسار الدين والسداد وتذكير الاستحقاق وتعديله المدقق. يبقى audit_events محدودًا بهذا الحدث فقط؛ وبقية الجداول في هذه الوثيقة تصميم معتمد لشرائح لاحقة وليست جزءًا من Schema الفعلية حتى الآن.

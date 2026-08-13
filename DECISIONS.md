@@ -60,8 +60,8 @@
 
 ## ADR-006 — Room 2.8.4 وMigrations صريحة
 
-- الحالة: معتمد ومنفذ حتى Schema v2
-- القرار: استخدام Room 2.8.4 مع KSP 2.3.11 وتصدير Schema واختبارات Migration. بدأ v1 بـpersons وdebts وledger_entries، وتضيف Migration v1→v2 جدول reminders مع سلوكه الفعلي واختبار انتقال يحفظ بيانات الدين القديمة.
+- الحالة: معتمد ومنفذ حتى Schema v3
+- القرار: استخدام Room 2.8.4 مع KSP 2.3.11 وتصدير Schema واختبارات Migration. بدأ v1 بـpersons وdebts وledger_entries، وتضيف v1→v2 جدول reminders، ثم تضيف v2→v3 جدول audit_events عند تنفيذ أول سلوك تدقيق فعلي لتعديل الاستحقاق.
 - السبب: Android-only يحتاج حلًا مستقرًا ومجربًا، والتحقق وقت الترجمة من SQL ومسار Migrations. Room موصى به رسميًا بدل SQLite المباشر.
 - البدائل:
   - SQLite API مباشرة: مرفوضة لكثرة Boilerplate وضعف التحقق وقت البناء.
@@ -73,10 +73,10 @@
   - [Room 3.0 والفروق الجوهرية](https://developer.android.com/jetpack/androidx/releases/room3)
   - [KSP](https://github.com/google/ksp)
 - النتيجة التنفيذية:
-  - ملفات `1.json` و`2.json` تحت `app/schemas/com.wasl.app.data.local.WaslDatabase/` جزء دائم من المستودع، ويمنع CI أي انحراف في Schema المولدة.
+  - ملفات `1.json` و`2.json` و`3.json` تحت `app/schemas/com.wasl.app.data.local.WaslDatabase/` جزء دائم من المستودع، ويمنع CI أي انحراف في Schema المولدة.
   - لا يوجد `fallbackToDestructiveMigration` في Production.
   - يُحاذى kotlinx-serialization Core وJSON معًا عبر BOM 1.9.0؛ Navigation 3 يحتاج Serialization للمفاتيح المحفوظة، وفرض BOM يمنع خلط Room JSON 1.8.1 مع Core مختلف في AndroidTest runtime.
-  - Version 1 هو Baseline؛ `MIGRATION_1_2` أول انتقال فعلي ومسجل في `ALL_MIGRATIONS`.
+  - Version 1 هو Baseline؛ `MIGRATION_1_2` و`MIGRATION_2_3` انتقالان يدويان مسجلان بالترتيب في `ALL_MIGRATIONS` ومختبران من v1 وv2 إلى الحالي.
 
 ## ADR-007 — Compose وMaterial 3 وNavigation 3
 
@@ -106,6 +106,7 @@
   - إذن POST_NOTIFICATIONS يطلب عند تفعيل التذكير على Android 13+؛ رفضه لا يلغي الدين أو التذكير، بل يسجل BLOCKED_PERMISSION ويعاد الاسترداد بعد السماح.
   - يتحقق التطبيق من إذن التطبيق ومن تعطيل الإشعارات أو قناة المستحقات. تبقى BLOCKED_PERMISSION دون جدولة ما دام الحظر قائمًا؛ وبعد السماح أو Retry للفشل يعيد Recovery الحالة إلى SCHEDULED قبل Unique Work.
   - قناة `wasl_due_accounts` مستقلة، والإشعار الخاص يملك نسخة عامة لا تكشف الشخص أو المبلغ على شاشة القفل ويفتح الحساب المقصود.
+  - تعديل موعد DUE_DATE يحافظ على reminder ID ويستبدل Unique Work السابق. إزالة الموعد تعلّم السجل `CANCELLED` داخل Transaction ثم تلغي العمل بعد Commit؛ ويظهر التغيير كحدث تدقيق قبل/بعد.
 - السبب: Exact alarms مكلفة ومقيدة، ووثائق Android توصي بعدم استخدامها للأعمال الدورية.
 - البدائل:
   - Exact لكل تذكير: مرفوض بسبب البطارية والصلاحيات والرفض الافتراضي.

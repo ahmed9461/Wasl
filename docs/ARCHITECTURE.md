@@ -68,9 +68,11 @@ Notifications وAlarmManager وWorkManager وBiometrics وKeystore وFileProvide
 
 إنشاء دين لشخص موجود يمر بمسار كتابة مستقل: يتحقق Repository من وجود `PersonId` وأنه غير مؤرشف، ثم يضيف الدين والتذكير الاختياري في Transaction واحدة دون Insert أو Update للشخص. يبقى لكل دين ID وLedger مستقلان، وتعيد إعادة المحاولة بالـDebt ID النتيجة نفسها أو ترفض Payload المتعارض.
 
+تعديل جدول الاستحقاق يقرأ الدين والتذكير الحاليين داخل Transaction، ويحدّث `due_date_epoch_day` ثم يعيد جدولة سجل reminder أو يعلّمه `CANCELLED`، ويضيف `audit_events` محدودًا يحمل Snapshot قبل/بعد. يضمن `command_id` الفريد Replay آمنًا ويرفض Payload المتعارض. بعد Commit فقط يستبدل Scheduler الـUnique Work بالـreminder ID نفسه أو يلغيه؛ فشل المنصة لا يتراجع عن التغيير الموثق ويمكن استرداده.
+
 ## Idempotency والتزامن
 
-- كل Command مالي يملك commandId فريدًا مع Unique index.
+- كل Command مالي أو أمر تعديل جدول الاستحقاق يملك commandId فريدًا مع Unique index في Ledger أو Audit بحسب نوعه.
 - تكرار commandId يعيد النتيجة السابقة ولا يضيف حدثًا.
 - القراءة والتحقق والإضافة في Transaction واحدة لمنع دفعتين تتجاوزان المتبقي.
 - IDs تولد قبل الكتابة وتبقى ثابتة عبر Retry.
@@ -97,7 +99,7 @@ Notifications وAlarmManager وWorkManager وBiometrics وKeystore وFileProvide
 - `com.wasl.app`: Application entry وComposition root وHome/Today/Search/Account details ViewModels وشاشات Compose وNavigation keys.
 - `com.wasl.app.data`: عقود Repository وRead/Command models.
 - `com.wasl.app.data.local`: Room database وRepository الذري وMappers الداخلية.
-- `com.wasl.app.data.local.entity`: persons وdebts وledger_entries وreminders وعلاقات القراءة.
+- `com.wasl.app.data.local.entity`: persons وdebts وledger_entries وreminders وaudit_events وعلاقات القراءة.
 - `com.wasl.app.data.local.dao`: واجهات الإدخال والاستعلام بلا Update/Delete للسجل المالي، مع انتقالات حالة محدودة للتذكير.
 - `com.wasl.app.reminder`: حساب الزمن المدني، سياسة Recovery قابلة لاختبار JVM، WorkManager scheduler/workers، القناة وناشر الإشعار وRecovery receiver.
 - `com.wasl.app.ui`: Theme، وتستقبل الشاشات الجديدة عند توسعها.

@@ -227,6 +227,16 @@ class RoomWaslRepositoryInstrumentedTest {
 
         repository.updateDueSchedule(reschedule)
         repository.updateDueSchedule(reschedule)
+        assertFailsWith<CommandConflictException> {
+            repository.updateDueSchedule(
+                reschedule.copy(
+                    dueDate = LocalDate.parse("2026-08-21"),
+                    dueReminder = requireNotNull(reschedule.dueReminder).copy(
+                        triggerAt = Instant.parse("2026-08-21T06:00:00Z"),
+                    ),
+                ),
+            )
+        }
 
         val updated = assertNotNull(repository.getAccount(DebtId("debt-1")))
         assertEquals(LocalDate.parse("2026-08-20"), updated.ledger.header.dueDate)

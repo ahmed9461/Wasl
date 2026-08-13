@@ -30,6 +30,7 @@
 
 - مواءمة إصدارات AndroidX مع منصة SDK المتاحة حتى تنجح اختبارات التطبيق وLint وتجميع APK في GitHub Actions.
 - إبقاء معرفات أمر الإنشاء ثابتة عبر إعادة المحاولة لمنع إنشاء دين مكرر بعد نتيجة حفظ غير مؤكدة.
+- محاذاة kotlinx-serialization على 1.8.1 لمنع تعارض Lifecycle 2.10 مع قارئ Schema في Room 2.8.4 أثناء Migration tests.
 
 ### Security
 

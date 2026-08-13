@@ -75,6 +75,7 @@
 - النتيجة التنفيذية:
   - `app/schemas/com.wasl.app.data.local.WaslDatabase/1.json` جزء دائم من المستودع.
   - لا يوجد `fallbackToDestructiveMigration` في Production.
+  - يُحاذى kotlinx-serialization على BOM 1.8.1 لأن Room migration 2.8.4 يعتمد JSON 1.8.1 بينما Lifecycle 2.10 يطلب Core 1.7.3؛ تركهما غير متحاذيين سبب خطأً ثنائيًا فعليًا في MigrationTestHelper.
   - Version 1 هو Baseline ولا يحتاج Migration سابقة؛ كل Version تالٍ يضاف إلى `ALL_MIGRATIONS` ويختبر من أقدم إصدار مدعوم.
 
 ## ADR-007 — Compose وMaterial 3 وNavigation 3

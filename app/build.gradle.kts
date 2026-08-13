@@ -69,6 +69,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.room.runtime)
+    // Lifecycle 2.10 requests serialization 1.7.3 while Room 2.8.4 migration
+    // bundles require 1.8.1. Align the runtime to prevent binary mismatch.
+    implementation(platform(libs.kotlinx.serialization.bom))
     ksp(libs.androidx.room.compiler)
 
     implementation(platform(libs.androidx.compose.bom))

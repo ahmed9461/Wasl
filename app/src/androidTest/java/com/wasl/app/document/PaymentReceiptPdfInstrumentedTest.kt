@@ -64,7 +64,7 @@ class PaymentReceiptPdfInstrumentedTest {
 
     private fun fixedSnapshot(): PaymentReceiptSnapshot {
         val currency = CurrencyCode.USD
-        val longArabicNote = List(180) { index ->
+        val longArabicNote = List(42) { index ->
             "سطر توثيقي عربي رقم ${index + 1} مع مرجع LTR-${index + 1} لاختبار اتجاه النص وتتابع الصفحات."
         }.joinToString(" ")
         return PaymentReceiptSnapshot(

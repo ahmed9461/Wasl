@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -126,7 +127,9 @@ class PaymentFlowUiInstrumentedTest {
             }
         } ?: error("Ready payment receipt was not found.")
         waitForText(document.documentNumber)
-        composeRule.onNodeWithTag("open-receipt-${document.id}").assertIsDisplayed()
+        composeRule.onNodeWithTag("open-receipt-${document.id}")
+            .performScrollTo()
+            .assertIsDisplayed()
 
         composeRule.runOnIdle {
             database!!.close()
@@ -143,7 +146,9 @@ class PaymentFlowUiInstrumentedTest {
             .assertTextContains("80,000 YER", substring = true)
         composeRule.onNodeWithText("دفعة مسجلة").assertIsDisplayed()
         composeRule.onNodeWithText(document.documentNumber).assertIsDisplayed()
-        composeRule.onNodeWithTag("open-receipt-${document.id}").assertIsDisplayed()
+        composeRule.onNodeWithTag("open-receipt-${document.id}")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     private fun openDatabase() {

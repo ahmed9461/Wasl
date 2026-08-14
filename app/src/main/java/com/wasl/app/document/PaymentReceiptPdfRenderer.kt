@@ -334,7 +334,7 @@ class AndroidPaymentReceiptPdfRenderer : PaymentReceiptPdfRenderer {
                 maximumFractionDigits = fractionDigits
             }
             val raw = "${formatter.format(major)} ${money.currency.value}"
-            return BidiFormatter.getInstance(Locale("ar")).unicodeWrap(
+            return BidiFormatter.getInstance(Locale.forLanguageTag("ar")).unicodeWrap(
                 raw,
                 TextDirectionHeuristics.LTR,
             )
@@ -343,7 +343,7 @@ class AndroidPaymentReceiptPdfRenderer : PaymentReceiptPdfRenderer {
         private fun formatInstant(instant: java.time.Instant): String {
             val formatter = DateTimeFormatter.ofPattern("dd/MM/uuuu - HH:mm", Locale.US)
             val raw = formatter.format(instant.atZone(snapshot.issueZoneId))
-            return BidiFormatter.getInstance(Locale("ar")).unicodeWrap(
+            return BidiFormatter.getInstance(Locale.forLanguageTag("ar")).unicodeWrap(
                 raw,
                 TextDirectionHeuristics.LTR,
             )

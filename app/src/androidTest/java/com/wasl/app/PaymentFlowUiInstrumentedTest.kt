@@ -145,10 +145,10 @@ class PaymentFlowUiInstrumentedTest {
         composeRule.onNodeWithTag("account-remaining")
             .assertTextContains("80,000 YER", substring = true)
         composeRule.onNodeWithText("دفعة مسجلة").assertIsDisplayed()
-        composeRule.onNodeWithText(document.documentNumber).assertIsDisplayed()
         composeRule.onNodeWithTag("open-receipt-${document.id}")
             .performScrollTo()
             .assertIsDisplayed()
+        composeRule.onNodeWithText(document.documentNumber).assertIsDisplayed()
     }
 
     private fun openDatabase() {

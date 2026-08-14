@@ -5,8 +5,11 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
+import com.wasl.app.data.DocumentStatus
 import com.wasl.app.data.IssuedDocumentRecord
 import java.io.File
+import java.io.FileInputStream
+import java.security.MessageDigest
 
 object ReceiptFileAccess {
     fun resolve(filesDir: File, relativePath: String): File {
@@ -24,8 +27,13 @@ object ReceiptFileAccess {
     }
 
     fun contentUri(context: Context, document: IssuedDocumentRecord): Uri {
+        require(document.status == DocumentStatus.READY) { "Receipt PDF is not ready." }
         val file = resolve(context.filesDir, document.pdfRelativePath)
         require(file.isFile) { "Receipt PDF is not available." }
+        val expectedHash = requireNotNull(document.pdfSha256) {
+            "Ready receipt PDF has no integrity hash."
+        }
+        require(file.sha256Hex() == expectedHash) { "Receipt PDF failed its integrity check." }
         return FileProvider.getUriForFile(
             context,
             "${context.packageName}.fileprovider",
@@ -58,4 +66,19 @@ object ReceiptFileAccess {
     }
 
     private const val PDF_MIME_TYPE = "application/pdf"
+}
+
+internal fun File.sha256Hex(): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    FileInputStream(this).use { input ->
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            digest.update(buffer, 0, count)
+        }
+    }
+    return digest.digest().joinToString("") { byte ->
+        "%02x".format(byte.toInt() and 0xff)
+    }
 }

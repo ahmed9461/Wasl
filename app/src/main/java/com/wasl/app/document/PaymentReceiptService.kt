@@ -7,11 +7,9 @@ import com.wasl.app.data.IssuedDocumentRecord
 import com.wasl.app.data.PaymentReceiptStore
 import com.wasl.app.data.PreparePaymentReceiptCommand
 import java.io.File
-import java.io.FileInputStream
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
-import java.security.MessageDigest
 import java.time.Clock
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
@@ -63,7 +61,7 @@ class AndroidPaymentReceiptService(
             val target = ReceiptFileAccess.resolve(filesDir, document.pdfRelativePath)
             if (document.status == DocumentStatus.READY) {
                 val expectedHash = requireNotNull(document.pdfSha256)
-                check(target.isFile && target.sha256() == expectedHash) {
+                check(target.isFile && target.sha256Hex() == expectedHash) {
                     "Ready receipt file is missing or failed its integrity check."
                 }
                 return@withContext document
@@ -78,7 +76,7 @@ class AndroidPaymentReceiptService(
                 val pageCount = temporary.outputStream().buffered().use { output ->
                     renderer.render(document.snapshot, output)
                 }
-                val checksum = temporary.sha256()
+                val checksum = temporary.sha256Hex()
                 moveAtomically(temporary, target)
                 store.markDocumentReady(
                     documentId = document.id,
@@ -116,21 +114,6 @@ class AndroidPaymentReceiptService(
                 target.toPath(),
                 StandardCopyOption.REPLACE_EXISTING,
             )
-        }
-    }
-
-    private fun File.sha256(): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        FileInputStream(this).use { input ->
-            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-            while (true) {
-                val count = input.read(buffer)
-                if (count < 0) break
-                digest.update(buffer, 0, count)
-            }
-        }
-        return digest.digest().joinToString("") { byte ->
-            "%02x".format(byte.toInt() and 0xff)
         }
     }
 

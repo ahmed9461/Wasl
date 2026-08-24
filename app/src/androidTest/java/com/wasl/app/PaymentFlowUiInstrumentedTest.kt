@@ -96,7 +96,7 @@ class PaymentFlowUiInstrumentedTest {
         scrollToTag("account-$debtId")
         composeRule.onNodeWithTag("account-$debtId").performClick()
         waitForTag("account-remaining")
-        scrollToTag("record-payment")
+        waitForTag("record-payment")
         composeRule.onNodeWithTag("record-payment").performClick()
         composeRule.onNodeWithTag("payment-amount").performTextInput("20000")
         composeRule.onNodeWithTag("payment-review").performClick()

@@ -1,9 +1,11 @@
 package com.wasl.app
 
 import android.app.Application
+import com.wasl.app.data.InstallmentPlanStore
 import com.wasl.app.data.PaymentPromiseStore
 import com.wasl.app.data.ReminderStore
 import com.wasl.app.data.WaslRepository
+import com.wasl.app.data.local.RoomInstallmentPlanStore
 import com.wasl.app.data.local.RoomPaymentPromiseStore
 import com.wasl.app.data.local.RoomWaslRepository
 import com.wasl.app.data.local.WaslDatabase
@@ -30,6 +32,10 @@ class WaslApplication : Application() {
 
     val paymentPromiseStore: PaymentPromiseStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         RoomPaymentPromiseStore(database)
+    }
+
+    val installmentPlanStore: InstallmentPlanStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        RoomInstallmentPlanStore(database, roomRepository)
     }
 
     val reminderScheduler: ReminderScheduler by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {

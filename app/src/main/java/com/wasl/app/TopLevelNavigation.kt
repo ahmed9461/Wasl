@@ -12,6 +12,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -23,10 +24,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+internal val LocalOpenInstallmentsHub = staticCompositionLocalOf<(() -> Unit)?> { null }
+
 internal enum class WaslTopLevelDestination {
     HOME,
     TODAY,
     SEARCH,
+    INSTALLMENTS,
 }
 
 @Composable
@@ -36,6 +40,7 @@ internal fun WaslTopLevelNavigation(
     onOpenToday: () -> Unit,
     onOpenSearch: () -> Unit,
 ) {
+    val onOpenInstallments = LocalOpenInstallmentsHub.current
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
@@ -68,6 +73,15 @@ internal fun WaslTopLevelNavigation(
                 testTag = "nav-search",
                 onClick = onOpenSearch,
             )
+            onOpenInstallments?.let { openInstallments ->
+                WaslNavigationItem(
+                    selected = selected == WaslTopLevelDestination.INSTALLMENTS,
+                    destination = WaslTopLevelDestination.INSTALLMENTS,
+                    label = "الأقساط",
+                    testTag = "open-installments-hub",
+                    onClick = openInstallments,
+                )
+            }
         }
     }
 }
@@ -182,6 +196,30 @@ private fun WaslDestinationIcon(
                     color = color,
                     start = Offset(size.width * 0.61f, size.height * 0.60f),
                     end = Offset(size.width * 0.82f, size.height * 0.81f),
+                    strokeWidth = strokeWidth,
+                    cap = StrokeCap.Round,
+                )
+            }
+
+            WaslTopLevelDestination.INSTALLMENTS -> {
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(size.width * 0.18f, size.height * 0.23f),
+                    size = Size(size.width * 0.64f, size.height * 0.56f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
+                    style = stroke,
+                )
+                drawLine(
+                    color = color,
+                    start = Offset(size.width * 0.32f, size.height * 0.40f),
+                    end = Offset(size.width * 0.68f, size.height * 0.40f),
+                    strokeWidth = strokeWidth,
+                    cap = StrokeCap.Round,
+                )
+                drawLine(
+                    color = color,
+                    start = Offset(size.width * 0.32f, size.height * 0.57f),
+                    end = Offset(size.width * 0.68f, size.height * 0.57f),
                     strokeWidth = strokeWidth,
                     cap = StrokeCap.Round,
                 )

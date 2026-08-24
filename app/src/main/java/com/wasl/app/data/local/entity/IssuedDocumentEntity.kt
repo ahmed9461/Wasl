@@ -37,6 +37,7 @@ import androidx.room.PrimaryKey
         Index(value = ["document_type", "ledger_entry_id"], unique = true),
         Index(value = ["issue_year", "sequence_number"], unique = true),
         Index(value = ["debt_id", "issued_at"]),
+        Index(value = ["ledger_entry_id"]),
         Index(value = ["identity_id"]),
         Index(value = ["person_id"]),
     ],

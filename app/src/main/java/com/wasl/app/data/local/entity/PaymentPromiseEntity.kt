@@ -22,6 +22,7 @@ import androidx.room.PrimaryKey
         Index(value = ["resolution_command_id"], unique = true),
         Index(value = ["debt_id", "promised_date_epoch_day"]),
         Index(value = ["debt_id", "status"]),
+        Index(value = ["status", "promised_date_epoch_day"]),
     ],
 )
 data class PaymentPromiseEntity(

@@ -87,9 +87,15 @@ class DueDateUiInstrumentedTest {
         }
 
         waitForText("تاريخ الاستحقاق")
-        composeRule.onNodeWithText("2026-08-14", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("موعد التذكير").assertIsDisplayed()
-        composeRule.onNodeWithText("مجدول").assertIsDisplayed()
+        composeRule.onNodeWithText("2026-08-14", substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("موعد التذكير")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("مجدول")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test
@@ -103,7 +109,9 @@ class DueDateUiInstrumentedTest {
         }
 
         waitForTag("edit-due-schedule")
-        composeRule.onNodeWithTag("edit-due-schedule").performClick()
+        composeRule.onNodeWithTag("edit-due-schedule")
+            .performScrollTo()
+            .performClick()
         waitForTag("remove-due-date")
         composeRule.onNodeWithTag("remove-due-date").performClick()
         composeRule.onNodeWithTag("save-due-schedule").performClick()
@@ -127,7 +135,6 @@ class DueDateUiInstrumentedTest {
             }.isSuccess
         }
     }
-
 
     private fun waitForTag(tag: String) {
         composeRule.waitUntil(timeoutMillis = 10_000) {

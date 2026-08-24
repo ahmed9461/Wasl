@@ -20,7 +20,7 @@ class WaslDatabaseBaselineTest {
     )
 
     @Test
-    fun versionOneMigratesToVersionFiveWithoutLosingDebtData() {
+    fun versionOneMigratesToVersionSixWithoutLosingDebtData() {
         val databaseName = "wasl-schema-v1.db"
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.deleteDatabase(databaseName)
@@ -47,38 +47,26 @@ class WaslDatabaseBaselineTest {
 
         migrationHelper.runMigrationsAndValidate(
             databaseName,
-            5,
+            6,
             true,
             WaslDatabase.MIGRATION_1_2,
             WaslDatabase.MIGRATION_2_3,
             WaslDatabase.MIGRATION_3_4,
             WaslDatabase.MIGRATION_4_5,
+            WaslDatabase.MIGRATION_5_6,
         ).use { migrated ->
             migrated.query("SELECT original_amount_minor, due_date_epoch_day FROM debts").use {
                 check(it.moveToFirst())
                 assertEquals(5000L, it.getLong(0))
                 assertEquals(20680L, it.getLong(1))
             }
-            migrated.query("SELECT COUNT(*) FROM reminders").use {
-                check(it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
-            migrated.query("SELECT COUNT(*) FROM audit_events").use {
-                check(it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
-            migrated.query("SELECT COUNT(*) FROM document_identities").use {
-                check(it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
-            migrated.query("SELECT COUNT(*) FROM issued_documents").use {
-                check(it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
-            migrated.query("SELECT COUNT(*) FROM payment_promises").use {
-                check(it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
+            assertEmpty(migrated, "reminders")
+            assertEmpty(migrated, "audit_events")
+            assertEmpty(migrated, "document_identities")
+            assertEmpty(migrated, "issued_documents")
+            assertEmpty(migrated, "payment_promises")
+            assertEmpty(migrated, "installment_plans")
+            assertEmpty(migrated, "installments")
         }
 
         val database = Room.databaseBuilder(context, WaslDatabase::class.java, databaseName)
@@ -91,7 +79,7 @@ class WaslDatabaseBaselineTest {
     }
 
     @Test
-    fun versionTwoMigratesToVersionFiveWithoutLosingReminderData() {
+    fun versionTwoMigratesToVersionSixWithoutLosingReminderData() {
         val databaseName = "wasl-schema-v2.db"
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.deleteDatabase(databaseName)
@@ -127,32 +115,29 @@ class WaslDatabaseBaselineTest {
 
         migrationHelper.runMigrationsAndValidate(
             databaseName,
-            5,
+            6,
             true,
             WaslDatabase.MIGRATION_2_3,
             WaslDatabase.MIGRATION_3_4,
             WaslDatabase.MIGRATION_4_5,
+            WaslDatabase.MIGRATION_5_6,
         ).use { migrated ->
             migrated.query("SELECT id, status FROM reminders").use {
                 check(it.moveToFirst())
                 assertEquals("reminder-v2", it.getString(0))
                 assertEquals("SCHEDULED", it.getString(1))
             }
-            migrated.query("SELECT COUNT(*) FROM audit_events").use {
-                check(it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
-            migrated.query("SELECT COUNT(*) FROM payment_promises").use {
-                check(it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
+            assertEmpty(migrated, "audit_events")
+            assertEmpty(migrated, "payment_promises")
+            assertEmpty(migrated, "installment_plans")
+            assertEmpty(migrated, "installments")
         }
 
         context.deleteDatabase(databaseName)
     }
 
     @Test
-    fun versionThreeMigratesToVersionFiveAndKeepsDocumentStorage() {
+    fun versionThreeMigratesToVersionSixAndKeepsDocumentStorage() {
         val databaseName = "wasl-schema-v3.db"
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.deleteDatabase(databaseName)
@@ -179,29 +164,30 @@ class WaslDatabaseBaselineTest {
 
         migrationHelper.runMigrationsAndValidate(
             databaseName,
-            5,
+            6,
             true,
             WaslDatabase.MIGRATION_3_4,
             WaslDatabase.MIGRATION_4_5,
+            WaslDatabase.MIGRATION_5_6,
         ).use { migrated ->
             migrated.query("SELECT original_amount_minor FROM debts WHERE id = 'debt-v3'").use {
                 check(it.moveToFirst())
                 assertEquals(12000L, it.getLong(0))
             }
-            migrated.query("SELECT COUNT(*) FROM document_identities").use {
-                check(it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
-            migrated.query("SELECT COUNT(*) FROM issued_documents").use {
-                check(it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
-            migrated.query("SELECT COUNT(*) FROM payment_promises").use {
-                check(it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
+            assertEmpty(migrated, "document_identities")
+            assertEmpty(migrated, "issued_documents")
+            assertEmpty(migrated, "payment_promises")
+            assertEmpty(migrated, "installment_plans")
+            assertEmpty(migrated, "installments")
         }
 
         context.deleteDatabase(databaseName)
+    }
+
+    private fun assertEmpty(database: androidx.sqlite.db.SupportSQLiteDatabase, table: String) {
+        database.query("SELECT COUNT(*) FROM $table").use {
+            check(it.moveToFirst())
+            assertEquals(0L, it.getLong(0))
+        }
     }
 }

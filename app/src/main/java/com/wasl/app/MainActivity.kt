@@ -20,6 +20,7 @@ class MainActivity : ComponentActivity() {
                 repository = application.repository,
                 reminderScheduler = application.reminderScheduler,
                 paymentReceiptService = application.paymentReceiptService,
+                paymentPromiseStore = application.paymentPromiseStore,
                 requestedDebtId = requestedDebtId.value,
                 onRequestedDebtHandled = { requestedDebtId.value = null },
             )

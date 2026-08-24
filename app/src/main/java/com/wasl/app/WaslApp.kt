@@ -80,7 +80,6 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.wasl.app.data.AccountOverview
-import com.wasl.app.data.PaymentPromiseStatus
 import com.wasl.app.data.PaymentPromiseStore
 import com.wasl.app.data.PersonRecord
 import com.wasl.app.data.UnavailablePaymentPromiseStore
@@ -248,6 +247,7 @@ fun WaslApp(
                                     reminderScheduler = reminderScheduler,
                                     clock = todayClock,
                                     zoneIdProvider = todayZoneIdProvider,
+                                    paymentPromiseStore = paymentPromiseStore,
                                 ),
                             )
                             val state by todayViewModel.uiState.collectAsStateWithLifecycle()

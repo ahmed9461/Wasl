@@ -105,11 +105,9 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            gradle --no-daemon :app:connectedDebugAndroidTest
+            gradle --no-daemon -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true :app:connectedDebugAndroidTest
             mkdir -p app/build/outputs/payment-receipt
-            adb exec-out run-as com.wasl.app cat \
-              files/test-artifacts/wasl-payment-receipt-sample.pdf \
-              > app/build/outputs/payment-receipt/wasl-payment-receipt-sample.pdf
+            adb exec-out run-as com.wasl.app cat files/test-artifacts/wasl-payment-receipt-sample.pdf > app/build/outputs/payment-receipt/wasl-payment-receipt-sample.pdf
 
       - name: Install PDF inspection tools
         run: sudo apt-get update && sudo apt-get install -y poppler-utils

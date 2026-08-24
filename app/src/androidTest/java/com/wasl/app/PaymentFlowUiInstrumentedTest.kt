@@ -97,11 +97,7 @@ class PaymentFlowUiInstrumentedTest {
         composeRule.onNodeWithTag("payment-amount").performTextInput("20000")
         composeRule.onNodeWithTag("payment-review").performClick()
         composeRule.onNodeWithTag("payment-confirm").performClick()
-        waitForText("دفعة مسجلة")
 
-        composeRule.onNodeWithTag("account-remaining")
-            .assertTextContains("80,000 YER", substring = true)
-        composeRule.onNodeWithText("دفعة مسجلة").assertIsDisplayed()
         val paymentId = runBlocking {
             withTimeout(10_000) {
                 repositoryState.value.observeAccount(com.wasl.domain.DebtId(debtId))
@@ -114,7 +110,17 @@ class PaymentFlowUiInstrumentedTest {
                     ?.value
             }
         } ?: error("Persisted payment was not found.")
-        composeRule.onNodeWithTag("issue-receipt-$paymentId").performClick()
+
+        composeRule.onNodeWithTag("account-remaining")
+            .performScrollTo()
+            .assertTextContains("80,000 YER", substring = true)
+        composeRule.onNodeWithText("دفعة مسجلة")
+            .performScrollTo()
+            .assertIsDisplayed()
+
+        composeRule.onNodeWithTag("issue-receipt-$paymentId")
+            .performScrollTo()
+            .performClick()
         waitForTag("receipt-issuer-name")
         composeRule.onNodeWithTag("receipt-issuer-name").performTextInput("متجر أحمد")
         composeRule.onNodeWithTag("receipt-confirm").performClick()
@@ -141,14 +147,19 @@ class PaymentFlowUiInstrumentedTest {
             requestedDebtIdState.value = debtId
         }
 
-        waitForText("دفعة مسجلة")
+        waitForTag("account-remaining")
         composeRule.onNodeWithTag("account-remaining")
+            .performScrollTo()
             .assertTextContains("80,000 YER", substring = true)
-        composeRule.onNodeWithText("دفعة مسجلة").assertIsDisplayed()
+        composeRule.onNodeWithText("دفعة مسجلة")
+            .performScrollTo()
+            .assertIsDisplayed()
         composeRule.onNodeWithTag("open-receipt-${document.id}")
             .performScrollTo()
             .assertIsDisplayed()
-        composeRule.onNodeWithText(document.documentNumber).assertIsDisplayed()
+        composeRule.onNodeWithText(document.documentNumber)
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     private fun openDatabase() {

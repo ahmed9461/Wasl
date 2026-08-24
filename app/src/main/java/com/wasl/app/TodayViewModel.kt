@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.wasl.app.data.AccountOverview
+import com.wasl.app.data.PaymentPromiseRecord
+import com.wasl.app.data.PaymentPromiseStore
+import com.wasl.app.data.UnavailablePaymentPromiseStore
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.reminder.NoOpReminderScheduler
 import com.wasl.app.reminder.ReminderScheduler
@@ -19,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -38,6 +42,19 @@ data class TodayItem(
     }
 }
 
+data class TodayPromiseItem(
+    val account: AccountOverview,
+    val promise: PaymentPromiseRecord,
+    val daysOverdue: Long,
+) {
+    init {
+        require(daysOverdue >= 0L) { "Promise days overdue cannot be negative." }
+    }
+
+    val isOverdue: Boolean
+        get() = daysOverdue > 0L
+}
+
 enum class TodayNotice {
     REMINDER_RECOVERY_REQUESTED,
     REMINDER_RECOVERY_FAILED,
@@ -48,6 +65,7 @@ data class TodayUiState(
     val isLoading: Boolean = true,
     val loadError: String? = null,
     val items: List<TodayItem> = emptyList(),
+    val promiseItems: List<TodayPromiseItem> = emptyList(),
     val isRequestingReminderRecovery: Boolean = false,
     val notice: TodayNotice? = null,
 ) {
@@ -56,6 +74,15 @@ data class TodayUiState(
 
     val dueTodayItems: List<TodayItem>
         get() = items.filter { it.dueState == DueState.DUE_TODAY }
+
+    val overduePromiseItems: List<TodayPromiseItem>
+        get() = promiseItems.filter { it.isOverdue }
+
+    val dueTodayPromiseItems: List<TodayPromiseItem>
+        get() = promiseItems.filterNot { it.isOverdue }
+
+    val totalAttentionItems: Int
+        get() = items.size + promiseItems.size
 }
 
 class TodayViewModel(
@@ -63,6 +90,7 @@ class TodayViewModel(
     private val clock: Clock = Clock.systemUTC(),
     private val zoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
     private val reminderScheduler: ReminderScheduler = NoOpReminderScheduler,
+    private val paymentPromiseStore: PaymentPromiseStore = UnavailablePaymentPromiseStore,
 ) : ViewModel() {
     private val initialDate = currentLocalDate()
     private val _uiState = MutableStateFlow(TodayUiState(today = initialDate))
@@ -128,25 +156,41 @@ class TodayViewModel(
                 isLoading = true,
                 loadError = null,
                 items = if (dateChanged) emptyList() else it.items,
+                promiseItems = if (dateChanged) emptyList() else it.promiseItems,
             )
         }
         observationJob = viewModelScope.launch {
-            repository.observeDueAccounts(date)
+            combine(
+                repository.observeDueAccounts(date),
+                repository.observeAccounts(),
+                paymentPromiseStore.observePendingPaymentPromises(date),
+            ) { dueAccounts, allAccounts, promises ->
+                val accountsByDebtId = allAccounts.associateBy { it.ledger.header.id }
+                TodayUiProjection(
+                    items = buildTodayItems(dueAccounts, date),
+                    promiseItems = buildTodayPromiseItems(
+                        promises = promises,
+                        accountsByDebtId = accountsByDebtId,
+                        date = date,
+                    ),
+                )
+            }
                 .catch { error ->
                     if (error is CancellationException) throw error
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            loadError = "تعذر قراءة مستحقات اليوم المحفوظة.",
+                            loadError = "تعذر قراءة التزامات ووعود اليوم المحفوظة.",
                         )
                     }
                 }
-                .collect { accounts ->
+                .collect { projection ->
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             loadError = null,
-                            items = buildTodayItems(accounts, date),
+                            items = projection.items,
+                            promiseItems = projection.promiseItems,
                         )
                     }
                 }
@@ -184,11 +228,35 @@ class TodayViewModel(
             .thenBy { it.account.ledger.header.id.value },
     )
 
+    private fun buildTodayPromiseItems(
+        promises: List<PaymentPromiseRecord>,
+        accountsByDebtId: Map<com.wasl.domain.DebtId, AccountOverview>,
+        date: LocalDate,
+    ): List<TodayPromiseItem> = promises.mapNotNull { promise ->
+        val account = accountsByDebtId[promise.debtId] ?: return@mapNotNull null
+        if (promise.promisedDate.isAfter(date)) return@mapNotNull null
+        TodayPromiseItem(
+            account = account,
+            promise = promise,
+            daysOverdue = ChronoUnit.DAYS.between(promise.promisedDate, date),
+        )
+    }.sortedWith(
+        compareBy<TodayPromiseItem> { it.promise.promisedDate }
+            .thenBy { it.account.person.displayName }
+            .thenBy { it.promise.id },
+    )
+
+    private data class TodayUiProjection(
+        val items: List<TodayItem>,
+        val promiseItems: List<TodayPromiseItem>,
+    )
+
     class Factory(
         private val repository: WaslRepository,
         private val reminderScheduler: ReminderScheduler = NoOpReminderScheduler,
         private val clock: Clock = Clock.systemUTC(),
         private val zoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
+        private val paymentPromiseStore: PaymentPromiseStore = UnavailablePaymentPromiseStore,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -200,6 +268,7 @@ class TodayViewModel(
                 clock = clock,
                 zoneIdProvider = zoneIdProvider,
                 reminderScheduler = reminderScheduler,
+                paymentPromiseStore = paymentPromiseStore,
             ) as T
         }
     }

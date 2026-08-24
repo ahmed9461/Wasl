@@ -16,8 +16,6 @@ interface WaslRepository {
 
     fun observeAccount(debtId: DebtId): Flow<AccountOverview?>
 
-    fun observePaymentPromises(debtId: DebtId): Flow<List<PaymentPromiseRecord>>
-
     suspend fun createPersonWithDebt(command: CreatePersonWithDebtCommand): AccountOverview
 
     suspend fun createDebtForExistingPerson(
@@ -31,8 +29,4 @@ interface WaslRepository {
     suspend fun reversePayment(command: ReversePaymentCommand): DebtLedger
 
     suspend fun updateDueSchedule(command: UpdateDueScheduleCommand): AccountOverview
-
-    suspend fun createPaymentPromise(command: CreatePaymentPromiseCommand): PaymentPromiseRecord
-
-    suspend fun resolvePaymentPromise(command: ResolvePaymentPromiseCommand): PaymentPromiseRecord
 }

@@ -120,7 +120,7 @@ internal fun TodayScreen(
                         color = MaterialTheme.colorScheme.tertiaryContainer,
                     ) {
                         Text(
-                            text = "متابعة الاستحقاقات",
+                            text = "متابعة الاستحقاقات والوعود",
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -145,7 +145,7 @@ internal fun TodayScreen(
             }
 
             when {
-                state.isLoading && state.items.isEmpty() -> item("today-loading") {
+                state.isLoading && state.totalAttentionItems == 0 -> item("today-loading") {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -163,7 +163,7 @@ internal fun TodayScreen(
                     )
                 }
 
-                state.items.isEmpty() -> item("today-empty") {
+                state.totalAttentionItems == 0 -> item("today-empty") {
                     TodayEmptyCard()
                 }
 
@@ -172,7 +172,7 @@ internal fun TodayScreen(
                         item("overdue-heading") {
                             TodaySectionHeading(
                                 title = "متأخرة",
-                                subtitle = "تحتاج متابعة أولًا",
+                                subtitle = "حسابات تجاوزت تاريخ الاستحقاق",
                                 count = state.overdueItems.size,
                                 overdue = true,
                             )
@@ -194,11 +194,33 @@ internal fun TodayScreen(
                         }
                     }
 
+                    if (state.overduePromiseItems.isNotEmpty()) {
+                        item("overdue-promises-heading") {
+                            TodaySectionHeading(
+                                title = "وعود متأخرة",
+                                subtitle = "وعود مر موعدها وما زالت بانتظار الحسم",
+                                count = state.overduePromiseItems.size,
+                                overdue = true,
+                            )
+                        }
+                        items(
+                            items = state.overduePromiseItems,
+                            key = { "overdue-promise:${it.promise.id}" },
+                        ) { item ->
+                            TodayPromiseCard(
+                                item = item,
+                                onOpenAccount = {
+                                    onOpenAccount(item.account.ledger.header.id)
+                                },
+                            )
+                        }
+                    }
+
                     if (state.dueTodayItems.isNotEmpty()) {
                         item("due-today-heading") {
                             TodaySectionHeading(
                                 title = "مستحقة اليوم",
-                                subtitle = "موعدها اليوم",
+                                subtitle = "موعد الدين اليوم",
                                 count = state.dueTodayItems.size,
                                 overdue = false,
                             )
@@ -219,6 +241,28 @@ internal fun TodayScreen(
                             )
                         }
                     }
+
+                    if (state.dueTodayPromiseItems.isNotEmpty()) {
+                        item("due-today-promises-heading") {
+                            TodaySectionHeading(
+                                title = "وعود اليوم",
+                                subtitle = "وعود سداد موعدها اليوم",
+                                count = state.dueTodayPromiseItems.size,
+                                overdue = false,
+                            )
+                        }
+                        items(
+                            items = state.dueTodayPromiseItems,
+                            key = { "today-promise:${it.promise.id}" },
+                        ) { item ->
+                            TodayPromiseCard(
+                                item = item,
+                                onOpenAccount = {
+                                    onOpenAccount(item.account.ledger.header.id)
+                                },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -227,6 +271,8 @@ internal fun TodayScreen(
 
 @Composable
 private fun TodaySummaryCard(state: TodayUiState) {
+    val overdueCount = state.overdueItems.size + state.overduePromiseItems.size
+    val todayCount = state.dueTodayItems.size + state.dueTodayPromiseItems.size
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -242,13 +288,13 @@ private fun TodaySummaryCard(state: TodayUiState) {
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "اليوم لديك ${state.items.size} أمور",
+                    text = "اليوم لديك ${state.totalAttentionItems} أمور",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
                 Text(
-                    text = "ركّز على المتأخر أولًا ثم الحسابات المستحقة اليوم.",
+                    text = "ركّز على المتأخر أولًا، سواء كان استحقاقًا أو وعد سداد.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -259,22 +305,29 @@ private fun TodaySummaryCard(state: TodayUiState) {
             ) {
                 TodayMetric(
                     modifier = Modifier.weight(1f),
-                    value = state.overdueItems.size,
+                    value = overdueCount,
                     label = "متأخرة",
-                    emphasized = state.overdueItems.isNotEmpty(),
+                    emphasized = overdueCount > 0,
                 )
                 TodayMetric(
                     modifier = Modifier.weight(1f),
-                    value = state.dueTodayItems.size,
+                    value = todayCount,
                     label = "مستحقة اليوم",
                     emphasized = false,
                 )
             }
             Text(
-                text = "${state.overdueItems.size} متأخرة · ${state.dueTodayItems.size} مستحقة اليوم",
+                text = "$overdueCount متأخرة · $todayCount مستحقة اليوم",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
+            if (state.promiseItems.isNotEmpty()) {
+                Text(
+                    text = "منها ${state.promiseItems.size} وعود سداد تحتاج متابعة.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
         }
     }
 }
@@ -335,12 +388,12 @@ private fun TodayEmptyCard() {
             verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
             Text(
-                text = "لا توجد مستحقات تحتاج انتباهك اليوم.",
+                text = "لا توجد أمور تحتاج انتباهك اليوم.",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = "ستظهر هنا الحسابات المستحقة اليوم والمتأخرة فقط.",
+                text = "ستظهر هنا الحسابات المستحقة والمتأخرة ووعود السداد التي حان موعدها.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -551,6 +604,121 @@ private fun TodayAccountCard(
                     ReminderStatus.CANCELLED,
                     null -> Unit
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TodayPromiseCard(
+    item: TodayPromiseItem,
+    onOpenAccount: () -> Unit,
+) {
+    val account = item.account
+    val promise = item.promise
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("today-promise-${promise.id}"),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TodayPersonAvatar(account.person.displayName)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(
+                        text = account.person.displayName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "وعد بالسداد · \u2066${promise.promisedDate.format(todayDateFormatter)}\u2069",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TodayDirectionPill(account.ledger.header.direction)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        text = "المتبقي في الحساب",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = formatMoney(account.ledger.balance),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Start,
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = if (item.isOverdue) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.tertiaryContainer
+                    },
+                ) {
+                    Text(
+                        text = if (item.isOverdue) {
+                            "الوعد ${overdueLabel(item.daysOverdue)}"
+                        } else {
+                            "وعد اليوم"
+                        },
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (item.isOverdue) {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        } else {
+                            MaterialTheme.colorScheme.onTertiaryContainer
+                        },
+                    )
+                }
+            }
+
+            promise.note?.let { note ->
+                Text(
+                    text = note,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            Text(
+                text = "هذا الوعد مستقل عن تاريخ استحقاق الدين. افتح الحساب لتسجيل الوفاء أو عدم التنفيذ أو الإلغاء.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(
+                onClick = onOpenAccount,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("today-open-promise-${promise.id}"),
+            ) {
+                Text("فتح الحساب وحسم الوعد")
             }
         }
     }

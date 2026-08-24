@@ -20,7 +20,7 @@ class WaslDatabaseBaselineTest {
     )
 
     @Test
-    fun versionOneMigratesToVersionFourWithoutLosingDebtData() {
+    fun versionOneMigratesToVersionFiveWithoutLosingDebtData() {
         val databaseName = "wasl-schema-v1.db"
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.deleteDatabase(databaseName)
@@ -47,11 +47,12 @@ class WaslDatabaseBaselineTest {
 
         migrationHelper.runMigrationsAndValidate(
             databaseName,
-            4,
+            5,
             true,
             WaslDatabase.MIGRATION_1_2,
             WaslDatabase.MIGRATION_2_3,
             WaslDatabase.MIGRATION_3_4,
+            WaslDatabase.MIGRATION_4_5,
         ).use { migrated ->
             migrated.query("SELECT original_amount_minor, due_date_epoch_day FROM debts").use {
                 check(it.moveToFirst())
@@ -74,6 +75,10 @@ class WaslDatabaseBaselineTest {
                 check(it.moveToFirst())
                 assertEquals(0L, it.getLong(0))
             }
+            migrated.query("SELECT COUNT(*) FROM payment_promises").use {
+                check(it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
         }
 
         val database = Room.databaseBuilder(context, WaslDatabase::class.java, databaseName)
@@ -86,7 +91,7 @@ class WaslDatabaseBaselineTest {
     }
 
     @Test
-    fun versionTwoMigratesToVersionFourWithoutLosingReminderData() {
+    fun versionTwoMigratesToVersionFiveWithoutLosingReminderData() {
         val databaseName = "wasl-schema-v2.db"
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.deleteDatabase(databaseName)
@@ -122,10 +127,11 @@ class WaslDatabaseBaselineTest {
 
         migrationHelper.runMigrationsAndValidate(
             databaseName,
-            4,
+            5,
             true,
             WaslDatabase.MIGRATION_2_3,
             WaslDatabase.MIGRATION_3_4,
+            WaslDatabase.MIGRATION_4_5,
         ).use { migrated ->
             migrated.query("SELECT id, status FROM reminders").use {
                 check(it.moveToFirst())
@@ -136,13 +142,17 @@ class WaslDatabaseBaselineTest {
                 check(it.moveToFirst())
                 assertEquals(0L, it.getLong(0))
             }
+            migrated.query("SELECT COUNT(*) FROM payment_promises").use {
+                check(it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
         }
 
         context.deleteDatabase(databaseName)
     }
 
     @Test
-    fun versionThreeMigratesToVersionFourAndCreatesDocumentStorage() {
+    fun versionThreeMigratesToVersionFiveAndKeepsDocumentStorage() {
         val databaseName = "wasl-schema-v3.db"
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.deleteDatabase(databaseName)
@@ -169,9 +179,10 @@ class WaslDatabaseBaselineTest {
 
         migrationHelper.runMigrationsAndValidate(
             databaseName,
-            4,
+            5,
             true,
             WaslDatabase.MIGRATION_3_4,
+            WaslDatabase.MIGRATION_4_5,
         ).use { migrated ->
             migrated.query("SELECT original_amount_minor FROM debts WHERE id = 'debt-v3'").use {
                 check(it.moveToFirst())
@@ -182,6 +193,10 @@ class WaslDatabaseBaselineTest {
                 assertEquals(0L, it.getLong(0))
             }
             migrated.query("SELECT COUNT(*) FROM issued_documents").use {
+                check(it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM payment_promises").use {
                 check(it.moveToFirst())
                 assertEquals(0L, it.getLong(0))
             }

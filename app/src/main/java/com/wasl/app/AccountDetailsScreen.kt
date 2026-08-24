@@ -34,6 +34,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -121,15 +122,27 @@ internal fun AccountDetailsScreen(
 
     val account = state.account
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.safeDrawing,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = account?.person?.displayName ?: "تفاصيل الحساب",
-                        maxLines = 1,
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(
+                            text = account?.person?.displayName ?: "تفاصيل الحساب",
+                            maxLines = 1,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        if (account != null) {
+                            Text(
+                                text = "تفاصيل الحساب وسجل العمليات",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
+                    }
                 },
                 navigationIcon = {
                     TextButton(onClick = onBack) {
@@ -143,8 +156,10 @@ internal fun AccountDetailsScreen(
                 ExtendedFloatingActionButton(
                     onClick = onOpenPayment,
                     modifier = Modifier.testTag("record-payment"),
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
                 ) {
-                    Text("تسجيل دفعة")
+                    Text("تسجيل دفعة", fontWeight = FontWeight.Bold)
                 }
             }
         },
@@ -249,7 +264,6 @@ internal fun AccountDetailsScreen(
         )
     }
 
-
     if (state.isDueScheduleDialogOpen && account != null) {
         DueScheduleDialog(
             form = state.dueScheduleForm,
@@ -301,9 +315,9 @@ private fun AccountDetailsContent(
             start = 20.dp,
             top = 16.dp,
             end = 20.dp,
-            bottom = 104.dp,
+            bottom = 112.dp,
         ),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         if (loadError != null) {
             item("load-error") {
@@ -316,17 +330,34 @@ private fun AccountDetailsContent(
         }
 
         item("timeline-heading") {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "سجل العمليات",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = "الأصل محفوظ، وكل دفعة أو عكس يظهر كسجل مستقل.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "سجل العمليات",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "الأصل محفوظ، وكل دفعة أو عكس يظهر كسجل مستقل.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Surface(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ) {
+                    Text(
+                        text = "سجل موثق",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
 
@@ -371,12 +402,18 @@ private fun AccountDetailsContent(
 
         if (account.ledger.entries.isEmpty()) {
             item("no-ledger-entries") {
-                Text(
-                    text = "لم تُسجل دفعات بعد.",
+                Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                ) {
+                    Text(
+                        text = "لم تُسجل دفعات بعد.",
+                        modifier = Modifier.padding(18.dp),
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -388,77 +425,139 @@ private fun AccountSummaryCard(
     onOpenDueSchedule: () -> Unit,
 ) {
     val ledger = account.ledger
+    val receivable = ledger.header.direction == DebtDirection.RECEIVABLE
+    val heroContainer = if (receivable) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.secondaryContainer
+    }
+    val heroContent = if (receivable) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
+        colors = CardDefaults.cardColors(containerColor = heroContainer),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = when (ledger.header.direction) {
-                        DebtDirection.RECEIVABLE -> "لي عنده"
-                        DebtDirection.PAYABLE -> "عليّ له"
+                Surface(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                ) {
+                    Text(
+                        text = if (receivable) "لي عنده" else "عليّ له",
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                Surface(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = when (ledger.state) {
+                        DebtState.SETTLED -> MaterialTheme.colorScheme.surface.copy(alpha = 0.76f)
+                        DebtState.PARTIALLY_PAID -> MaterialTheme.colorScheme.tertiaryContainer
+                        DebtState.OPEN -> MaterialTheme.colorScheme.surface.copy(alpha = 0.56f)
                     },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = when (ledger.state) {
-                        DebtState.OPEN -> "مفتوح"
-                        DebtState.PARTIALLY_PAID -> "مسدد جزئيًا"
-                        DebtState.SETTLED -> "مسدد بالكامل"
-                    },
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                ) {
+                    Text(
+                        text = when (ledger.state) {
+                            DebtState.OPEN -> "مفتوح"
+                            DebtState.PARTIALLY_PAID -> "مسدد جزئيًا"
+                            DebtState.SETTLED -> "مسدد بالكامل"
+                        },
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
             }
+
             ledger.header.description?.let {
                 Text(
                     text = it,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = heroContent,
                 )
             }
-            HorizontalDivider()
-            DetailMoneyRow("أصل الدين", ledger.header.originalAmount)
-            DetailMoneyRow("المدفوع", ledger.paidAmount)
-            DetailMoneyRow(
-                label = "المتبقي",
-                money = ledger.balance,
-                valueModifier = Modifier.testTag("account-remaining"),
-            )
-            HorizontalDivider()
-            MetadataRow("تاريخ الإنشاء", formatInstant(ledger.header.openedAt))
-            MetadataRow(
-                "تاريخ الاستحقاق",
-                ledger.header.dueDate?.let(::formatDate) ?: "غير محدد",
-            )
-            account.dueReminder?.let { reminder ->
-                MetadataRow("موعد التذكير", formatInstant(reminder.triggerAt))
-                MetadataRow(
-                    "حالة التذكير",
-                    when (reminder.status) {
-                        ReminderStatus.SCHEDULED -> "مجدول"
-                        ReminderStatus.DELIVERED -> "تم إظهاره"
-                        ReminderStatus.BLOCKED_PERMISSION -> "بانتظار إذن الإشعارات"
-                        ReminderStatus.FAILED -> "ستُعاد المحاولة"
-                        ReminderStatus.CANCELLED -> "ملغى"
-                    },
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "المتبقي",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = heroContent,
+                )
+                Text(
+                    text = formatMoney(ledger.balance),
+                    modifier = Modifier.testTag("account-remaining"),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = heroContent,
+                    textAlign = TextAlign.Start,
                 )
             }
-            account.closedAt?.let { closedAt ->
-                MetadataRow("تاريخ الإغلاق", formatInstant(closedAt))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                FinancialMetric(
+                    modifier = Modifier.weight(1f),
+                    label = "أصل الدين",
+                    money = ledger.header.originalAmount,
+                )
+                FinancialMetric(
+                    modifier = Modifier.weight(1f),
+                    label = "المدفوع",
+                    money = ledger.paidAmount,
+                )
             }
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.66f),
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp),
+                ) {
+                    MetadataRow("تاريخ الإنشاء", formatInstant(ledger.header.openedAt))
+                    MetadataRow(
+                        "تاريخ الاستحقاق",
+                        ledger.header.dueDate?.let(::formatDate) ?: "غير محدد",
+                    )
+                    account.dueReminder?.let { reminder ->
+                        MetadataRow("موعد التذكير", formatInstant(reminder.triggerAt))
+                        MetadataRow(
+                            "حالة التذكير",
+                            when (reminder.status) {
+                                ReminderStatus.SCHEDULED -> "مجدول"
+                                ReminderStatus.DELIVERED -> "تم إظهاره"
+                                ReminderStatus.BLOCKED_PERMISSION -> "بانتظار إذن الإشعارات"
+                                ReminderStatus.FAILED -> "ستُعاد المحاولة"
+                                ReminderStatus.CANCELLED -> "ملغى"
+                            },
+                        )
+                    }
+                    account.closedAt?.let { closedAt ->
+                        MetadataRow("تاريخ الإغلاق", formatInstant(closedAt))
+                    }
+                }
+            }
+
             if (!ledger.balance.isZero) {
                 TextButton(
                     onClick = onOpenDueSchedule,
@@ -472,9 +571,40 @@ private fun AccountSummaryCard(
                         } else {
                             "تعديل الموعد والتذكير"
                         },
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun FinancialMetric(
+    modifier: Modifier,
+    label: String,
+    money: Money,
+) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.68f),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = formatMoney(money),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }
@@ -557,11 +687,17 @@ private fun DueScheduleDialog(
                     )
                 }
                 error?.let {
-                    Text(
-                        text = it,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.errorContainer,
+                    ) {
+                        Text(
+                            text = it,
+                            modifier = Modifier.padding(12.dp),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
             }
         },
@@ -643,23 +779,47 @@ private fun PaymentDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (review == null) "تسجيل دفعة" else "تأكيد الدفعة")
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(if (review == null) "تسجيل دفعة" else "تأكيد الدفعة")
+                Text(
+                    text = if (review == null) {
+                        "أضف السداد وسيُحفظ كحدث مستقل في السجل."
+                    } else {
+                        "راجع الأرقام قبل اعتماد العملية."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Normal,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(
-                    text = account.person.displayName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = account.person.displayName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = "المتبقي: ${formatMoney(account.ledger.balance)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 if (review == null) {
-                    Text(
-                        text = "المتبقي: ${formatMoney(account.ledger.balance)}",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                     OutlinedTextField(
                         value = form.amount,
                         onValueChange = onAmountChange,
@@ -673,6 +833,7 @@ private fun PaymentDialog(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         enabled = !isSaving,
+                        shape = MaterialTheme.shapes.medium,
                     )
                     OutlinedTextField(
                         value = form.note,
@@ -682,6 +843,7 @@ private fun PaymentDialog(
                         minLines = 2,
                         maxLines = 3,
                         enabled = !isSaving,
+                        shape = MaterialTheme.shapes.medium,
                     )
                 } else {
                     Text("راجع البيانات قبل إضافة الحدث المالي إلى السجل.")
@@ -696,11 +858,17 @@ private fun PaymentDialog(
                     }
                 }
                 error?.let {
-                    Text(
-                        text = it,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.errorContainer,
+                    ) {
+                        Text(
+                            text = it,
+                            modifier = Modifier.padding(12.dp),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
             }
         },
@@ -778,6 +946,7 @@ private fun PaymentReceiptDialog(
                     label = { Text("اسم مُصدر الإيصال") },
                     singleLine = true,
                     enabled = !isSaving && !isLoadingIdentity,
+                    shape = MaterialTheme.shapes.medium,
                 )
                 OutlinedTextField(
                     value = form.activityName,
@@ -786,6 +955,7 @@ private fun PaymentReceiptDialog(
                     label = { Text("النشاط — اختياري") },
                     singleLine = true,
                     enabled = !isSaving && !isLoadingIdentity,
+                    shape = MaterialTheme.shapes.medium,
                 )
                 OutlinedTextField(
                     value = form.phone,
@@ -795,6 +965,7 @@ private fun PaymentReceiptDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     singleLine = true,
                     enabled = !isSaving && !isLoadingIdentity,
+                    shape = MaterialTheme.shapes.medium,
                 )
                 OutlinedTextField(
                     value = form.footerText,
@@ -804,6 +975,7 @@ private fun PaymentReceiptDialog(
                     minLines = 2,
                     maxLines = 4,
                     enabled = !isSaving && !isLoadingIdentity,
+                    shape = MaterialTheme.shapes.medium,
                 )
                 if (isLoadingIdentity) {
                     Row(
@@ -818,11 +990,17 @@ private fun PaymentReceiptDialog(
                     }
                 }
                 error?.let {
-                    Text(
-                        text = it,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.errorContainer,
+                    ) {
+                        Text(
+                            text = it,
+                            modifier = Modifier.padding(12.dp),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
             }
         },
@@ -884,13 +1062,20 @@ private fun ReversalDialog(
                     minLines = 2,
                     maxLines = 4,
                     enabled = !isSaving,
+                    shape = MaterialTheme.shapes.medium,
                 )
                 error?.let {
-                    Text(
-                        text = it,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.errorContainer,
+                    ) {
+                        Text(
+                            text = it,
+                            modifier = Modifier.padding(12.dp),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
             }
         },
@@ -934,8 +1119,9 @@ private fun PaymentTimelineCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -944,17 +1130,29 @@ private fun PaymentTimelineCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("دفعة مسجلة", fontWeight = FontWeight.Bold)
-                Text(
-                    text = if (isReversed) "معكوسة" else "فعّالة",
+                Surface(
+                    shape = MaterialTheme.shapes.extraLarge,
                     color = if (isReversed) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
+                        MaterialTheme.colorScheme.surfaceContainerHigh
                     } else {
-                        MaterialTheme.colorScheme.primary
+                        MaterialTheme.colorScheme.primaryContainer
                     },
-                    fontWeight = FontWeight.SemiBold,
-                )
+                ) {
+                    Text(
+                        text = if (isReversed) "معكوسة" else "فعّالة",
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        color = if (isReversed) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
             DetailMoneyRow("المبلغ", payment.amount)
             MetadataRow("وقت السداد", formatInstant(payment.paidAt))
@@ -1058,7 +1256,7 @@ private fun ReversalTimelineCard(
         timestamp = reversal.recordedAt,
         body = reversal.reason,
         money = payment?.amount,
-)
+    )
 }
 
 @Composable
@@ -1080,8 +1278,9 @@ private fun DueScheduleAuditTimelineCard(event: DueScheduleAuditEvent) {
             .fillMaxWidth()
             .testTag("due-schedule-audit-${event.id}"),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -1113,8 +1312,9 @@ private fun TimelineCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -1172,7 +1372,11 @@ private fun LoadErrorCard(message: String, onRetry: () -> Unit) {
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(message, lineHeight = 22.sp)
+            Text(
+                text = message,
+                lineHeight = 22.sp,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
             Button(onClick = onRetry, modifier = Modifier.align(Alignment.End)) {
                 Text("إعادة المحاولة")
             }

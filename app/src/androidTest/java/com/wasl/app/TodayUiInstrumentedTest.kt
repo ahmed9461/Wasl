@@ -111,11 +111,15 @@ class TodayUiInstrumentedTest {
         waitForText("اليوم لديك 2 أمور")
 
         composeRule.onNodeWithText("متأخر 3 أيام").assertIsDisplayed()
-        composeRule.onNodeWithText("مستحق اليوم").assertIsDisplayed()
+        composeRule.onNodeWithText("مستحق اليوم")
+            .performScrollTo()
+            .assertIsDisplayed()
         composeRule.onNodeWithText("شخص قادم").assertDoesNotExist()
         composeRule.onNodeWithText(
             "التذكير متوقف حتى تسمح بإشعارات وَصل.",
-        ).assertIsDisplayed()
+        )
+            .performScrollTo()
+            .assertIsDisplayed()
 
         composeRule.onNodeWithTag("today-open-debt-today")
             .performScrollTo()

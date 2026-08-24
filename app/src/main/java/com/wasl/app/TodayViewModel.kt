@@ -119,7 +119,8 @@ class TodayViewModel(
     private val zoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
     private val reminderScheduler: ReminderScheduler = NoOpReminderScheduler,
     private val paymentPromiseStore: PaymentPromiseStore = UnavailablePaymentPromiseStore,
-    private val installmentPlanStore: InstallmentPlanStore = UnavailableInstallmentPlanStore,
+    private val installmentPlanStore: InstallmentPlanStore =
+        (repository as? InstallmentPlanStore) ?: UnavailableInstallmentPlanStore,
 ) : ViewModel() {
     private val initialDate = currentLocalDate()
     private val _uiState = MutableStateFlow(TodayUiState(today = initialDate))
@@ -145,12 +146,7 @@ class TodayViewModel(
 
     fun retryReminderRecovery() {
         if (_uiState.value.isRequestingReminderRecovery) return
-        _uiState.update {
-            it.copy(
-                isRequestingReminderRecovery = true,
-                notice = null,
-            )
-        }
+        _uiState.update { it.copy(isRequestingReminderRecovery = true, notice = null) }
         try {
             reminderScheduler.requestRecovery()
             _uiState.update {
@@ -199,38 +195,32 @@ class TodayViewModel(
                 val accountsByDebtId = allAccounts.associateBy { it.ledger.header.id }
                 TodayUiProjection(
                     items = buildTodayItems(dueAccounts, date),
-                    promiseItems = buildTodayPromiseItems(
-                        promises = promises,
-                        accountsByDebtId = accountsByDebtId,
-                        date = date,
-                    ),
+                    promiseItems = buildTodayPromiseItems(promises, accountsByDebtId, date),
                     installmentItems = buildTodayInstallmentItems(
-                        installments = installments,
-                        accountsByDebtId = accountsByDebtId,
-                        date = date,
+                        installments,
+                        accountsByDebtId,
+                        date,
                     ),
                 )
+            }.catch { error ->
+                if (error is CancellationException) throw error
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        loadError = "تعذر قراءة استحقاقات ووعود وأقساط اليوم المحفوظة.",
+                    )
+                }
+            }.collect { projection ->
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        loadError = null,
+                        items = projection.items,
+                        promiseItems = projection.promiseItems,
+                        installmentItems = projection.installmentItems,
+                    )
+                }
             }
-                .catch { error ->
-                    if (error is CancellationException) throw error
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            loadError = "تعذر قراءة استحقاقات ووعود وأقساط اليوم المحفوظة.",
-                        )
-                    }
-                }
-                .collect { projection ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            loadError = null,
-                            items = projection.items,
-                            promiseItems = projection.promiseItems,
-                            installmentItems = projection.installmentItems,
-                        )
-                    }
-                }
         }
     }
 
@@ -243,18 +233,12 @@ class TodayViewModel(
     ): List<TodayItem> = accounts.mapNotNull { account ->
         val dueDate = account.ledger.header.dueDate ?: return@mapNotNull null
         when (val dueState = account.ledger.dueState(date)) {
-            DueState.DUE_TODAY -> TodayItem(
-                account = account,
-                dueState = dueState,
-                daysOverdue = 0L,
-            )
-
+            DueState.DUE_TODAY -> TodayItem(account, dueState, 0L)
             DueState.OVERDUE -> TodayItem(
-                account = account,
-                dueState = dueState,
-                daysOverdue = ChronoUnit.DAYS.between(dueDate, date),
+                account,
+                dueState,
+                ChronoUnit.DAYS.between(dueDate, date),
             )
-
             DueState.NO_DUE_DATE,
             DueState.UPCOMING,
             DueState.SETTLED -> null
@@ -313,7 +297,8 @@ class TodayViewModel(
         private val clock: Clock = Clock.systemUTC(),
         private val zoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
         private val paymentPromiseStore: PaymentPromiseStore = UnavailablePaymentPromiseStore,
-        private val installmentPlanStore: InstallmentPlanStore = UnavailableInstallmentPlanStore,
+        private val installmentPlanStore: InstallmentPlanStore =
+            (repository as? InstallmentPlanStore) ?: UnavailableInstallmentPlanStore,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {

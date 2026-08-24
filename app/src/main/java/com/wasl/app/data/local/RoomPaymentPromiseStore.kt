@@ -23,7 +23,7 @@ class RoomPaymentPromiseStore(
     private val promiseDao = database.paymentPromiseDao()
 
     override fun observePaymentPromises(debtId: DebtId): Flow<List<PaymentPromiseRecord>> =
-        promiseDao.observeForDebt(debtId.value).map { rows -> rows.map(::toRecord) }
+        promiseDao.observeForDebt(debtId.value).map { rows -> rows.map { it.toRecord() } }
 
     override suspend fun createPaymentPromise(
         command: CreatePaymentPromiseCommand,
@@ -137,24 +137,24 @@ class RoomPaymentPromiseStore(
         }
     }
 
-    private fun toRecord(entity: PaymentPromiseEntity): PaymentPromiseRecord {
-        val status = PaymentPromiseStatus.valueOf(entity.status)
-        check((status == PaymentPromiseStatus.PENDING) == (entity.resolvedAt == null)) {
+    private fun PaymentPromiseEntity.toRecord(): PaymentPromiseRecord {
+        val recordStatus = PaymentPromiseStatus.valueOf(status)
+        check((recordStatus == PaymentPromiseStatus.PENDING) == (resolvedAt == null)) {
             "Payment promise resolution projection is corrupt."
         }
-        check((entity.resolutionCommandId == null) == (entity.resolvedAt == null)) {
+        check((resolutionCommandId == null) == (resolvedAt == null)) {
             "Payment promise resolution command projection is corrupt."
         }
         return PaymentPromiseRecord(
-            id = entity.id,
-            debtId = DebtId(entity.debtId),
-            promisedDate = LocalDate.ofEpochDay(entity.promisedDateEpochDay),
-            status = status,
-            note = entity.note,
-            createdAt = Instant.ofEpochMilli(entity.createdAt),
-            resolvedAt = entity.resolvedAt?.let(Instant::ofEpochMilli),
-            resolutionNote = entity.resolutionNote,
-            updatedAt = Instant.ofEpochMilli(entity.updatedAt),
+            id = id,
+            debtId = DebtId(debtId),
+            promisedDate = LocalDate.ofEpochDay(promisedDateEpochDay),
+            status = recordStatus,
+            note = note,
+            createdAt = Instant.ofEpochMilli(createdAt),
+            resolvedAt = resolvedAt?.let(Instant::ofEpochMilli),
+            resolutionNote = resolutionNote,
+            updatedAt = Instant.ofEpochMilli(updatedAt),
         )
     }
 }

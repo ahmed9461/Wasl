@@ -21,6 +21,16 @@ interface PaymentPromiseDao {
     )
     fun observeForDebt(debtId: String): Flow<List<PaymentPromiseEntity>>
 
+    @Query(
+        """
+        SELECT * FROM payment_promises
+        WHERE status = 'PENDING'
+          AND promised_date_epoch_day <= :onOrBeforeEpochDay
+        ORDER BY promised_date_epoch_day ASC, created_at ASC, id ASC
+        """,
+    )
+    fun observePendingOnOrBefore(onOrBeforeEpochDay: Long): Flow<List<PaymentPromiseEntity>>
+
     @Query("SELECT * FROM payment_promises WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): PaymentPromiseEntity?
 

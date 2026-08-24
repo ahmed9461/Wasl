@@ -120,7 +120,7 @@ internal fun TodayScreen(
                         color = MaterialTheme.colorScheme.tertiaryContainer,
                     ) {
                         Text(
-                            text = "متابعة الاستحقاقات والوعود",
+                            text = "متابعة الاستحقاقات والوعود والأقساط",
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -157,10 +157,7 @@ internal fun TodayScreen(
                 }
 
                 state.loadError != null -> item("today-error") {
-                    TodayErrorCard(
-                        message = state.loadError,
-                        onRetry = onRetryLoad,
-                    )
+                    TodayErrorCard(message = state.loadError, onRetry = onRetryLoad)
                 }
 
                 state.totalAttentionItems == 0 -> item("today-empty") {
@@ -185,11 +182,29 @@ internal fun TodayScreen(
                                 item = item,
                                 notificationsAvailable = notificationsAvailable,
                                 isReminderActionRunning = state.isRequestingReminderRecovery,
-                                onOpenAccount = {
-                                    onOpenAccount(item.account.ledger.header.id)
-                                },
+                                onOpenAccount = { onOpenAccount(item.account.ledger.header.id) },
                                 onResolveNotificationPermission = onResolveNotificationPermission,
                                 onRetryReminders = onRetryReminders,
+                            )
+                        }
+                    }
+
+                    if (state.overdueInstallmentItems.isNotEmpty()) {
+                        item("overdue-installments-heading") {
+                            TodaySectionHeading(
+                                title = "أقساط متأخرة",
+                                subtitle = "أقساط لم يكتمل سدادها بعد موعدها",
+                                count = state.overdueInstallmentItems.size,
+                                overdue = true,
+                            )
+                        }
+                        items(
+                            items = state.overdueInstallmentItems,
+                            key = { "overdue-installment:${it.installment.id}" },
+                        ) { item ->
+                            TodayInstallmentCard(
+                                item = item,
+                                onOpenAccount = { onOpenAccount(item.account.ledger.header.id) },
                             )
                         }
                     }
@@ -209,9 +224,7 @@ internal fun TodayScreen(
                         ) { item ->
                             TodayPromiseCard(
                                 item = item,
-                                onOpenAccount = {
-                                    onOpenAccount(item.account.ledger.header.id)
-                                },
+                                onOpenAccount = { onOpenAccount(item.account.ledger.header.id) },
                             )
                         }
                     }
@@ -233,11 +246,29 @@ internal fun TodayScreen(
                                 item = item,
                                 notificationsAvailable = notificationsAvailable,
                                 isReminderActionRunning = state.isRequestingReminderRecovery,
-                                onOpenAccount = {
-                                    onOpenAccount(item.account.ledger.header.id)
-                                },
+                                onOpenAccount = { onOpenAccount(item.account.ledger.header.id) },
                                 onResolveNotificationPermission = onResolveNotificationPermission,
                                 onRetryReminders = onRetryReminders,
+                            )
+                        }
+                    }
+
+                    if (state.dueTodayInstallmentItems.isNotEmpty()) {
+                        item("due-today-installments-heading") {
+                            TodaySectionHeading(
+                                title = "أقساط اليوم",
+                                subtitle = "أقساط موعدها اليوم وتحتاج متابعة",
+                                count = state.dueTodayInstallmentItems.size,
+                                overdue = false,
+                            )
+                        }
+                        items(
+                            items = state.dueTodayInstallmentItems,
+                            key = { "today-installment:${it.installment.id}" },
+                        ) { item ->
+                            TodayInstallmentCard(
+                                item = item,
+                                onOpenAccount = { onOpenAccount(item.account.ledger.header.id) },
                             )
                         }
                     }
@@ -257,9 +288,7 @@ internal fun TodayScreen(
                         ) { item ->
                             TodayPromiseCard(
                                 item = item,
-                                onOpenAccount = {
-                                    onOpenAccount(item.account.ledger.header.id)
-                                },
+                                onOpenAccount = { onOpenAccount(item.account.ledger.header.id) },
                             )
                         }
                     }
@@ -271,8 +300,12 @@ internal fun TodayScreen(
 
 @Composable
 private fun TodaySummaryCard(state: TodayUiState) {
-    val overdueCount = state.overdueItems.size + state.overduePromiseItems.size
-    val todayCount = state.dueTodayItems.size + state.dueTodayPromiseItems.size
+    val overdueCount = state.overdueItems.size +
+        state.overduePromiseItems.size +
+        state.overdueInstallmentItems.size
+    val todayCount = state.dueTodayItems.size +
+        state.dueTodayPromiseItems.size +
+        state.dueTodayInstallmentItems.size
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -294,7 +327,7 @@ private fun TodaySummaryCard(state: TodayUiState) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
                 Text(
-                    text = "ركّز على المتأخر أولًا، سواء كان استحقاقًا أو وعد سداد.",
+                    text = "ركّز على المتأخر أولًا، ثم استحقاقات وأقساط ووعود اليوم.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -321,9 +354,16 @@ private fun TodaySummaryCard(state: TodayUiState) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
+            if (state.installmentItems.isNotEmpty()) {
+                Text(
+                    text = "منها ${state.installmentItems.size} أقساط لم يكتمل سدادها.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
             if (state.promiseItems.isNotEmpty()) {
                 Text(
-                    text = "منها ${state.promiseItems.size} وعود سداد تحتاج متابعة.",
+                    text = "ومنها ${state.promiseItems.size} وعود سداد تحتاج متابعة.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -393,7 +433,7 @@ private fun TodayEmptyCard() {
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = "ستظهر هنا الحسابات المستحقة والمتأخرة ووعود السداد التي حان موعدها.",
+                text = "ستظهر هنا الاستحقاقات والأقساط ووعود السداد التي حان موعدها أو تأخرت.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -413,7 +453,10 @@ private fun TodaySectionHeading(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
@@ -472,33 +515,11 @@ private fun TodayAccountCard(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TodayPersonAvatar(account.person.displayName)
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                    Text(
-                        text = account.person.displayName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    account.ledger.header.description?.let { description ->
-                        Text(
-                            text = description,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                        )
-                    }
-                }
-                TodayDirectionPill(account.ledger.header.direction)
-            }
-
+            TodayAccountHeader(
+                personName = account.person.displayName,
+                direction = account.ledger.header.direction,
+                subtitle = account.ledger.header.description,
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -517,34 +538,16 @@ private fun TodayAccountCard(
                         textAlign = TextAlign.Start,
                     )
                 }
-                Surface(
-                    shape = RoundedCornerShape(999.dp),
-                    color = if (overdue) {
-                        MaterialTheme.colorScheme.errorContainer
-                    } else {
-                        MaterialTheme.colorScheme.tertiaryContainer
+                TodayStatusPill(
+                    text = when (item.dueState) {
+                        DueState.DUE_TODAY -> "مستحق اليوم"
+                        DueState.OVERDUE -> overdueLabel(item.daysOverdue)
+                        else -> error("Unsupported Today due state.")
                     },
-                ) {
-                    Text(
-                        text = when (item.dueState) {
-                            DueState.DUE_TODAY -> "مستحق اليوم"
-                            DueState.OVERDUE -> overdueLabel(item.daysOverdue)
-                            else -> error("Unsupported Today due state.")
-                        },
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = if (overdue) {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        } else {
-                            MaterialTheme.colorScheme.onTertiaryContainer
-                        },
-                    )
-                }
+                    overdue = overdue,
+                )
             }
-
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
             Text(
                 text = reminderStatusText(reminder?.status),
                 style = MaterialTheme.typography.bodyMedium,
@@ -581,11 +584,7 @@ private fun TodayAccountCard(
                             .testTag("today-enable-notifications-${account.ledger.header.id.value}"),
                     ) {
                         Text(
-                            if (notificationsAvailable) {
-                                "إعادة التفعيل"
-                            } else {
-                                "السماح بالإشعارات"
-                            },
+                            if (notificationsAvailable) "إعادة التفعيل" else "السماح بالإشعارات",
                         )
                     }
 
@@ -604,6 +603,88 @@ private fun TodayAccountCard(
                     ReminderStatus.CANCELLED,
                     null -> Unit
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TodayInstallmentCard(
+    item: TodayInstallmentItem,
+    onOpenAccount: () -> Unit,
+) {
+    val account = item.account
+    val installment = item.installment
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("today-installment-${installment.id}"),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            TodayAccountHeader(
+                personName = account.person.displayName,
+                direction = account.ledger.header.direction,
+                subtitle = "القسط ${installment.sequenceNumber} · الخطة ${installment.revisionNumber}",
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        text = if (installment.isPartiallyPaid) "المتبقي في القسط" else "قيمة القسط",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = formatMoney(installment.remainingAmount),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Start,
+                    )
+                }
+                TodayStatusPill(
+                    text = if (item.isOverdue) {
+                        overdueLabel(item.daysOverdue)
+                    } else {
+                        "قسط اليوم"
+                    },
+                    overdue = item.isOverdue,
+                )
+            }
+            if (installment.isPartiallyPaid) {
+                Text(
+                    text = "دُفع ${formatMoney(installment.paidAmount)} من ${formatMoney(installment.scheduledAmount)}.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                text = "الموعد: \u2066${installment.dueDate.format(todayDateFormatter)}\u2069",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text(
+                text = "تقدم القسط مشتق من دفعات الحساب المالية نفسها؛ لا يوجد رصيد أقساط منفصل.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(
+                onClick = onOpenAccount,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("today-open-installment-${installment.id}"),
+            ) {
+                Text(if (installment.isPartiallyPaid) "فتح الحساب وإكمال السداد" else "فتح الحساب وتسجيل دفعة")
             }
         }
     }
@@ -629,30 +710,11 @@ private fun TodayPromiseCard(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TodayPersonAvatar(account.person.displayName)
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                    Text(
-                        text = account.person.displayName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = "وعد بالسداد · \u2066${promise.promisedDate.format(todayDateFormatter)}\u2069",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TodayDirectionPill(account.ledger.header.direction)
-            }
-
+            TodayAccountHeader(
+                personName = account.person.displayName,
+                direction = account.ledger.header.direction,
+                subtitle = "وعد بالسداد · \u2066${promise.promisedDate.format(todayDateFormatter)}\u2069",
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -671,32 +733,15 @@ private fun TodayPromiseCard(
                         textAlign = TextAlign.Start,
                     )
                 }
-                Surface(
-                    shape = RoundedCornerShape(999.dp),
-                    color = if (item.isOverdue) {
-                        MaterialTheme.colorScheme.errorContainer
+                TodayStatusPill(
+                    text = if (item.isOverdue) {
+                        "الوعد ${overdueLabel(item.daysOverdue)}"
                     } else {
-                        MaterialTheme.colorScheme.tertiaryContainer
+                        "وعد اليوم"
                     },
-                ) {
-                    Text(
-                        text = if (item.isOverdue) {
-                            "الوعد ${overdueLabel(item.daysOverdue)}"
-                        } else {
-                            "وعد اليوم"
-                        },
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = if (item.isOverdue) {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        } else {
-                            MaterialTheme.colorScheme.onTertiaryContainer
-                        },
-                    )
-                }
+                    overdue = item.isOverdue,
+                )
             }
-
             promise.note?.let { note ->
                 Text(
                     text = note,
@@ -704,9 +749,7 @@ private fun TodayPromiseCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
             Text(
                 text = "هذا الوعد مستقل عن تاريخ استحقاق الدين. افتح الحساب لتسجيل الوفاء أو عدم التنفيذ أو الإلغاء.",
                 style = MaterialTheme.typography.bodySmall,
@@ -721,6 +764,64 @@ private fun TodayPromiseCard(
                 Text("فتح الحساب وحسم الوعد")
             }
         }
+    }
+}
+
+@Composable
+private fun TodayAccountHeader(
+    personName: String,
+    direction: DebtDirection,
+    subtitle: String?,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TodayPersonAvatar(personName)
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                text = personName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            subtitle?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                )
+            }
+        }
+        TodayDirectionPill(direction)
+    }
+}
+
+@Composable
+private fun TodayStatusPill(text: String, overdue: Boolean) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = if (overdue) {
+            MaterialTheme.colorScheme.errorContainer
+        } else {
+            MaterialTheme.colorScheme.tertiaryContainer
+        },
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = if (overdue) {
+                MaterialTheme.colorScheme.onErrorContainer
+            } else {
+                MaterialTheme.colorScheme.onTertiaryContainer
+            },
+        )
     }
 }
 
@@ -769,6 +870,7 @@ private fun TodayDirectionPill(direction: DebtDirection) {
 @Composable
 private fun TodayErrorCard(message: String, onRetry: () -> Unit) {
     Card(
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer,
         ),

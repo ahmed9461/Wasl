@@ -2,11 +2,14 @@ package com.wasl.app
 
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -110,20 +113,18 @@ class TodayUiInstrumentedTest {
         composeRule.onNodeWithTag("nav-today").performClick()
         waitForText("اليوم لديك 2 أمور")
 
+        scrollToText("متأخر 3 أيام")
         composeRule.onNodeWithText("متأخر 3 أيام").assertIsDisplayed()
-        composeRule.onNodeWithText("مستحق اليوم")
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeRule.onNodeWithText("شخص قادم").assertDoesNotExist()
+        scrollToText("التذكير متوقف حتى تسمح بإشعارات وَصل.")
         composeRule.onNodeWithText(
             "التذكير متوقف حتى تسمح بإشعارات وَصل.",
-        )
-            .performScrollTo()
-            .assertIsDisplayed()
+        ).assertIsDisplayed()
+        scrollToText("مستحق اليوم")
+        composeRule.onNodeWithText("مستحق اليوم").assertIsDisplayed()
+        composeRule.onNodeWithText("شخص قادم").assertDoesNotExist()
 
-        composeRule.onNodeWithTag("today-open-debt-today")
-            .performScrollTo()
-            .performClick()
+        scrollToTag("today-open-debt-today")
+        composeRule.onNodeWithTag("today-open-debt-today").performClick()
         waitForText("سجل العمليات")
         composeRule.onNodeWithText("شخص اليوم").assertIsDisplayed()
     }
@@ -154,12 +155,10 @@ class TodayUiInstrumentedTest {
             )
         }
 
-        composeRule.onNodeWithTag("today-enable-notifications-debt-blocked")
-            .performScrollTo()
-            .performClick()
-        composeRule.onNodeWithTag("today-retry-reminder-debt-failed")
-            .performScrollTo()
-            .performClick()
+        scrollToTag("today-enable-notifications-debt-blocked")
+        composeRule.onNodeWithTag("today-enable-notifications-debt-blocked").performClick()
+        scrollToTag("today-retry-reminder-debt-failed")
+        composeRule.onNodeWithTag("today-retry-reminder-debt-failed").performClick()
 
         composeRule.runOnIdle {
             assertEquals(1, permissionActions)
@@ -228,6 +227,14 @@ class TodayUiInstrumentedTest {
             dueState = DueState.DUE_TODAY,
             daysOverdue = 0,
         )
+    }
+
+    private fun scrollToText(text: String) {
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText(text))
+    }
+
+    private fun scrollToTag(tag: String) {
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(tag))
     }
 
     private fun waitForText(text: String) {

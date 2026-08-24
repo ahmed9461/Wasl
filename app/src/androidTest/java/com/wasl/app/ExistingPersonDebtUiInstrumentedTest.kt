@@ -2,10 +2,13 @@ package com.wasl.app
 
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -63,7 +66,9 @@ class ExistingPersonDebtUiInstrumentedTest {
                 repository.observeAccounts().first { it.size == 1 }.single()
             }
         }
-        waitForTag("account-${firstAccount.ledger.header.id.value}")
+        scrollToTag("account-${firstAccount.ledger.header.id.value}")
+        composeRule.onNodeWithTag("account-${firstAccount.ledger.header.id.value}")
+            .assertIsDisplayed()
 
         composeRule.onNodeWithText("إضافة حساب").performClick()
         composeRule.onNodeWithTag("create-person-mode-existing").performClick()
@@ -86,7 +91,11 @@ class ExistingPersonDebtUiInstrumentedTest {
 
         composeRule.onNodeWithTag("nav-search").performClick()
         composeRule.onNodeWithTag("search-input").performTextInput("أحمد")
-        accounts.forEach { waitForTag("search-result-${it.ledger.header.id.value}") }
+        accounts.forEach { account ->
+            val resultTag = "search-result-${account.ledger.header.id.value}"
+            scrollToTag(resultTag)
+            composeRule.onNodeWithTag(resultTag).assertIsDisplayed()
+        }
     }
 
     private fun createFirstDebt() {
@@ -95,6 +104,10 @@ class ExistingPersonDebtUiInstrumentedTest {
         composeRule.onNodeWithTag("create-debt-amount").performTextInput("100000")
         composeRule.onNodeWithTag("create-debt-save").performClick()
         waitForTagToDisappear("create-debt-save")
+    }
+
+    private fun scrollToTag(tag: String) {
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(tag))
     }
 
     private fun waitForTag(tag: String) {

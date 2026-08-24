@@ -114,6 +114,7 @@ class PaymentFlowUiInstrumentedTest {
             }
         } ?: error("Persisted payment was not found.")
 
+        waitForTagText("account-remaining", "80,000 YER")
         composeRule.onNodeWithTag("account-remaining")
             .assertTextContains("80,000 YER", substring = true)
         scrollToText("دفعة مسجلة")
@@ -147,7 +148,7 @@ class PaymentFlowUiInstrumentedTest {
             requestedDebtIdState.value = debtId
         }
 
-        waitForTag("account-remaining")
+        waitForTagText("account-remaining", "80,000 YER")
         composeRule.onNodeWithTag("account-remaining")
             .assertTextContains("80,000 YER", substring = true)
         scrollToText("دفعة مسجلة")
@@ -180,6 +181,15 @@ class PaymentFlowUiInstrumentedTest {
         composeRule.waitUntil(timeoutMillis = 10_000) {
             runCatching {
                 composeRule.onNodeWithTag(tag).fetchSemanticsNode()
+            }.isSuccess
+        }
+    }
+
+    private fun waitForTagText(tag: String, text: String) {
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            runCatching {
+                composeRule.onNodeWithTag(tag)
+                    .assertTextContains(text, substring = true)
             }.isSuccess
         }
     }

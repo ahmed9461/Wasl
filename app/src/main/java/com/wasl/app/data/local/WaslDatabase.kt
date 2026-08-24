@@ -8,6 +8,7 @@ import androidx.room.migration.Migration
 import com.wasl.app.data.local.dao.AuditEventDao
 import com.wasl.app.data.local.dao.DebtDao
 import com.wasl.app.data.local.dao.DocumentIdentityDao
+import com.wasl.app.data.local.dao.InstallmentPlanDao
 import com.wasl.app.data.local.dao.IssuedDocumentDao
 import com.wasl.app.data.local.dao.LedgerDao
 import com.wasl.app.data.local.dao.PaymentPromiseDao
@@ -16,6 +17,8 @@ import com.wasl.app.data.local.dao.ReminderDao
 import com.wasl.app.data.local.entity.AuditEventEntity
 import com.wasl.app.data.local.entity.DebtEntity
 import com.wasl.app.data.local.entity.DocumentIdentityEntity
+import com.wasl.app.data.local.entity.InstallmentEntity
+import com.wasl.app.data.local.entity.InstallmentPlanEntity
 import com.wasl.app.data.local.entity.IssuedDocumentEntity
 import com.wasl.app.data.local.entity.LedgerEntryEntity
 import com.wasl.app.data.local.entity.PaymentPromiseEntity
@@ -32,8 +35,10 @@ import com.wasl.app.data.local.entity.ReminderEntity
         DocumentIdentityEntity::class,
         IssuedDocumentEntity::class,
         PaymentPromiseEntity::class,
+        InstallmentPlanEntity::class,
+        InstallmentEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class WaslDatabase : RoomDatabase() {
@@ -52,6 +57,8 @@ abstract class WaslDatabase : RoomDatabase() {
     abstract fun issuedDocumentDao(): IssuedDocumentDao
 
     abstract fun paymentPromiseDao(): PaymentPromiseDao
+
+    abstract fun installmentPlanDao(): InstallmentPlanDao
 
     companion object {
         const val DATABASE_NAME = "wasl.db"
@@ -241,11 +248,73 @@ abstract class WaslDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `installment_plans` (
+                        `id` TEXT NOT NULL,
+                        `command_id` TEXT NOT NULL,
+                        `debt_id` TEXT NOT NULL,
+                        `revision_number` INTEGER NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        `supersedes_plan_id` TEXT,
+                        `superseded_at` INTEGER,
+                        `superseded_after_sequence` INTEGER,
+                        `reason` TEXT,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`debt_id`) REFERENCES `debts`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_installment_plans_command_id` ON `installment_plans` (`command_id`)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_installment_plans_debt_id_revision_number` ON `installment_plans` (`debt_id`, `revision_number`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_installment_plans_debt_id_status` ON `installment_plans` (`debt_id`, `status`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_installment_plans_supersedes_plan_id` ON `installment_plans` (`supersedes_plan_id`)",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `installments` (
+                        `id` TEXT NOT NULL,
+                        `plan_id` TEXT NOT NULL,
+                        `debt_id` TEXT NOT NULL,
+                        `sequence_number` INTEGER NOT NULL,
+                        `due_date_epoch_day` INTEGER NOT NULL,
+                        `amount_minor` INTEGER NOT NULL,
+                        `currency_code` TEXT NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`plan_id`) REFERENCES `installment_plans`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT,
+                        FOREIGN KEY(`debt_id`) REFERENCES `debts`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_installments_plan_id_sequence_number` ON `installments` (`plan_id`, `sequence_number`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_installments_plan_id_due_date_epoch_day` ON `installments` (`plan_id`, `due_date_epoch_day`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_installments_debt_id_due_date_epoch_day` ON `installments` (`debt_id`, `due_date_epoch_day`)",
+                )
+            }
+        }
+
         val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
             MIGRATION_3_4,
             MIGRATION_4_5,
+            MIGRATION_5_6,
         )
 
         fun create(context: Context): WaslDatabase =

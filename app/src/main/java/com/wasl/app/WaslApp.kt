@@ -401,6 +401,7 @@ private fun WaslHomeScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.safeDrawing,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
@@ -414,8 +415,10 @@ private fun WaslHomeScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onOpenCreate,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
             ) {
-                Text("إضافة حساب")
+                Text("إضافة حساب", fontWeight = FontWeight.Bold)
             }
         },
     ) { scaffoldPadding ->
@@ -425,19 +428,30 @@ private fun WaslHomeScreen(
                 .padding(scaffoldPadding),
             contentPadding = PaddingValues(
                 start = 20.dp,
-                top = 24.dp,
+                top = 22.dp,
                 end = 20.dp,
-                bottom = 104.dp,
+                bottom = 112.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            item {
-                Column {
+            item("home-header") {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(
+                        shape = MaterialTheme.shapes.extraLarge,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                    ) {
+                        Text(
+                            text = "دفترك المالي الشخصي",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
                     Text(
                         text = "وَصل",
                         style = MaterialTheme.typography.displaySmall,
                         fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onBackground,
                     )
                     Text(
                         text = "كل حساب له وصل",
@@ -448,7 +462,7 @@ private fun WaslHomeScreen(
             }
 
             if (state.isLoading) {
-                item {
+                item("home-loading") {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -459,37 +473,79 @@ private fun WaslHomeScreen(
                     }
                 }
             } else {
-                item {
+                item("home-overview-heading") {
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            text = "ملخصك المالي",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = "نظرة سريعة على الحقوق والالتزامات حسب العملة.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                item("home-receivable-summary") {
                     SummaryCard(
                         title = "لي عند الناس",
+                        subtitle = "حقوقك المفتوحة",
                         values = summaryRows(state.balanceSummary.receivableByCurrency),
+                        receivable = true,
                     )
                 }
-                item {
+                item("home-payable-summary") {
                     SummaryCard(
                         title = "عليّ للناس",
+                        subtitle = "التزاماتك المفتوحة",
                         values = summaryRows(state.balanceSummary.payableByCurrency),
+                        receivable = false,
                     )
                 }
 
                 state.loadError?.let { error ->
-                    item { StatusCard(message = error, isError = true) }
+                    item("home-error") { StatusCard(message = error, isError = true) }
                 }
 
                 if (state.accounts.isEmpty() && state.loadError == null) {
-                    item {
+                    item("home-empty") {
                         StatusCard(
                             message = "لا توجد حسابات بعد. أضف شخصًا ودينًا، وسيبقى محفوظًا بعد إغلاق التطبيق.",
                             isError = false,
                         )
                     }
                 } else {
-                    item {
-                        Text(
-                            text = "الحسابات",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                        )
+                    item("home-accounts-heading") {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = "الحسابات",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    text = "${state.accounts.size} حساب محفوظ",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Surface(
+                                shape = MaterialTheme.shapes.extraLarge,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            ) {
+                                Text(
+                                    text = state.accounts.size.toString(),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                        }
                     }
                     items(
                         items = state.accounts,
@@ -562,7 +618,17 @@ private fun CreateDebtDialog(
     var showDatePicker by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("دين جديد") },
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("دين جديد")
+                Text(
+                    text = "سجّل حقًا لك أو التزامًا عليك بدون تعقيد.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Normal,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -596,6 +662,7 @@ private fun CreateDebtDialog(
                         label = { Text("اسم الشخص") },
                         singleLine = true,
                         enabled = !isSaving,
+                        shape = MaterialTheme.shapes.medium,
                     )
                 } else {
                     form.selectedPerson?.let { selected ->
@@ -623,6 +690,7 @@ private fun CreateDebtDialog(
                         label = { Text("ابحث باسم الشخص") },
                         singleLine = true,
                         enabled = !isSaving,
+                        shape = MaterialTheme.shapes.medium,
                     )
                     when {
                         isPeopleLoading -> Box(
@@ -766,6 +834,7 @@ private fun CreateDebtDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                     enabled = !isSaving,
+                    shape = MaterialTheme.shapes.medium,
                 )
 
                 Text("العملة", fontWeight = FontWeight.SemiBold)
@@ -788,14 +857,21 @@ private fun CreateDebtDialog(
                     minLines = 2,
                     maxLines = 3,
                     enabled = !isSaving,
+                    shape = MaterialTheme.shapes.medium,
                 )
 
                 error?.let {
-                    Text(
-                        text = it,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.errorContainer,
+                    ) {
+                        Text(
+                            text = it,
+                            modifier = Modifier.padding(12.dp),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
             }
         },
@@ -866,56 +942,143 @@ private fun AccountCard(
     onClick: () -> Unit,
 ) {
     val header = account.ledger.header
+    val receivable = header.direction == DebtDirection.RECEIVABLE
     Card(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .testTag("account-${header.id.value}"),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = account.person.displayName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = when (header.direction) {
-                        DebtDirection.RECEIVABLE -> "لي عنده"
-                        DebtDirection.PAYABLE -> "عليّ له"
+                Surface(
+                    modifier = Modifier.size(46.dp),
+                    shape = MaterialTheme.shapes.large,
+                    color = if (receivable) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
                     },
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = account.person.displayName.trim().firstOrNull()?.toString() ?: "و",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (receivable) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            },
+                        )
+                    }
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(
+                        text = account.person.displayName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    header.description?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                        )
+                    }
+                }
+                Surface(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = if (receivable) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    },
+                ) {
+                    Text(
+                        text = if (receivable) "لي عنده" else "عليّ له",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (receivable) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        },
+                    )
+                }
             }
-            header.description?.let {
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        text = "المتبقي",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = formatMoney(account.ledger.balance),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Start,
+                    )
+                }
+                Surface(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = when (account.ledger.state) {
+                        DebtState.SETTLED -> MaterialTheme.colorScheme.primaryContainer
+                        DebtState.PARTIALLY_PAID -> MaterialTheme.colorScheme.tertiaryContainer
+                        DebtState.OPEN -> MaterialTheme.colorScheme.surfaceContainerHigh
+                    },
+                ) {
+                    Text(
+                        text = when (account.ledger.state) {
+                            DebtState.OPEN -> "مفتوح"
+                            DebtState.PARTIALLY_PAID -> "مسدد جزئيًا"
+                            DebtState.SETTLED -> "مسدد"
+                        },
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
                 Text(
-                    text = it,
+                    text = "الأصل",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Text(
+                    text = formatMoney(header.originalAmount),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
-            HorizontalDivider()
-            MoneyRow("الأصل", header.originalAmount)
-            MoneyRow("المتبقي", account.ledger.balance)
-            Text(
-                text = when (account.ledger.state) {
-                    DebtState.OPEN -> "مفتوح"
-                    DebtState.PARTIALLY_PAID -> "مسدد جزئيًا"
-                    DebtState.SETTLED -> "مسدد"
-                },
-                style = MaterialTheme.typography.labelMedium,
-            )
         }
     }
 }
@@ -936,31 +1099,82 @@ private fun MoneyRow(label: String, money: Money) {
 }
 
 @Composable
-private fun SummaryCard(title: String, values: List<String>) {
+private fun SummaryCard(
+    title: String,
+    subtitle: String,
+    values: List<String>,
+    receivable: Boolean,
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            containerColor = if (receivable) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.secondaryContainer
+            },
         ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(12.dp))
-            values.forEachIndexed { index, value ->
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
-                    text = value,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Start,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (receivable) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    },
                 )
-                if (index != values.lastIndex) Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (receivable) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    },
+                )
+            }
+            HorizontalDivider(
+                color = if (receivable) {
+                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.18f)
+                } else {
+                    MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.18f)
+                },
+            )
+            values.forEachIndexed { index, value ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = supportedCurrencies[index].value,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (receivable) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        },
+                    )
+                    Text(
+                        text = value,
+                        textAlign = TextAlign.End,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (receivable) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        },
+                    )
+                }
             }
         }
     }
@@ -969,20 +1183,40 @@ private fun SummaryCard(title: String, values: List<String>) {
 @Composable
 private fun StatusCard(message: String, isError: Boolean) {
     Card(
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = if (isError) {
                 MaterialTheme.colorScheme.errorContainer
             } else {
-                MaterialTheme.colorScheme.secondaryContainer
+                MaterialTheme.colorScheme.surfaceContainerLow
             },
         ),
     ) {
-        Text(
-            text = message,
+        Column(
             modifier = Modifier.padding(18.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            lineHeight = 22.sp,
-        )
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Text(
+                text = if (isError) "تعذر تحميل البيانات" else "ابدأ أول حساب",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (isError) {
+                    MaterialTheme.colorScheme.onErrorContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                lineHeight = 22.sp,
+                color = if (isError) {
+                    MaterialTheme.colorScheme.onErrorContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
     }
 }
 

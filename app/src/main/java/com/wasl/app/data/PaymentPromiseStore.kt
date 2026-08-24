@@ -1,11 +1,14 @@
 package com.wasl.app.data
 
 import com.wasl.domain.DebtId
+import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
 interface PaymentPromiseStore {
     fun observePaymentPromises(debtId: DebtId): Flow<List<PaymentPromiseRecord>>
+
+    fun observePendingPaymentPromises(onOrBefore: LocalDate): Flow<List<PaymentPromiseRecord>>
 
     suspend fun createPaymentPromise(command: CreatePaymentPromiseCommand): PaymentPromiseRecord
 
@@ -15,6 +18,10 @@ interface PaymentPromiseStore {
 object UnavailablePaymentPromiseStore : PaymentPromiseStore {
     override fun observePaymentPromises(debtId: DebtId): Flow<List<PaymentPromiseRecord>> =
         flowOf(emptyList())
+
+    override fun observePendingPaymentPromises(
+        onOrBefore: LocalDate,
+    ): Flow<List<PaymentPromiseRecord>> = flowOf(emptyList())
 
     override suspend fun createPaymentPromise(
         command: CreatePaymentPromiseCommand,

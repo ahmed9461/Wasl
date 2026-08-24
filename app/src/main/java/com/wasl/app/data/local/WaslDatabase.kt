@@ -233,6 +233,9 @@ abstract class WaslDatabase : RoomDatabase() {
                     "CREATE INDEX IF NOT EXISTS `index_payment_promises_debt_id_status` ON `payment_promises` (`debt_id`, `status`)",
                 )
                 db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_payment_promises_status_promised_date_epoch_day` ON `payment_promises` (`status`, `promised_date_epoch_day`)",
+                )
+                db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_issued_documents_ledger_entry_id` ON `issued_documents` (`ledger_entry_id`)",
                 )
             }

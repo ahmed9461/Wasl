@@ -5,11 +5,21 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.wasl.app.data.local.entity.PaymentPromiseEntity
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PaymentPromiseDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(entity: PaymentPromiseEntity)
+
+    @Query(
+        """
+        SELECT * FROM payment_promises
+        WHERE debt_id = :debtId
+        ORDER BY promised_date_epoch_day ASC, created_at ASC, id ASC
+        """,
+    )
+    fun observeForDebt(debtId: String): Flow<List<PaymentPromiseEntity>>
 
     @Query("SELECT * FROM payment_promises WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): PaymentPromiseEntity?

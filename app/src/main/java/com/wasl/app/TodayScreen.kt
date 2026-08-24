@@ -10,8 +10,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -22,6 +25,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -85,6 +89,7 @@ internal fun TodayScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.safeDrawing,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
@@ -102,23 +107,34 @@ internal fun TodayScreen(
                 .padding(scaffoldPadding),
             contentPadding = PaddingValues(
                 start = 20.dp,
-                top = 24.dp,
+                top = 22.dp,
                 end = 20.dp,
-                bottom = 24.dp,
+                bottom = 30.dp,
             ),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item("today-heading") {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                    ) {
+                        Text(
+                            text = "متابعة الاستحقاقات",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        )
+                    }
                     Text(
                         text = "اليوم",
                         style = MaterialTheme.typography.displaySmall,
                         fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onBackground,
                     )
                     Text(
                         text = "حسب تاريخ الجهاز: \u2066${state.today.format(todayDateFormatter)}\u2069",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -148,26 +164,7 @@ internal fun TodayScreen(
                 }
 
                 state.items.isEmpty() -> item("today-empty") {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        ),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(18.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Text(
-                                text = "لا توجد مستحقات تحتاج انتباهك اليوم.",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                text = "ستظهر هنا الحسابات المستحقة اليوم والمتأخرة فقط.",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-                    }
+                    TodayEmptyCard()
                 }
 
                 else -> {
@@ -175,7 +172,9 @@ internal fun TodayScreen(
                         item("overdue-heading") {
                             TodaySectionHeading(
                                 title = "متأخرة",
+                                subtitle = "تحتاج متابعة أولًا",
                                 count = state.overdueItems.size,
+                                overdue = true,
                             )
                         }
                         items(
@@ -199,7 +198,9 @@ internal fun TodayScreen(
                         item("due-today-heading") {
                             TodaySectionHeading(
                                 title = "مستحقة اليوم",
+                                subtitle = "موعدها اليوم",
                                 count = state.dueTodayItems.size,
+                                overdue = false,
                             )
                         }
                         items(
@@ -233,41 +234,163 @@ private fun TodaySummaryCard(state: TodayUiState) {
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer,
         ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(
-                text = "اليوم لديك ${state.items.size} أمور",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "اليوم لديك ${state.items.size} أمور",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Text(
+                    text = "ركّز على المتأخر أولًا ثم الحسابات المستحقة اليوم.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                TodayMetric(
+                    modifier = Modifier.weight(1f),
+                    value = state.overdueItems.size,
+                    label = "متأخرة",
+                    emphasized = state.overdueItems.isNotEmpty(),
+                )
+                TodayMetric(
+                    modifier = Modifier.weight(1f),
+                    value = state.dueTodayItems.size,
+                    label = "مستحقة اليوم",
+                    emphasized = false,
+                )
+            }
             Text(
                 text = "${state.overdueItems.size} متأخرة · ${state.dueTodayItems.size} مستحقة اليوم",
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
         }
     }
 }
 
 @Composable
-private fun TodaySectionHeading(title: String, count: Int) {
+private fun TodayMetric(
+    modifier: Modifier,
+    value: Int,
+    label: String,
+    emphasized: Boolean,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        color = if (emphasized) {
+            MaterialTheme.colorScheme.errorContainer
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+        },
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = value.toString(),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.ExtraBold,
+                color = if (emphasized) {
+                    MaterialTheme.colorScheme.onErrorContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (emphasized) {
+                    MaterialTheme.colorScheme.onErrorContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun TodayEmptyCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Text(
+                text = "لا توجد مستحقات تحتاج انتباهك اليوم.",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "ستظهر هنا الحسابات المستحقة اليوم والمتأخرة فقط.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TodaySectionHeading(
+    title: String,
+    subtitle: String,
+    count: Int,
+    overdue: Boolean,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = count.toString(),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Surface(
+            shape = CircleShape,
+            color = if (overdue) {
+                MaterialTheme.colorScheme.errorContainer
+            } else {
+                MaterialTheme.colorScheme.primaryContainer
+            },
+        ) {
+            Text(
+                text = count.toString(),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                style = MaterialTheme.typography.labelLarge,
+                color = if (overdue) {
+                    MaterialTheme.colorScheme.onErrorContainer
+                } else {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                },
+            )
+        }
     }
 }
 
@@ -282,66 +405,93 @@ private fun TodayAccountCard(
 ) {
     val account = item.account
     val reminder = account.dueReminder
+    val overdue = item.dueState == DueState.OVERDUE
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("today-account-${account.ledger.header.id.value}"),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = account.person.displayName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                TodayPersonAvatar(account.person.displayName)
+                Column(
                     modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = when (account.ledger.header.direction) {
-                        DebtDirection.RECEIVABLE -> "لي عنده"
-                        DebtDirection.PAYABLE -> "عليّ له"
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(
+                        text = account.person.displayName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    account.ledger.header.description?.let { description ->
+                        Text(
+                            text = description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                        )
+                    }
+                }
+                TodayDirectionPill(account.ledger.header.direction)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        text = "المتبقي",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = formatMoney(account.ledger.balance),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Start,
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = if (overdue) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.tertiaryContainer
                     },
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                ) {
+                    Text(
+                        text = when (item.dueState) {
+                            DueState.DUE_TODAY -> "مستحق اليوم"
+                            DueState.OVERDUE -> overdueLabel(item.daysOverdue)
+                            else -> error("Unsupported Today due state.")
+                        },
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (overdue) {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        } else {
+                            MaterialTheme.colorScheme.onTertiaryContainer
+                        },
+                    )
+                }
             }
-            Text(
-                text = formatMoney(account.ledger.balance),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Start,
-            )
-            Text(
-                text = when (item.dueState) {
-                    DueState.DUE_TODAY -> "مستحق اليوم"
-                    DueState.OVERDUE -> overdueLabel(item.daysOverdue)
-                    else -> error("Unsupported Today due state.")
-                },
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = if (item.dueState == DueState.OVERDUE) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-            )
-            account.ledger.header.description?.let { description ->
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            HorizontalDivider()
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
             Text(
                 text = reminderStatusText(reminder?.status),
                 style = MaterialTheme.typography.bodyMedium,
@@ -407,6 +557,48 @@ private fun TodayAccountCard(
 }
 
 @Composable
+private fun TodayPersonAvatar(name: String) {
+    Surface(
+        modifier = Modifier.size(46.dp),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.primaryContainer,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = name.trim().firstOrNull()?.toString() ?: "و",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TodayDirectionPill(direction: DebtDirection) {
+    val receivable = direction == DebtDirection.RECEIVABLE
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = if (receivable) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer
+        },
+    ) {
+        Text(
+            text = if (receivable) "لي عنده" else "عليّ له",
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = if (receivable) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSecondaryContainer
+            },
+        )
+    }
+}
+
+@Composable
 private fun TodayErrorCard(message: String, onRetry: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(
@@ -417,7 +609,10 @@ private fun TodayErrorCard(message: String, onRetry: () -> Unit) {
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(message)
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
             OutlinedButton(
                 onClick = onRetry,
                 modifier = Modifier.testTag("today-retry-load"),

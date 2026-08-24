@@ -6,11 +6,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -90,8 +93,8 @@ class PaymentFlowUiInstrumentedTest {
         }
 
         waitForTagToDisappear("create-debt-save")
-        waitForTag("account-$debtId")
-        composeRule.runOnIdle { requestedDebtIdState.value = debtId }
+        scrollToTag("account-$debtId")
+        composeRule.onNodeWithTag("account-$debtId").performClick()
         waitForTag("record-payment")
         composeRule.onNodeWithTag("record-payment").performClick()
         composeRule.onNodeWithTag("payment-amount").performTextInput("20000")
@@ -112,15 +115,12 @@ class PaymentFlowUiInstrumentedTest {
         } ?: error("Persisted payment was not found.")
 
         composeRule.onNodeWithTag("account-remaining")
-            .performScrollTo()
             .assertTextContains("80,000 YER", substring = true)
-        composeRule.onNodeWithText("دفعة مسجلة")
-            .performScrollTo()
-            .assertIsDisplayed()
+        scrollToText("دفعة مسجلة")
+        composeRule.onNodeWithText("دفعة مسجلة").assertIsDisplayed()
 
-        composeRule.onNodeWithTag("issue-receipt-$paymentId")
-            .performScrollTo()
-            .performClick()
+        scrollToTag("issue-receipt-$paymentId")
+        composeRule.onNodeWithTag("issue-receipt-$paymentId").performClick()
         waitForTag("receipt-issuer-name")
         composeRule.onNodeWithTag("receipt-issuer-name").performTextInput("متجر أحمد")
         composeRule.onNodeWithTag("receipt-confirm").performClick()
@@ -132,10 +132,10 @@ class PaymentFlowUiInstrumentedTest {
                     ?.single()
             }
         } ?: error("Ready payment receipt was not found.")
-        waitForText(document.documentNumber)
-        composeRule.onNodeWithTag("open-receipt-${document.id}")
-            .performScrollTo()
-            .assertIsDisplayed()
+        scrollToText(document.documentNumber)
+        composeRule.onNodeWithText(document.documentNumber).assertIsDisplayed()
+        scrollToTag("open-receipt-${document.id}")
+        composeRule.onNodeWithTag("open-receipt-${document.id}").assertIsDisplayed()
 
         composeRule.runOnIdle {
             database!!.close()
@@ -149,17 +149,13 @@ class PaymentFlowUiInstrumentedTest {
 
         waitForTag("account-remaining")
         composeRule.onNodeWithTag("account-remaining")
-            .performScrollTo()
             .assertTextContains("80,000 YER", substring = true)
-        composeRule.onNodeWithText("دفعة مسجلة")
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeRule.onNodeWithTag("open-receipt-${document.id}")
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeRule.onNodeWithText(document.documentNumber)
-            .performScrollTo()
-            .assertIsDisplayed()
+        scrollToText("دفعة مسجلة")
+        composeRule.onNodeWithText("دفعة مسجلة").assertIsDisplayed()
+        scrollToTag("open-receipt-${document.id}")
+        composeRule.onNodeWithTag("open-receipt-${document.id}").assertIsDisplayed()
+        scrollToText(document.documentNumber)
+        composeRule.onNodeWithText(document.documentNumber).assertIsDisplayed()
     }
 
     private fun openDatabase() {
@@ -172,12 +168,12 @@ class PaymentFlowUiInstrumentedTest {
             .build()
     }
 
-    private fun waitForText(text: String) {
-        composeRule.waitUntil(timeoutMillis = 10_000) {
-            runCatching {
-                composeRule.onNodeWithText(text).fetchSemanticsNode()
-            }.isSuccess
-        }
+    private fun scrollToTag(tag: String) {
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(tag))
+    }
+
+    private fun scrollToText(text: String) {
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText(text))
     }
 
     private fun waitForTag(tag: String) {

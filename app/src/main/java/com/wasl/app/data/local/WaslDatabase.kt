@@ -5,20 +5,22 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
-import com.wasl.app.data.local.dao.DebtDao
 import com.wasl.app.data.local.dao.AuditEventDao
-import com.wasl.app.data.local.dao.LedgerDao
-import com.wasl.app.data.local.dao.PersonDao
-import com.wasl.app.data.local.dao.ReminderDao
+import com.wasl.app.data.local.dao.DebtDao
 import com.wasl.app.data.local.dao.DocumentIdentityDao
 import com.wasl.app.data.local.dao.IssuedDocumentDao
-import com.wasl.app.data.local.entity.DebtEntity
+import com.wasl.app.data.local.dao.LedgerDao
+import com.wasl.app.data.local.dao.PaymentPromiseDao
+import com.wasl.app.data.local.dao.PersonDao
+import com.wasl.app.data.local.dao.ReminderDao
 import com.wasl.app.data.local.entity.AuditEventEntity
-import com.wasl.app.data.local.entity.LedgerEntryEntity
-import com.wasl.app.data.local.entity.PersonEntity
-import com.wasl.app.data.local.entity.ReminderEntity
+import com.wasl.app.data.local.entity.DebtEntity
 import com.wasl.app.data.local.entity.DocumentIdentityEntity
 import com.wasl.app.data.local.entity.IssuedDocumentEntity
+import com.wasl.app.data.local.entity.LedgerEntryEntity
+import com.wasl.app.data.local.entity.PaymentPromiseEntity
+import com.wasl.app.data.local.entity.PersonEntity
+import com.wasl.app.data.local.entity.ReminderEntity
 
 @Database(
     entities = [
@@ -29,8 +31,9 @@ import com.wasl.app.data.local.entity.IssuedDocumentEntity
         AuditEventEntity::class,
         DocumentIdentityEntity::class,
         IssuedDocumentEntity::class,
+        PaymentPromiseEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class WaslDatabase : RoomDatabase() {
@@ -47,6 +50,8 @@ abstract class WaslDatabase : RoomDatabase() {
     abstract fun documentIdentityDao(): DocumentIdentityDao
 
     abstract fun issuedDocumentDao(): IssuedDocumentDao
+
+    abstract fun paymentPromiseDao(): PaymentPromiseDao
 
     companion object {
         const val DATABASE_NAME = "wasl.db"
@@ -194,10 +199,50 @@ abstract class WaslDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `payment_promises` (
+                        `id` TEXT NOT NULL,
+                        `create_command_id` TEXT NOT NULL,
+                        `debt_id` TEXT NOT NULL,
+                        `promised_date_epoch_day` INTEGER NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `note` TEXT,
+                        `created_at` INTEGER NOT NULL,
+                        `resolution_command_id` TEXT,
+                        `resolved_at` INTEGER,
+                        `resolution_note` TEXT,
+                        `updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`debt_id`) REFERENCES `debts`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_payment_promises_create_command_id` ON `payment_promises` (`create_command_id`)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_payment_promises_resolution_command_id` ON `payment_promises` (`resolution_command_id`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_payment_promises_debt_id_promised_date_epoch_day` ON `payment_promises` (`debt_id`, `promised_date_epoch_day`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_payment_promises_debt_id_status` ON `payment_promises` (`debt_id`, `status`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_ledger_entry_id` ON `issued_documents` (`ledger_entry_id`)",
+                )
+            }
+        }
+
         val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
             MIGRATION_3_4,
+            MIGRATION_4_5,
         )
 
         fun create(context: Context): WaslDatabase =

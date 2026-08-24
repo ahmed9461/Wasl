@@ -5,15 +5,21 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.wasl.app.data.AccountOverview
 import com.wasl.app.data.CommandConflictException
+import com.wasl.app.data.CreatePaymentPromiseCommand
 import com.wasl.app.data.DueReminderRequest
+import com.wasl.app.data.IssuedDocumentRecord
+import com.wasl.app.data.PaymentPromiseRecord
+import com.wasl.app.data.PaymentPromiseStatus
+import com.wasl.app.data.PaymentPromiseStore
+import com.wasl.app.data.PreparePaymentReceiptCommand
 import com.wasl.app.data.RecordNotFoundException
 import com.wasl.app.data.RecordPaymentCommand
-import com.wasl.app.data.ReversePaymentCommand
 import com.wasl.app.data.ReminderStatus
+import com.wasl.app.data.ResolvePaymentPromiseCommand
+import com.wasl.app.data.ReversePaymentCommand
+import com.wasl.app.data.UnavailablePaymentPromiseStore
 import com.wasl.app.data.UpdateDueScheduleCommand
 import com.wasl.app.data.WaslRepository
-import com.wasl.app.data.IssuedDocumentRecord
-import com.wasl.app.data.PreparePaymentReceiptCommand
 import com.wasl.app.document.PaymentReceiptService
 import com.wasl.app.document.UnavailablePaymentReceiptService
 import com.wasl.app.reminder.NoOpReminderScheduler
@@ -61,6 +67,17 @@ data class ReceiptIdentityForm(
     val footerText: String = "",
 )
 
+data class PaymentPromiseForm(
+    val promisedDate: LocalDate? = null,
+    val note: String = "",
+)
+
+data class PaymentPromiseResolutionForm(
+    val promiseId: String,
+    val status: PaymentPromiseStatus,
+    val note: String = "",
+)
+
 sealed interface AccountOperationNotice {
     data class PaymentRecordedNotice(
         val personName: String,
@@ -81,6 +98,17 @@ sealed interface AccountOperationNotice {
 
     data class PaymentReceiptIssuedNotice(
         val documentNumber: String,
+    ) : AccountOperationNotice
+
+    data class PaymentPromiseCreatedNotice(
+        val personName: String,
+        val promisedDate: LocalDate,
+    ) : AccountOperationNotice
+
+    data class PaymentPromiseResolvedNotice(
+        val personName: String,
+        val promisedDate: LocalDate,
+        val status: PaymentPromiseStatus,
     ) : AccountOperationNotice
 }
 
@@ -109,6 +137,15 @@ data class AccountDetailsUiState(
     val retryingReceiptId: String? = null,
     val receiptRecoveryErrorDocumentId: String? = null,
     val receiptReadyToOpen: IssuedDocumentRecord? = null,
+    val paymentPromises: List<PaymentPromiseRecord> = emptyList(),
+    val paymentPromiseLoadError: String? = null,
+    val isPaymentPromiseDialogOpen: Boolean = false,
+    val paymentPromiseForm: PaymentPromiseForm = PaymentPromiseForm(),
+    val isCreatingPaymentPromise: Boolean = false,
+    val paymentPromiseError: String? = null,
+    val paymentPromiseResolutionForm: PaymentPromiseResolutionForm? = null,
+    val isResolvingPaymentPromise: Boolean = false,
+    val paymentPromiseResolutionError: String? = null,
     val notice: AccountOperationNotice? = null,
 )
 
@@ -119,24 +156,30 @@ class AccountDetailsViewModel(
     private val zoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
     private val reminderScheduler: ReminderScheduler = NoOpReminderScheduler,
     private val paymentReceiptService: PaymentReceiptService = UnavailablePaymentReceiptService,
+    private val paymentPromiseStore: PaymentPromiseStore = UnavailablePaymentPromiseStore,
     private val idFactory: () -> String = { UUID.randomUUID().toString() },
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AccountDetailsUiState())
     val uiState: StateFlow<AccountDetailsUiState> = _uiState.asStateFlow()
 
     private var observationJob: Job? = null
+    private var promiseObservationJob: Job? = null
     private var pendingPaymentCommand: RecordPaymentCommand? = null
     private var pendingReversalCommand: ReversePaymentCommand? = null
     private var pendingReversalAmount: Money? = null
     private var pendingDueScheduleCommand: UpdateDueScheduleCommand? = null
     private var pendingReceiptCommand: PreparePaymentReceiptCommand? = null
+    private var pendingPromiseCommand: CreatePaymentPromiseCommand? = null
+    private var pendingPromiseResolutionCommand: ResolvePaymentPromiseCommand? = null
 
     init {
         observeAccount()
+        observePaymentPromises()
     }
 
     fun retryLoad() {
         observeAccount()
+        observePaymentPromises()
     }
 
     fun openPaymentDialog() {
@@ -315,7 +358,6 @@ class AccountDetailsViewModel(
                     )
                 }
             } catch (_: Exception) {
-                // The commit result can be unknown. Keep the exact command for an idempotent retry.
                 _uiState.update {
                     it.copy(
                         isRecordingPayment = false,
@@ -448,7 +490,6 @@ class AccountDetailsViewModel(
                     )
                 }
             } catch (_: Exception) {
-                // Preserve the exact command: retrying it cannot append a second reversal.
                 _uiState.update {
                     it.copy(
                         isReversingPayment = false,
@@ -624,7 +665,6 @@ class AccountDetailsViewModel(
                     )
                 }
             } catch (_: Exception) {
-                // The snapshot may already exist. Reuse the exact command to recover the PDF safely.
                 _uiState.update {
                     it.copy(
                         isIssuingReceipt = false,
@@ -870,11 +910,271 @@ class AccountDetailsViewModel(
                     )
                 }
             } catch (_: Exception) {
-                // The commit result can be unknown. Keep the exact command for an idempotent retry.
                 _uiState.update {
                     it.copy(
                         isUpdatingDueSchedule = false,
                         dueScheduleError = "تعذر تأكيد نتيجة التعديل. أعد المحاولة بنفس البيانات للتحقق بأمان.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun openPaymentPromiseDialog() {
+        val account = _uiState.value.account ?: return
+        if (account.ledger.balance.isZero) return
+        pendingPromiseCommand = null
+        _uiState.update {
+            it.copy(
+                isPaymentPromiseDialogOpen = true,
+                paymentPromiseForm = PaymentPromiseForm(),
+                paymentPromiseError = null,
+                notice = null,
+            )
+        }
+    }
+
+    fun dismissPaymentPromiseDialog() {
+        if (_uiState.value.isCreatingPaymentPromise) return
+        pendingPromiseCommand = null
+        _uiState.update {
+            it.copy(
+                isPaymentPromiseDialogOpen = false,
+                paymentPromiseForm = PaymentPromiseForm(),
+                paymentPromiseError = null,
+            )
+        }
+    }
+
+    fun updatePaymentPromiseDate(value: LocalDate?) {
+        pendingPromiseCommand = null
+        _uiState.update {
+            it.copy(
+                paymentPromiseForm = it.paymentPromiseForm.copy(promisedDate = value),
+                paymentPromiseError = null,
+            )
+        }
+    }
+
+    fun updatePaymentPromiseNote(value: String) {
+        pendingPromiseCommand = null
+        _uiState.update {
+            it.copy(
+                paymentPromiseForm = it.paymentPromiseForm.copy(note = value),
+                paymentPromiseError = null,
+            )
+        }
+    }
+
+    fun confirmPaymentPromise() {
+        val state = _uiState.value
+        if (state.isCreatingPaymentPromise) return
+        val account = state.account ?: return
+        if (account.ledger.balance.isZero) {
+            _uiState.update { it.copy(paymentPromiseError = "الحساب مسدد ولا يقبل وعدًا جديدًا.") }
+            return
+        }
+        val promisedDate = state.paymentPromiseForm.promisedDate ?: run {
+            _uiState.update { it.copy(paymentPromiseError = "اختر تاريخ الوعد بالسداد.") }
+            return
+        }
+        val command = pendingPromiseCommand ?: run {
+            val createdAt = operationTimestamp(account) ?: run {
+                _uiState.update {
+                    it.copy(
+                        paymentPromiseError = "وقت الجهاز أقدم من آخر عملية. صحح الوقت ثم أعد المحاولة.",
+                    )
+                }
+                return
+            }
+            CreatePaymentPromiseCommand(
+                commandId = idFactory(),
+                promiseId = idFactory(),
+                debtId = debtId,
+                promisedDate = promisedDate,
+                note = state.paymentPromiseForm.note.trim().ifEmpty { null },
+                createdAt = createdAt,
+            ).also { pendingPromiseCommand = it }
+        }
+
+        _uiState.update { it.copy(isCreatingPaymentPromise = true, paymentPromiseError = null) }
+        viewModelScope.launch {
+            try {
+                paymentPromiseStore.createPaymentPromise(command)
+                pendingPromiseCommand = null
+                _uiState.update {
+                    it.copy(
+                        isPaymentPromiseDialogOpen = false,
+                        paymentPromiseForm = PaymentPromiseForm(),
+                        isCreatingPaymentPromise = false,
+                        paymentPromiseError = null,
+                        notice = AccountOperationNotice.PaymentPromiseCreatedNotice(
+                            personName = account.person.displayName,
+                            promisedDate = command.promisedDate,
+                        ),
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: IllegalArgumentException) {
+                pendingPromiseCommand = null
+                _uiState.update {
+                    it.copy(
+                        isCreatingPaymentPromise = false,
+                        paymentPromiseError = "لم يعد هذا الوعد صالحًا للحساب الحالي.",
+                    )
+                }
+            } catch (_: RecordNotFoundException) {
+                pendingPromiseCommand = null
+                _uiState.update {
+                    it.copy(
+                        isCreatingPaymentPromise = false,
+                        paymentPromiseError = "تعذر العثور على الحساب.",
+                    )
+                }
+            } catch (_: CommandConflictException) {
+                pendingPromiseCommand = null
+                _uiState.update {
+                    it.copy(
+                        isCreatingPaymentPromise = false,
+                        paymentPromiseError = "تعذر تأكيد الوعد بأمان. راجع البيانات وأعد المحاولة.",
+                    )
+                }
+            } catch (_: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isCreatingPaymentPromise = false,
+                        paymentPromiseError = "تعذر تأكيد نتيجة حفظ الوعد. أعد المحاولة بنفس البيانات للتحقق بأمان.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun openPaymentPromiseResolution(promiseId: String, status: PaymentPromiseStatus) {
+        if (status == PaymentPromiseStatus.PENDING) return
+        val promise = _uiState.value.paymentPromises.firstOrNull { it.id == promiseId } ?: return
+        if (promise.status != PaymentPromiseStatus.PENDING) return
+        pendingPromiseResolutionCommand = null
+        _uiState.update {
+            it.copy(
+                paymentPromiseResolutionForm = PaymentPromiseResolutionForm(
+                    promiseId = promiseId,
+                    status = status,
+                ),
+                paymentPromiseResolutionError = null,
+                notice = null,
+            )
+        }
+    }
+
+    fun dismissPaymentPromiseResolution() {
+        if (_uiState.value.isResolvingPaymentPromise) return
+        pendingPromiseResolutionCommand = null
+        _uiState.update {
+            it.copy(
+                paymentPromiseResolutionForm = null,
+                paymentPromiseResolutionError = null,
+            )
+        }
+    }
+
+    fun updatePaymentPromiseResolutionNote(value: String) {
+        pendingPromiseResolutionCommand = null
+        _uiState.update {
+            it.copy(
+                paymentPromiseResolutionForm = it.paymentPromiseResolutionForm?.copy(note = value),
+                paymentPromiseResolutionError = null,
+            )
+        }
+    }
+
+    fun confirmPaymentPromiseResolution() {
+        val state = _uiState.value
+        if (state.isResolvingPaymentPromise) return
+        val account = state.account ?: return
+        val form = state.paymentPromiseResolutionForm ?: return
+        val promise = state.paymentPromises.firstOrNull { it.id == form.promiseId } ?: run {
+            _uiState.update {
+                it.copy(paymentPromiseResolutionError = "لم يعد الوعد موجودًا في السجل.")
+            }
+            return
+        }
+        if (promise.status != PaymentPromiseStatus.PENDING) {
+            _uiState.update {
+                it.copy(paymentPromiseResolutionError = "تم حسم هذا الوعد مسبقًا.")
+            }
+            return
+        }
+        val command = pendingPromiseResolutionCommand ?: run {
+            val resolvedAt = operationTimestamp(account) ?: run {
+                _uiState.update {
+                    it.copy(
+                        paymentPromiseResolutionError = "وقت الجهاز أقدم من آخر عملية. صحح الوقت ثم أعد المحاولة.",
+                    )
+                }
+                return
+            }
+            ResolvePaymentPromiseCommand(
+                commandId = idFactory(),
+                promiseId = promise.id,
+                debtId = debtId,
+                status = form.status,
+                resolvedAt = resolvedAt,
+                note = form.note.trim().ifEmpty { null },
+            ).also { pendingPromiseResolutionCommand = it }
+        }
+
+        _uiState.update {
+            it.copy(isResolvingPaymentPromise = true, paymentPromiseResolutionError = null)
+        }
+        viewModelScope.launch {
+            try {
+                paymentPromiseStore.resolvePaymentPromise(command)
+                pendingPromiseResolutionCommand = null
+                _uiState.update {
+                    it.copy(
+                        paymentPromiseResolutionForm = null,
+                        isResolvingPaymentPromise = false,
+                        paymentPromiseResolutionError = null,
+                        notice = AccountOperationNotice.PaymentPromiseResolvedNotice(
+                            personName = account.person.displayName,
+                            promisedDate = promise.promisedDate,
+                            status = command.status,
+                        ),
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: IllegalArgumentException) {
+                pendingPromiseResolutionCommand = null
+                _uiState.update {
+                    it.copy(
+                        isResolvingPaymentPromise = false,
+                        paymentPromiseResolutionError = "لم يعد هذا الوعد قابلًا للحسم.",
+                    )
+                }
+            } catch (_: RecordNotFoundException) {
+                pendingPromiseResolutionCommand = null
+                _uiState.update {
+                    it.copy(
+                        isResolvingPaymentPromise = false,
+                        paymentPromiseResolutionError = "تعذر العثور على الوعد.",
+                    )
+                }
+            } catch (_: CommandConflictException) {
+                pendingPromiseResolutionCommand = null
+                _uiState.update {
+                    it.copy(
+                        isResolvingPaymentPromise = false,
+                        paymentPromiseResolutionError = "تعذر تأكيد حسم الوعد بأمان. راجع السجل وأعد المحاولة.",
+                    )
+                }
+            } catch (_: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isResolvingPaymentPromise = false,
+                        paymentPromiseResolutionError = "تعذر تأكيد نتيجة الحسم. أعد المحاولة بنفس القرار للتحقق بأمان.",
                     )
                 }
             }
@@ -911,6 +1211,28 @@ class AccountDetailsViewModel(
         }
     }
 
+    private fun observePaymentPromises() {
+        promiseObservationJob?.cancel()
+        _uiState.update { it.copy(paymentPromiseLoadError = null) }
+        promiseObservationJob = viewModelScope.launch {
+            paymentPromiseStore.observePaymentPromises(debtId)
+                .catch { error ->
+                    if (error is CancellationException) throw error
+                    _uiState.update {
+                        it.copy(paymentPromiseLoadError = "تعذر قراءة وعود السداد المحفوظة.")
+                    }
+                }
+                .collect { promises ->
+                    _uiState.update {
+                        it.copy(
+                            paymentPromises = promises,
+                            paymentPromiseLoadError = null,
+                        )
+                    }
+                }
+        }
+    }
+
     private fun operationTimestamp(account: AccountOverview): Instant? {
         val now = Instant.now(clock)
         if (now.isBefore(account.ledger.header.openedAt)) return null
@@ -918,6 +1240,8 @@ class AccountDetailsViewModel(
         if (lastRecordedAt != null && now.isBefore(lastRecordedAt)) return null
         val lastAuditAt = account.dueScheduleAuditEvents.lastOrNull()?.occurredAt
         if (lastAuditAt != null && now.isBefore(lastAuditAt)) return null
+        val lastPromiseAt = _uiState.value.paymentPromises.maxOfOrNull { it.updatedAt }
+        if (lastPromiseAt != null && now.isBefore(lastPromiseAt)) return null
         return now
     }
 
@@ -930,6 +1254,7 @@ class AccountDetailsViewModel(
         private val reminderScheduler: ReminderScheduler = NoOpReminderScheduler,
         private val paymentReceiptService: PaymentReceiptService =
             UnavailablePaymentReceiptService,
+        private val paymentPromiseStore: PaymentPromiseStore = UnavailablePaymentPromiseStore,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -941,6 +1266,7 @@ class AccountDetailsViewModel(
                 debtId = debtId,
                 reminderScheduler = reminderScheduler,
                 paymentReceiptService = paymentReceiptService,
+                paymentPromiseStore = paymentPromiseStore,
             ) as T
         }
     }

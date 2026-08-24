@@ -318,7 +318,7 @@ class RoomInstallmentPlanStore(
         InstallmentScheduleItem(
             sequenceNumber = sequenceNumber,
             dueDate = LocalDate.ofEpochDay(dueDateEpochDay),
-            amount = Money(amountMinor, CurrencyCode(currencyCode)),
+            amount = Money(amountMinor, CurrencyCode.of(currencyCode)),
         )
 
     private fun List<InstallmentPlanItemInput>.toEntities(

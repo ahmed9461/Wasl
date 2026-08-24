@@ -1,6 +1,7 @@
 package com.wasl.app
 
 import android.app.Application
+import com.wasl.app.data.InstallmentAwareWaslRepository
 import com.wasl.app.data.InstallmentPlanStore
 import com.wasl.app.data.PaymentPromiseStore
 import com.wasl.app.data.ReminderStore
@@ -24,8 +25,23 @@ class WaslApplication : Application() {
         RoomWaslRepository(database)
     }
 
+    private val roomInstallmentPlanStore: RoomInstallmentPlanStore by lazy(
+        LazyThreadSafetyMode.SYNCHRONIZED,
+    ) {
+        RoomInstallmentPlanStore(database, roomRepository)
+    }
+
+    private val installmentAwareRepository: InstallmentAwareWaslRepository by lazy(
+        LazyThreadSafetyMode.SYNCHRONIZED,
+    ) {
+        InstallmentAwareWaslRepository(
+            waslRepository = roomRepository,
+            installmentPlanStore = roomInstallmentPlanStore,
+        )
+    }
+
     val repository: WaslRepository
-        get() = roomRepository
+        get() = installmentAwareRepository
 
     val reminderStore: ReminderStore
         get() = roomRepository
@@ -34,9 +50,8 @@ class WaslApplication : Application() {
         RoomPaymentPromiseStore(database)
     }
 
-    val installmentPlanStore: InstallmentPlanStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        RoomInstallmentPlanStore(database, roomRepository)
-    }
+    val installmentPlanStore: InstallmentPlanStore
+        get() = installmentAwareRepository
 
     val reminderScheduler: ReminderScheduler by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         WorkManagerReminderScheduler(this)

@@ -1,15 +1,17 @@
 package com.wasl.app
 
 import android.app.Application
-import com.wasl.app.data.WaslRepository
+import com.wasl.app.data.PaymentPromiseStore
 import com.wasl.app.data.ReminderStore
+import com.wasl.app.data.WaslRepository
+import com.wasl.app.data.local.RoomPaymentPromiseStore
 import com.wasl.app.data.local.RoomWaslRepository
 import com.wasl.app.data.local.WaslDatabase
+import com.wasl.app.document.AndroidPaymentReceiptService
+import com.wasl.app.document.PaymentReceiptService
 import com.wasl.app.reminder.ReminderNotificationPublisher
 import com.wasl.app.reminder.ReminderScheduler
 import com.wasl.app.reminder.WorkManagerReminderScheduler
-import com.wasl.app.document.AndroidPaymentReceiptService
-import com.wasl.app.document.PaymentReceiptService
 
 class WaslApplication : Application() {
     private val database: WaslDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
@@ -25,6 +27,10 @@ class WaslApplication : Application() {
 
     val reminderStore: ReminderStore
         get() = roomRepository
+
+    val paymentPromiseStore: PaymentPromiseStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        RoomPaymentPromiseStore(database)
+    }
 
     val reminderScheduler: ReminderScheduler by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         WorkManagerReminderScheduler(this)

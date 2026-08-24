@@ -58,6 +58,8 @@ import com.wasl.app.data.DueScheduleAuditEvent
 import com.wasl.app.data.ReminderStatus
 import com.wasl.app.data.DocumentStatus
 import com.wasl.app.data.IssuedDocumentRecord
+import com.wasl.app.data.PaymentPromiseRecord
+import com.wasl.app.data.PaymentPromiseStatus
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtState
 import com.wasl.domain.LedgerEntryId
@@ -105,6 +107,15 @@ internal fun AccountDetailsScreen(
     onDueScheduleDateChange: (LocalDate?) -> Unit,
     onDueScheduleReminderChange: (Boolean) -> Unit,
     onConfirmDueSchedule: () -> Unit,
+    onOpenPaymentPromise: () -> Unit,
+    onDismissPaymentPromise: () -> Unit,
+    onPaymentPromiseDateChange: (LocalDate?) -> Unit,
+    onPaymentPromiseNoteChange: (String) -> Unit,
+    onConfirmPaymentPromise: () -> Unit,
+    onOpenPaymentPromiseResolution: (String, PaymentPromiseStatus) -> Unit,
+    onDismissPaymentPromiseResolution: () -> Unit,
+    onPaymentPromiseResolutionNoteChange: (String) -> Unit,
+    onConfirmPaymentPromiseResolution: () -> Unit,
     notificationPermissionGranted: Boolean,
     onNoticeShown: () -> Unit,
 ) {
@@ -205,6 +216,10 @@ internal fun AccountDetailsScreen(
                     retryingReceiptId = state.retryingReceiptId,
                     receiptRecoveryErrorDocumentId = state.receiptRecoveryErrorDocumentId,
                     onOpenDueSchedule = onOpenDueSchedule,
+                    paymentPromises = state.paymentPromises,
+                    paymentPromiseLoadError = state.paymentPromiseLoadError,
+                    onOpenPaymentPromise = onOpenPaymentPromise,
+                    onOpenPaymentPromiseResolution = onOpenPaymentPromiseResolution,
                 )
             }
         }
@@ -276,6 +291,34 @@ internal fun AccountDetailsScreen(
             onConfirm = onConfirmDueSchedule,
         )
     }
+
+    if (state.isPaymentPromiseDialogOpen && account != null) {
+        PaymentPromiseDialog(
+            form = state.paymentPromiseForm,
+            isSaving = state.isCreatingPaymentPromise,
+            error = state.paymentPromiseError,
+            onDismiss = onDismissPaymentPromise,
+            onDateChange = onPaymentPromiseDateChange,
+            onNoteChange = onPaymentPromiseNoteChange,
+            onConfirm = onConfirmPaymentPromise,
+        )
+    }
+
+    val promiseResolutionForm = state.paymentPromiseResolutionForm
+    val promiseToResolve = promiseResolutionForm?.let { form ->
+        state.paymentPromises.firstOrNull { it.id == form.promiseId }
+    }
+    if (promiseResolutionForm != null && promiseToResolve != null) {
+        PaymentPromiseResolutionDialog(
+            promise = promiseToResolve,
+            form = promiseResolutionForm,
+            isSaving = state.isResolvingPaymentPromise,
+            error = state.paymentPromiseResolutionError,
+            onDismiss = onDismissPaymentPromiseResolution,
+            onNoteChange = onPaymentPromiseResolutionNoteChange,
+            onConfirm = onConfirmPaymentPromiseResolution,
+        )
+    }
 }
 
 @Composable
@@ -292,6 +335,10 @@ private fun AccountDetailsContent(
     retryingReceiptId: String?,
     receiptRecoveryErrorDocumentId: String?,
     onOpenDueSchedule: () -> Unit,
+    paymentPromises: List<PaymentPromiseRecord>,
+    paymentPromiseLoadError: String?,
+    onOpenPaymentPromise: () -> Unit,
+    onOpenPaymentPromiseResolution: (String, PaymentPromiseStatus) -> Unit,
 ) {
     val payments = account.ledger.entries
         .filterIsInstance<PaymentRecorded>()
@@ -327,6 +374,16 @@ private fun AccountDetailsContent(
 
         item("summary") {
             AccountSummaryCard(account, onOpenDueSchedule)
+        }
+
+        item("payment-promises") {
+            PaymentPromisesSection(
+                promises = paymentPromises,
+                loadError = paymentPromiseLoadError,
+                canAddPromise = !account.ledger.balance.isZero,
+                onAddPromise = onOpenPaymentPromise,
+                onResolvePromise = onOpenPaymentPromiseResolution,
+            )
         }
 
         item("timeline-heading") {
@@ -1427,4 +1484,18 @@ private fun AccountOperationNotice.toDisplayText(): String = when (this) {
 
     is AccountOperationNotice.PaymentReceiptIssuedNotice ->
         "تم تجهيز إيصال السداد $documentNumber وحفظه في سجل الدفعة."
+
+    is AccountOperationNotice.PaymentPromiseCreatedNotice ->
+        "تم تسجيل وعد بالسداد بتاريخ ${formatDate(promisedDate)} في حساب $personName."
+
+    is AccountOperationNotice.PaymentPromiseResolvedNotice -> when (status) {
+        PaymentPromiseStatus.KEPT ->
+            "تم تسجيل الوفاء بوعد ${formatDate(promisedDate)} في حساب $personName."
+        PaymentPromiseStatus.MISSED ->
+            "تم تسجيل أن وعد ${formatDate(promisedDate)} لم يُنفذ في حساب $personName."
+        PaymentPromiseStatus.CANCELLED ->
+            "تم إلغاء وعد ${formatDate(promisedDate)} مع الاحتفاظ به في سجل $personName."
+        PaymentPromiseStatus.PENDING ->
+            "تم تحديث وعد ${formatDate(promisedDate)} في حساب $personName."
+    }
 }

@@ -25,6 +25,12 @@ class RoomPaymentPromiseStore(
     override fun observePaymentPromises(debtId: DebtId): Flow<List<PaymentPromiseRecord>> =
         promiseDao.observeForDebt(debtId.value).map { rows -> rows.map { it.toRecord() } }
 
+    override fun observePendingPaymentPromises(
+        onOrBefore: LocalDate,
+    ): Flow<List<PaymentPromiseRecord>> =
+        promiseDao.observePendingOnOrBefore(onOrBefore.toEpochDay())
+            .map { rows -> rows.map { it.toRecord() } }
+
     override suspend fun createPaymentPromise(
         command: CreatePaymentPromiseCommand,
     ): PaymentPromiseRecord = database.withTransaction {

@@ -80,7 +80,10 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.wasl.app.data.AccountOverview
+import com.wasl.app.data.PaymentPromiseStatus
+import com.wasl.app.data.PaymentPromiseStore
 import com.wasl.app.data.PersonRecord
+import com.wasl.app.data.UnavailablePaymentPromiseStore
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.reminder.NoOpReminderScheduler
 import com.wasl.app.reminder.ReminderNotificationPublisher
@@ -137,6 +140,7 @@ fun WaslApp(
     instanceKey: String = "production",
     reminderScheduler: ReminderScheduler = NoOpReminderScheduler,
     paymentReceiptService: PaymentReceiptService = UnavailablePaymentReceiptService,
+    paymentPromiseStore: PaymentPromiseStore = UnavailablePaymentPromiseStore,
     todayClock: Clock = Clock.systemUTC(),
     todayZoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
     requestedDebtId: String? = null,
@@ -301,6 +305,7 @@ fun WaslApp(
                                     debtId = debtId,
                                     reminderScheduler = reminderScheduler,
                                     paymentReceiptService = paymentReceiptService,
+                                    paymentPromiseStore = paymentPromiseStore,
                                 ),
                             )
                             val state by detailsViewModel.uiState.collectAsStateWithLifecycle()
@@ -358,6 +363,15 @@ fun WaslApp(
                                     }
                                 },
                                 onConfirmDueSchedule = detailsViewModel::confirmDueSchedule,
+                                onOpenPaymentPromise = detailsViewModel::openPaymentPromiseDialog,
+                                onDismissPaymentPromise = detailsViewModel::dismissPaymentPromiseDialog,
+                                onPaymentPromiseDateChange = detailsViewModel::updatePaymentPromiseDate,
+                                onPaymentPromiseNoteChange = detailsViewModel::updatePaymentPromiseNote,
+                                onConfirmPaymentPromise = detailsViewModel::confirmPaymentPromise,
+                                onOpenPaymentPromiseResolution = detailsViewModel::openPaymentPromiseResolution,
+                                onDismissPaymentPromiseResolution = detailsViewModel::dismissPaymentPromiseResolution,
+                                onPaymentPromiseResolutionNoteChange = detailsViewModel::updatePaymentPromiseResolutionNote,
+                                onConfirmPaymentPromiseResolution = detailsViewModel::confirmPaymentPromiseResolution,
                                 notificationPermissionGranted = notificationsAvailable,
                                 onNoticeShown = detailsViewModel::clearNotice,
                             )

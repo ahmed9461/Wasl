@@ -28,9 +28,14 @@ class WorkManagerReminderSchedulerInstrumentedTest {
 
     @AfterTest
     fun tearDown() {
-        workManager.cancelUniqueWork(
-            WorkManagerReminderScheduler.deliveryWorkName(reminderId),
+        workManager.cancelAllWorkByTag(
+            WorkManagerReminderScheduler.reminderTag(reminderId),
         ).result.get(10, TimeUnit.SECONDS)
+        ReminderOccurrence.entries.forEach { occurrence ->
+            workManager.cancelUniqueWork(
+                WorkManagerReminderScheduler.occurrenceWorkName(reminderId, occurrence),
+            ).result.get(10, TimeUnit.SECONDS)
+        }
     }
 
     @Test
@@ -57,6 +62,40 @@ class WorkManagerReminderSchedulerInstrumentedTest {
             WorkManagerReminderScheduler.deliveryWorkName(reminderId),
         ).get(10, TimeUnit.SECONDS)
         val active = work.filter { info ->
+            info.state == WorkInfo.State.ENQUEUED ||
+                info.state == WorkInfo.State.BLOCKED ||
+                info.state == WorkInfo.State.RUNNING
+        }
+        assertEquals(1, active.size)
+    }
+
+    @Test
+    fun smartScheduleKeepsExactlyOneWeeklyOverdueWorker() {
+        val now = Instant.parse("2026-08-13T00:00:00Z")
+        val scheduler = WorkManagerReminderScheduler(
+            context = context,
+            clock = Clock.fixed(now, ZoneOffset.UTC),
+        )
+        val reminder = ReminderRecord(
+            id = reminderId,
+            debtId = DebtId("debt-test"),
+            triggerAt = now.plusSeconds(3_600),
+            zoneId = ZoneOffset.UTC,
+            status = ReminderStatus.SCHEDULED,
+            createdAt = now,
+            updatedAt = now,
+        )
+
+        scheduler.schedule(reminder)
+        scheduler.schedule(reminder)
+
+        val weekly = workManager.getWorkInfosForUniqueWork(
+            WorkManagerReminderScheduler.occurrenceWorkName(
+                reminderId,
+                ReminderOccurrence.OVERDUE_WEEKLY,
+            ),
+        ).get(10, TimeUnit.SECONDS)
+        val active = weekly.filter { info ->
             info.state == WorkInfo.State.ENQUEUED ||
                 info.state == WorkInfo.State.BLOCKED ||
                 info.state == WorkInfo.State.RUNNING

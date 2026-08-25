@@ -16,6 +16,7 @@ class ReminderDeliveryWorker(
     override suspend fun doWork(): Result {
         val application = applicationContext as? WaslApplication ?: return Result.failure()
         val reminderId = inputData.getString(KEY_REMINDER_ID) ?: return Result.failure()
+        val occurrence = ReminderOccurrence.fromWireValue(inputData.getString(KEY_OCCURRENCE))
         val reminder = application.reminderStore.getReminder(reminderId) ?: return Result.success()
         if (reminder.status == ReminderStatus.DELIVERED ||
             reminder.status == ReminderStatus.CANCELLED
@@ -39,12 +40,18 @@ class ReminderDeliveryWorker(
         }
         if (account.ledger.balance.isZero) {
             application.reminderStore.markReminderCancelled(reminderId, now)
+            application.reminderScheduler.cancel(reminderId)
             return Result.success()
         }
 
         return try {
-            application.reminderNotificationPublisher.publish(reminder, account)
-            application.reminderStore.markReminderDelivered(reminderId, now)
+            application.reminderNotificationPublisher.publish(reminder, account, occurrence)
+            application.reminderStore.updateReminderSchedule(
+                reminderId = reminderId,
+                triggerAt = reminder.triggerAt,
+                zoneId = reminder.zoneId,
+                updatedAt = now,
+            )
             Result.success()
         } catch (error: CancellationException) {
             throw error
@@ -60,6 +67,7 @@ class ReminderDeliveryWorker(
 
     companion object {
         const val KEY_REMINDER_ID = "reminder_id"
+        const val KEY_OCCURRENCE = "reminder_occurrence"
         private const val FAILURE_MISSING_DEBT = "MISSING_DEBT"
         private const val FAILURE_NOTIFICATION_DELIVERY = "NOTIFICATION_DELIVERY"
     }

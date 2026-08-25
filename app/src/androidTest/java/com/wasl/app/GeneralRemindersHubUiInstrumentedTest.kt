@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -110,7 +111,9 @@ class GeneralRemindersHubUiInstrumentedTest {
 
         composeRule.onNodeWithTag("edit-general-reminder").performClick()
         waitForTag("cancel-general-reminder")
-        composeRule.onNodeWithTag("cancel-general-reminder").performClick()
+        composeRule.onNodeWithTag("cancel-general-reminder")
+            .performScrollTo()
+            .performClick()
 
         composeRule.waitUntil(timeoutMillis = 10_000) {
             runBlocking {

@@ -6,6 +6,8 @@ import com.wasl.app.data.DocumentStatus
 import com.wasl.app.data.IssuedDocumentRecord
 import com.wasl.app.data.PaymentReceiptSnapshot
 import com.wasl.app.data.PaymentReceiptStore
+import com.wasl.app.data.PrepareAccountStatementCommand
+import com.wasl.app.data.PrepareDebtReceiptCommand
 import com.wasl.app.data.PreparePaymentReceiptCommand
 import java.io.File
 import java.nio.file.AtomicMoveNotSupportedException
@@ -21,7 +23,13 @@ interface PaymentReceiptService {
 
     suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord
 
+    suspend fun issueDebtReceipt(command: PrepareDebtReceiptCommand): IssuedDocumentRecord
+
+    suspend fun issueAccountStatement(command: PrepareAccountStatementCommand): IssuedDocumentRecord
+
     suspend fun retry(documentId: String): IssuedDocumentRecord
+
+    suspend fun retryAccountDocument(documentId: String): IssuedDocumentRecord
 }
 
 object UnavailablePaymentReceiptService : PaymentReceiptService {
@@ -30,14 +38,25 @@ object UnavailablePaymentReceiptService : PaymentReceiptService {
     override suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord =
         error("Payment receipt service is unavailable.")
 
+    override suspend fun issueDebtReceipt(command: PrepareDebtReceiptCommand): IssuedDocumentRecord =
+        error("Account document service is unavailable.")
+
+    override suspend fun issueAccountStatement(
+        command: PrepareAccountStatementCommand,
+    ): IssuedDocumentRecord = error("Account document service is unavailable.")
+
     override suspend fun retry(documentId: String): IssuedDocumentRecord =
         error("Payment receipt service is unavailable.")
+
+    override suspend fun retryAccountDocument(documentId: String): IssuedDocumentRecord =
+        error("Account document service is unavailable.")
 }
 
 class AndroidPaymentReceiptService(
     context: Context,
     private val store: PaymentReceiptStore,
     private val renderer: PaymentReceiptPdfRenderer = AndroidPaymentReceiptPdfRenderer(),
+    private val accountDocumentService: AccountDocumentService = UnavailableAccountDocumentService,
     private val clock: Clock = Clock.systemUTC(),
 ) : PaymentReceiptService {
     private val filesDir = context.applicationContext.filesDir
@@ -50,12 +69,22 @@ class AndroidPaymentReceiptService(
         return ensurePdf(prepared)
     }
 
+    override suspend fun issueDebtReceipt(command: PrepareDebtReceiptCommand): IssuedDocumentRecord =
+        accountDocumentService.issueDebtReceipt(command)
+
+    override suspend fun issueAccountStatement(
+        command: PrepareAccountStatementCommand,
+    ): IssuedDocumentRecord = accountDocumentService.issueAccountStatement(command)
+
     override suspend fun retry(documentId: String): IssuedDocumentRecord {
         val document = requireNotNull(store.getIssuedDocument(documentId)) {
             "Document $documentId was not found."
         }
         return ensurePdf(document)
     }
+
+    override suspend fun retryAccountDocument(documentId: String): IssuedDocumentRecord =
+        accountDocumentService.retry(documentId)
 
     private suspend fun ensurePdf(document: IssuedDocumentRecord): IssuedDocumentRecord =
         withContext(Dispatchers.IO) {

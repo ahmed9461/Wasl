@@ -6,7 +6,12 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.wasl.app.data.CreatePersonWithDebtCommand
+import com.wasl.app.data.GeneralReminderFrequency
+import com.wasl.app.data.GeneralReminderRepeatRule
 import com.wasl.app.data.RecordPaymentCommand
+import com.wasl.app.data.ReminderStatus
+import com.wasl.app.data.UpsertGeneralReminderCommand
+import com.wasl.app.data.local.RoomGeneralReminderStore
 import com.wasl.app.data.local.RoomWaslRepository
 import com.wasl.app.data.local.WaslDatabase
 import com.wasl.domain.CurrencyCode
@@ -18,6 +23,7 @@ import com.wasl.domain.PersonId
 import java.io.File
 import java.time.Clock
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -65,7 +71,7 @@ class BackupRestoreInstrumentedTest {
     }
 
     @Test
-    fun encryptedBackupRestoresLedgerAndWrongPasswordDoesNotMutateDatabase() = runTest {
+    fun encryptedBackupRestoresLedgerGeneralReminderAndWrongPasswordDoesNotMutateDatabase() = runTest {
         val primaryDebtId = DebtId("backup-debt-primary")
         val primaryPaymentId = LedgerEntryId("backup-payment-primary")
         repository.createPersonWithDebt(
@@ -91,6 +97,20 @@ class BackupRestoreInstrumentedTest {
                 note = "دفعة اختبار",
             ),
         )
+        val reminderStore = RoomGeneralReminderStore(database)
+        val reminderBeforeBackup = reminderStore.upsertReminder(
+            UpsertGeneralReminderCommand(
+                reminderId = "backup-general-reminder",
+                debtId = primaryDebtId,
+                triggerAt = Instant.parse("2026-08-30T06:00:00Z"),
+                zoneId = ZoneId.of("Asia/Aden"),
+                repeatRule = GeneralReminderRepeatRule(GeneralReminderFrequency.WEEKLY),
+                updatedAt = Instant.parse("2026-08-25T13:00:00Z"),
+            ),
+        )
+        assertEquals(ReminderStatus.SCHEDULED, reminderBeforeBackup.status)
+        assertEquals(GeneralReminderFrequency.WEEKLY, reminderBeforeBackup.repeatRule?.frequency)
+
         val beforeBackup = assertNotNull(repository.getAccount(primaryDebtId))
         assertEquals(75_000L, beforeBackup.ledger.balance.minorUnits)
         assertEquals(1, beforeBackup.ledger.entries.size)
@@ -104,6 +124,10 @@ class BackupRestoreInstrumentedTest {
         assertEquals(7, backup.schemaVersion)
         assertEquals(0, backup.documentCount)
 
+        reminderStore.cancelReminder(
+            reminderId = reminderBeforeBackup.id,
+            updatedAt = Instant.parse("2026-08-25T13:30:00Z"),
+        )
         val extraDebtId = DebtId("backup-debt-extra")
         repository.createPersonWithDebt(
             CreatePersonWithDebtCommand(
@@ -117,6 +141,10 @@ class BackupRestoreInstrumentedTest {
             ),
         )
         assertNotNull(repository.getAccount(extraDebtId))
+        assertEquals(
+            ReminderStatus.CANCELLED,
+            assertNotNull(reminderStore.getReminderForDebt(primaryDebtId)).status,
+        )
 
         assertFailsWith<SecurityException> {
             backupService.restore(backup.bytes, "definitely-wrong".toCharArray())
@@ -125,6 +153,10 @@ class BackupRestoreInstrumentedTest {
         assertEquals(
             75_000L,
             assertNotNull(repository.getAccount(primaryDebtId)).ledger.balance.minorUnits,
+        )
+        assertEquals(
+            ReminderStatus.CANCELLED,
+            assertNotNull(reminderStore.getReminderForDebt(primaryDebtId)).status,
         )
 
         val restorePassword = "portable-secret-123".toCharArray()
@@ -141,5 +173,12 @@ class BackupRestoreInstrumentedTest {
         assertEquals(beforeBackup.ledger.balance, afterRestore.ledger.balance)
         assertEquals(beforeBackup.ledger.entries, afterRestore.ledger.entries)
         assertNull(repository.getAccount(extraDebtId))
+
+        val reminderAfterRestore = assertNotNull(reminderStore.getReminderForDebt(primaryDebtId))
+        assertEquals(reminderBeforeBackup.id, reminderAfterRestore.id)
+        assertEquals(reminderBeforeBackup.triggerAt, reminderAfterRestore.triggerAt)
+        assertEquals(reminderBeforeBackup.zoneId, reminderAfterRestore.zoneId)
+        assertEquals(GeneralReminderFrequency.WEEKLY, reminderAfterRestore.repeatRule?.frequency)
+        assertEquals(ReminderStatus.SCHEDULED, reminderAfterRestore.status)
     }
 }

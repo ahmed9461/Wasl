@@ -13,12 +13,17 @@ import com.wasl.app.data.local.entity.ReminderEntity
 import com.wasl.domain.DebtId
 import java.time.Instant
 import java.time.ZoneId
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 class RoomGeneralReminderStore(
     private val database: WaslDatabase,
 ) : GeneralReminderStore {
     private val reminderDao = database.reminderDao()
     private val debtDao = database.debtDao()
+
+    override fun observeReminderForDebt(debtId: DebtId): Flow<GeneralReminderRecord?> =
+        reminderDao.observeGeneralForDebt(debtId.value).map { it?.toGeneralRecord() }
 
     override suspend fun getReminder(reminderId: String): GeneralReminderRecord? =
         reminderDao.findById(reminderId)

@@ -264,7 +264,7 @@ internal fun DocumentsHubRoute(
                                 }) { Text("مشاركة") }
                             }
                         }
-                    }
+                    )
                 }
             }
 
@@ -293,7 +293,7 @@ internal fun DocumentsHubRoute(
                     ) {
                         Text(account.person.displayName, fontWeight = FontWeight.Bold)
                         Text(
-                            "المتبقي ${formatMoney(account.ledger.balance)} من ${formatMoney(account.ledger.header.originalAmount)}",
+                            "المتبقي ${formatDocumentsMoney(account.ledger.balance)} من ${formatDocumentsMoney(account.ledger.header.originalAmount)}",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Button(
@@ -325,7 +325,7 @@ private fun DocumentType.arabicLabel(): String = when (this) {
     DocumentType.ACCOUNT_STATEMENT -> "كشف الحساب"
 }
 
-private fun formatMoney(money: Money): String {
+private fun formatDocumentsMoney(money: Money): String {
     val fractionDigits = MoneyInputParser.fractionDigits(money.currency)
     val major = BigDecimal.valueOf(money.minorUnits, fractionDigits)
     val formatter = NumberFormat.getNumberInstance(Locale.US).apply {

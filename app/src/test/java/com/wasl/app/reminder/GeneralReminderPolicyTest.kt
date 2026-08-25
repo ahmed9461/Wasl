@@ -58,14 +58,51 @@ class GeneralReminderPolicyTest {
     }
 
     @Test
+    fun recoveryRebasesSameCivilClockToCurrentTimezone() {
+        val sourceZone = ZoneId.of("Asia/Aden")
+        val targetZone = ZoneId.of("Europe/Berlin")
+        val sourceTrigger = LocalDateTime.parse("2026-08-27T09:30:00")
+            .atZone(sourceZone)
+            .toInstant()
+        val stored = record(
+            triggerAt = sourceTrigger,
+            repeatRule = GeneralReminderRepeatRule(GeneralReminderFrequency.WEEKLY),
+            status = ReminderStatus.SCHEDULED,
+            zoneId = sourceZone,
+        )
+
+        val plan = planGeneralReminderRecovery(
+            stored = stored,
+            currentZone = targetZone,
+            now = Instant.parse("2026-08-25T10:00:00Z"),
+            canNotify = true,
+        )
+
+        val local = plan.triggerAt.atZone(targetZone)
+        assertTrue(plan.shouldSchedule)
+        assertTrue(plan.shouldPersistScheduledState)
+        assertEquals(targetZone, plan.zoneId)
+        assertEquals(9, local.hour)
+        assertEquals(30, local.minute)
+        assertEquals(27, local.dayOfMonth)
+    }
+
+    @Test
     fun missedOneTimeReminderIsRecoveredImmediatelyWhenNotificationsReturn() {
+        val zone = ZoneId.of("Asia/Aden")
         val stored = record(
             triggerAt = Instant.parse("2026-08-25T08:00:00Z"),
             repeatRule = null,
             status = ReminderStatus.BLOCKED_PERMISSION,
+            zoneId = zone,
         )
         val now = Instant.parse("2026-08-25T10:00:00Z")
-        val plan = planGeneralReminderRecovery(stored, now, canNotify = true)
+        val plan = planGeneralReminderRecovery(
+            stored = stored,
+            currentZone = zone,
+            now = now,
+            canNotify = true,
+        )
 
         assertTrue(plan.shouldSchedule)
         assertTrue(plan.shouldPersistScheduledState)
@@ -74,13 +111,16 @@ class GeneralReminderPolicyTest {
 
     @Test
     fun blockedReminderIsNotScheduledWhileNotificationsRemainUnavailable() {
+        val zone = ZoneId.of("Asia/Aden")
         val stored = record(
             triggerAt = Instant.parse("2026-08-26T08:00:00Z"),
             repeatRule = GeneralReminderRepeatRule(GeneralReminderFrequency.WEEKLY),
             status = ReminderStatus.BLOCKED_PERMISSION,
+            zoneId = zone,
         )
         val plan = planGeneralReminderRecovery(
             stored = stored,
+            currentZone = zone,
             now = Instant.parse("2026-08-25T10:00:00Z"),
             canNotify = false,
         )
@@ -89,15 +129,37 @@ class GeneralReminderPolicyTest {
         assertFalse(plan.shouldPersistScheduledState)
     }
 
+    @Test
+    fun scheduledReminderStillGetsWorkAfterBootWhenNotificationsAreDisabled() {
+        val zone = ZoneId.of("Asia/Aden")
+        val stored = record(
+            triggerAt = Instant.parse("2026-08-26T08:00:00Z"),
+            repeatRule = null,
+            status = ReminderStatus.SCHEDULED,
+            zoneId = zone,
+        )
+        val plan = planGeneralReminderRecovery(
+            stored = stored,
+            currentZone = zone,
+            now = Instant.parse("2026-08-25T10:00:00Z"),
+            canNotify = false,
+        )
+
+        assertTrue(plan.shouldSchedule)
+        assertFalse(plan.shouldPersistScheduledState)
+        assertEquals(stored.triggerAt, plan.triggerAt)
+    }
+
     private fun record(
         triggerAt: Instant,
         repeatRule: GeneralReminderRepeatRule?,
         status: ReminderStatus,
+        zoneId: ZoneId,
     ) = GeneralReminderRecord(
         id = "general-1",
         debtId = DebtId("debt-1"),
         triggerAt = triggerAt,
-        zoneId = ZoneId.of("Asia/Aden"),
+        zoneId = zoneId,
         repeatRule = repeatRule,
         status = status,
         createdAt = Instant.parse("2026-08-24T10:00:00Z"),

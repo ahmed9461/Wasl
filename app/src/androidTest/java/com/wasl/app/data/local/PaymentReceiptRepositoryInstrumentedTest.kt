@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.wasl.app.data.CommandConflictException
 import com.wasl.app.data.CreatePersonWithDebtCommand
 import com.wasl.app.data.DocumentStatus
+import com.wasl.app.data.PaymentReceiptSnapshot
 import com.wasl.app.data.PreparePaymentReceiptCommand
 import com.wasl.app.data.RecordPaymentCommand
 import com.wasl.app.data.ReversePaymentCommand
@@ -25,6 +26,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.Dispatchers
@@ -73,16 +75,17 @@ class PaymentReceiptRepositoryInstrumentedTest {
             pageCount = 1,
             updatedAt = Instant.parse("2026-08-13T00:04:00Z"),
         )
+        val readySnapshot = assertIs<PaymentReceiptSnapshot>(ready.snapshot)
         assertEquals(DocumentStatus.READY, ready.status)
         assertEquals("PAY-2026-00001", ready.documentNumber)
-        assertEquals(PersonId("person-1"), ready.snapshot.personId)
-        assertEquals("أحمد", ready.snapshot.personName)
-        assertEquals(Money(100_000L, CurrencyCode.YER), ready.snapshot.originalAmount)
-        assertEquals(Money(100_000L, CurrencyCode.YER), ready.snapshot.balanceBefore)
-        assertEquals(Money(20_000L, CurrencyCode.YER), ready.snapshot.paymentAmount)
-        assertEquals(Money(80_000L, CurrencyCode.YER), ready.snapshot.balanceAfter)
-        assertEquals(CurrencyCode.YER, ready.snapshot.paymentAmount.currency)
-        assertEquals("متجر أحمد", ready.snapshot.identity.displayName)
+        assertEquals(PersonId("person-1"), readySnapshot.personId)
+        assertEquals("أحمد", readySnapshot.personName)
+        assertEquals(Money(100_000L, CurrencyCode.YER), readySnapshot.originalAmount)
+        assertEquals(Money(100_000L, CurrencyCode.YER), readySnapshot.balanceBefore)
+        assertEquals(Money(20_000L, CurrencyCode.YER), readySnapshot.paymentAmount)
+        assertEquals(Money(80_000L, CurrencyCode.YER), readySnapshot.balanceAfter)
+        assertEquals(CurrencyCode.YER, readySnapshot.paymentAmount.currency)
+        assertEquals("متجر أحمد", readySnapshot.identity.displayName)
 
         val second = repository.preparePaymentReceipt(
             receiptCommand(
@@ -93,18 +96,20 @@ class PaymentReceiptRepositoryInstrumentedTest {
                 minute = 5,
             ).copy(identityId = firstCommand.identityId),
         )
+        val secondSnapshot = assertIs<PaymentReceiptSnapshot>(second.snapshot)
         assertEquals("PAY-2026-00002", second.documentNumber)
-        assertEquals(Money(80_000L, CurrencyCode.YER), second.snapshot.balanceBefore)
-        assertEquals(Money(5_000L, CurrencyCode.YER), second.snapshot.paymentAmount)
-        assertEquals(Money(75_000L, CurrencyCode.YER), second.snapshot.balanceAfter)
+        assertEquals(Money(80_000L, CurrencyCode.YER), secondSnapshot.balanceBefore)
+        assertEquals(Money(5_000L, CurrencyCode.YER), secondSnapshot.paymentAmount)
+        assertEquals(Money(75_000L, CurrencyCode.YER), secondSnapshot.balanceAfter)
         assertEquals("مؤسسة أحمد الجديدة", repository.getDefaultDocumentIdentity()?.displayName)
 
         reopenDatabase()
         val reopened = assertNotNull(repository.getAccount(DebtId("debt-1")))
         val historical = reopened.issuedDocuments.first { it.id == "document-1" }
-        assertEquals("متجر أحمد", historical.snapshot.identity.displayName)
-        assertEquals("أحمد", historical.snapshot.personName)
-        assertEquals(Money(20_000L, CurrencyCode.YER), historical.snapshot.paymentAmount)
+        val historicalSnapshot = assertIs<PaymentReceiptSnapshot>(historical.snapshot)
+        assertEquals("متجر أحمد", historicalSnapshot.identity.displayName)
+        assertEquals("أحمد", historicalSnapshot.personName)
+        assertEquals(Money(20_000L, CurrencyCode.YER), historicalSnapshot.paymentAmount)
         assertEquals("a".repeat(64), historical.pdfSha256)
     }
 

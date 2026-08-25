@@ -12,6 +12,8 @@ import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 
 class GeneralReminderServiceTest {
@@ -71,6 +73,9 @@ class GeneralReminderServiceTest {
         private val record: GeneralReminderRecord,
     ) : GeneralReminderStore {
         var upsertCalled = false
+
+        override fun observeReminderForDebt(debtId: DebtId): Flow<GeneralReminderRecord?> =
+            flowOf(record)
 
         override suspend fun getReminder(reminderId: String): GeneralReminderRecord? = record
 

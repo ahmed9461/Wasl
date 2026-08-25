@@ -6,144 +6,96 @@
 
 ### Added
 
-- المرجع التأسيسي الدائم للمشروع.
-- وثائق السياق والمواصفات والقرارات والتسليم.
-- Android project skeleton بـKotlin وJetpack Compose.
-- Theme عربي RTL في الوضعين الفاتح والداكن.
-- وحدة Domain مستقلة للأموال والديون.
-- سجل دفعات Append-only مع عكس موثق.
-- اشتقاق مركزي للأرصدة والحالات حسب العملة والاتجاه.
-- Unit tests لقواعد المال والسداد والعكس.
-- GitHub Actions للبناء والاختبارات وLint.
-- Room 2.8.4 Schema v1 للأشخاص والديون وLedger append-only مع Schema JSON مصدّر.
-- Repository ذري لإنشاء الشخص والدين وتسجيل الدفعات وعكسها مع Idempotency وإغلاق مشتق.
-- أول مسار Compose فعلي لإنشاء شخص ودين وعرض الحسابات والإجماليات المحفوظة.
-- Parsing دقيق لمبالغ YER وSAR وUSD مع الأرقام العربية دون Floating Point.
-- اختبارات Room على Android Emulator للإغلاق وإعادة الفتح والقيود والتزامن وMigration baseline.
-- شاشة تفاصيل الحساب مع الأصل والمدفوع والمتبقي والحالة وTimeline مالي append-only.
-- مسار تسجيل دفعة من مرحلتي المراجعة والتأكيد، ورسائل نجاح تتضمن الشخص والمبلغ.
-- مسار عكس دفعة بسبب إلزامي دون حذف السجل الأصلي.
-- Navigation 3 1.1.6 بين الرئيسية وتفاصيل الحساب بمفاتيح Serializable.
-- اختبار UI End-to-End لإنشاء دين ودفعة جزئية وإعادة فتح قاعدة البيانات والتحقق من الاستمرارية.
-- اختبارات ViewModel لإعادة استخدام أمر الدفع أو العكس نفسه بعد نتيجة حفظ غير مؤكدة.
-- Schema v2 وجدول reminders مع Migration v1→v2 واختبارات حفظ بيانات v1.
-- تاريخ استحقاق اختياري في نموذج إنشاء الدين وشاشة التفاصيل.
-- أول تذكير DUE_DATE محلي عبر WorkManager Unique Work قرابة 09:00 حسب المنطقة الزمنية.
-- قناة إشعار خاصة بمواعيد الحسابات، وإذن POST_NOTIFICATIONS، ونسخة عامة تحمي تفاصيل شاشة القفل.
-- استرداد وإعادة جدولة Idempotent عند تشغيل التطبيق وتغير الوقت أو المنطقة الزمنية.
-- Deep link من إشعار التذكير إلى تفاصيل الدين المقصود.
-- اختبارات وحدة لحساب الزمن المدني، واختبارات Emulator للـMigration والتخزين الذري والجدولة والإشعار وواجهة التفاصيل.
-- شاشة «اليوم» كوجهة عليا تعرض المتأخرات والمستحقات الحالية فقط، مرتبة بتاريخ الاستحقاق مع المتبقي وعدد أيام التأخير.
-- استعلام Room Reactive مخصص لـToday يستبعد الديون المسددة والقادمة ويستخدم LocalDate المدني.
-- إجراءات واضحة لحالة BLOCKED_PERMISSION وFAILED: طلب الإذن/فتح إعدادات الإشعارات وإعادة محاولة Recovery.
-- اختبارات Unit وRoom وCompose لتغير اليوم حسب المنطقة الزمنية، الاستعلام، حالات التذكير، والتنقل من Today إلى تفاصيل الحساب.
-- وجهة بحث محلية Reactive في أسماء الأشخاص ووصف الديون، تعرض حالة الدين والمتبقي وتفتح تفاصيل الحساب.
-- حد صريح لأول 50 نتيجة مع تنبيه عند وجود المزيد، وتطبيع المسافات وحماية محارف SQLite LIKE الحرفية.
-- اختبارات Unit وRoom وCompose للبحث بالاسم والوصف، والحد، والـwildcards، وفتح النتيجة، والتحديث بعد إنشاء دين أو دفعة.
-- اختيار شخص محفوظ بالـID من نموذج الدين عبر بحث Room محدود ومتفاعل، وإنشاء دين مستقل جديد له دون إدراج Person مكرر.
-- أمر Repository ذري وIdempotent لإنشاء دين وتذكيره الاختياري لشخص موجود، مع رفض الشخص المفقود أو المؤرشف وPayload المتعارض.
-- اختبارات Unit وRoom وCompose لاختيار الشخص، وحد النتائج، وتعدد الديون، وعدم التكرار، والاستمرارية وظهور الديون المستقلة في الرئيسية والبحث.
-- Schema v3 وجدول `audit_events` مع Migration v2→v3 واختبارات انتقال تبدأ من v1 وv2 وتحافظ على الدين والتذكير.
-- تعديل أو إلغاء تاريخ الاستحقاق وتذكير DUE_DATE من تفاصيل الحساب، مع Snapshot قبل/بعد ظاهر في Timeline.
-- أمر ذري وIdempotent لتغيير جدول الاستحقاق يحافظ على reminder ID عند إعادة الجدولة أو إعادة التفعيل، ويعلّم سجل التذكير `CANCELLED` عند حذف الموعد.
-- اختبارات Unit وRoom وCompose وWorkManager لإعادة الجدولة والإلغاء، تكرار command، Rollback عند فشل Audit، وإلغاء Unique Work.
-- Schema v4 مع `document_identities` و`issued_documents` وMigration v3→v4 دون تدمير البيانات.
-- هوية مستند قابلة للتخصيص للاسم والنشاط والهاتف والتذييل مع هوية افتراضية محفوظة.
-- إيصال سداد PDF عربي من Snapshot ثابت يتضمن رقم مستند وتسلسلًا سنويًا وMetadata للمبلغ والطرف والدفعة.
-- حفظ SHA-256 وعدد صفحات الإيصال وحالة التوليد، مع منع فتح الملف الجاهز إذا فقد أو فشل تحقق سلامته.
-- إعادة فتح ومشاركة إيصال السداد من Timeline، مع Retry لاسترداد التوليد دون إنشاء مستند مالي مكرر.
-- فحص CI فعلي لإيصال PDF مستخرج من التطبيق باستخدام `pdfinfo` و`pdftotext` و`pdftoppm` ورفع Artifact للأدلة.
-- تحديث بصري شامل لـMaterial 3 يشمل Theme وTypography وSurface containers والتنقل السفلي والرئيسية والبحث وToday وتفاصيل الحساب.
-- Schema v5 مع جدول `payment_promises` وMigration v4→v5 واختبارات ترحيل، مع Index للاستعلام حسب `status` و`promised_date_epoch_day`.
-- وعود سداد مستقلة عن Ledger وعن due date بحالات `PENDING`, `KEPT`, `MISSED`, `CANCELLED`.
-- إنشاء وحسم الوعود بأوامر Idempotent منفصلة مع حفظ التاريخ الكامل وعدم الكتابة فوق الوعد السابق.
-- منع إنشاء وعد جديد على دين مسدد بالكامل مع إبقاء حسم الوعد التاريخي الموجود مسموحًا.
-- قسم وعود السداد داخل تفاصيل الحساب مع إضافة وعد وحسمه إلى «تم الوفاء» أو «لم يُنفذ» أو «ملغي».
-- عرض الوعود المتأخرة ووعود اليوم في شاشة Today وفتح الحساب المقصود مباشرة لحسم الوعد.
-- اختبارات ViewModel وRoom وCompose للوعود، بما فيها التأكد أن حسم الوعد لا يغير الرصيد ولا due date.
-- اختبار Compose لرحلة Today الخاصة بالوعود مع Clock ثابت لتجنب الاعتماد على تاريخ الجهاز.
-- بوابة CI نهائية على Emulator تشمل **44/44** اختبار Android ناجحًا، إلى جانب Unit/Lint/APK/Room Schema وفحص PDF.
-- Schema v6 مع تخزين خطط الأقساط والأقساط وMigration v5→v6، مع ملف `6.json` مولد من Room وملتزم بهوية `ea8a5a8df2311a0842d64bc34ef91454`.
-- نماذج `InstallmentPlan` و`Installment` مع حالات `ACTIVE` و`SUPERSEDED` وتاريخ Revisions محفوظ بدل الكتابة فوق الخطة السابقة.
-- أوامر Idempotent لإنشاء خطة أقساط ومراجعتها، مع التحقق من تطابق العملة والمبالغ والتسلسل وعدم إنشاء رصيد مالي مستقل عن Ledger.
-- اشتقاق `paidAmount` و`remainingAmount` لكل قسط مع ثابت المصالحة `paidAmount + remainingAmount == scheduledAmount`.
-- استعلام Reactive للأقساط القابلة للمتابعة حتى تاريخ محدد، واستبعاد الأقساط المستقبلية والمدفوعة بالكامل من Today.
-- مركز «الأقساط» في واجهة Material3 لعرض الحسابات والخطة النشطة وإنشاء الخطة أو تعديلها وفتح الحساب المرتبط.
-- `InstallmentAwareWaslRepository` كتركيب Production يجمع `WaslRepository` و`InstallmentPlanStore` بالتفويض دون تكرار منطق Room أو استخدام Global state.
-- عرض **الأقساط المتأخرة** و**أقساط اليوم** في شاشة Today مع المجدول والمدفوع والمتبقي وحالة السداد الجزئي وفتح الحساب لتسجيل الدفعة الفعلية عبر Ledger.
-- اختبارات Baseline للانتقال من قواعد v1 وv2 وv3 حتى Schema v6 دون فقد البيانات، مع التحقق من جداول الأقساط الجديدة.
-- اختبارات Room/ViewModel/Compose للأقساط، بما فيها رحلة Today التي تثبت ظهور المتأخر واليوم، إخفاء القسط المستقبلي، وفتح الحساب الصحيح.
-- بوابة Android CI #218 على الرأس `9874c58` نجحت بالكامل مع **48/48** اختبار Android و0 فشل، إلى جانب Unit/Lint/APK/Room Schema v6 وفحص PDF.
-- Artifacts موثقة من CI #218 للـDebug APK وSchema v6 وإيصال PDF وتقارير Android instrumentation.
-- **متابعة ذكية للاستحقاق** كسلسلة متابعة محلية: قبل الموعد بيوم، يوم الموعد، بعد يومين، ثم أسبوعيًا حتى السداد، مع Recovery وإعادة جدولة عند تغير الوقت أو المنطقة الزمنية.
-- **منبّه قوي إضافي** باستخدام Exact Alarm قرابة 09:00 يوم الاستحقاق، مع بقاء WorkManager والمتابعة الذكية كـfallback آمن.
-- معالجة صريحة لصلاحية Android «المنبهات والتذكيرات»: يظهر تحذير داخل وَصل وزر مستقل «السماح بالمنبه الدقيق» بدل فتح إعدادات النظام تلقائيًا عند تشغيل السويتش.
-- اختبارات Strong Alarm تغطي إعادة الجدولة بعد تغير المنطقة الزمنية والحفاظ على الساعة المحلية، وعدم تسجيل جدولة ناجحة زائفة إذا لم تتوفر صلاحية Exact Alarm.
-- اختبار Compose رجعي يثبت أن نافذة الموعد والمتابعة تبقى داخل وَصل بعد تفعيل المنبّه القوي، وأن التحذير وزر الإذن وزر الحفظ كلها تبقى متاحة.
-- بوابة **Android CI #281** على الرأس `c92857c` نجحت بالكامل مع **53/53** اختبار Android و0 فشل، إلى جانب Unit/Lint/APK/Room Schema v6 وفحص PDF الحقيقي.
-- Artifacts موثقة من CI #281: `Wasl-debug` (`9563818121`)، `Wasl-room-schema` (`9563818656`)، `Wasl-payment-receipt-evidence` (`9564031722`)، و`Wasl-room-instrumentation-results` (`9564032564`).
-- **Schema v7** مع Migration v6→v7 وملف `7.json` مولد من Room بهوية `d2c9fe45f2707138bc1476639617e255`، مع جعل `issued_documents.ledger_entry_id` nullable لدعم مستندات الحساب التي لا ترتبط بحركة واحدة.
-- نوع مستند **إيصال دين `DEBT_RECEIPT`** من Snapshot ثابت مع رقم مستند وتسلسل سنوي وSHA-256 وعدد صفحات وحالة توليد.
-- نوع مستند **كشف حساب `ACCOUNT_STATEMENT`** متعدد الصفحات من Snapshot ثابت يشمل تاريخ العمليات ومراجعها دون ربط قسري بحركة Ledger واحدة.
-- `AccountDocumentStore` وطبقة خدمة/Renderer مستقلة لإعداد إيصال الدين وكشف الحساب، مع lifecycle موحد داخل `issued_documents`.
-- مركز **المستندات** وواجهة **الإعدادات** ضمن بنية التطبيق الحالية.
-- Backup تطبيقي يدوي **مشفر بكلمة مرور** يشمل جداول وَصل وملفات PDF الخاصة بالمستندات `READY`.
-- Restore مرحلي يتحقق من Schema وشكل الجداول والملفات والمسارات وSHA-256، ويختبر البيانات أولًا داخل Room مؤقتة قبل استبدال الحالة الحية.
-- فحوص Restore لسلامة Foreign Keys والثوابت المالية الأساسية، مع Rollback لمجلد المستندات عند فشل الاستبدال.
-- اختبارات `BackupEnvelope` وBackup/Restore على Android ونسخ مستندات الحساب ضمن النسخة الاحتياطية.
-- بوابة **Android CI #374** — Run `32888565016` — على الرأس `62c591c` نجحت بالكامل مع **59/59** اختبار Android و0 فشل، إضافة إلى Unit/Lint/APK/Room Schema v7.
-- فحص CI فعلي لثلاثة مستندات PDF: إيصال السداد، إيصال الدين، وكشف الحساب، مع `pdfinfo` و`pdftotext` وتحويل الصفحات إلى PNG عبر `pdftoppm`.
-- Artifacts موثقة من CI #374: `Wasl-debug` (`9578696169`)، `Wasl-room-schema` (`9578696602`)، `Wasl-payment-receipt-evidence` (`9578927270`)، `Wasl-account-document-evidence` (`9578927732`)، و`Wasl-room-instrumentation-results` (`9578928168`).
+- المرجع التأسيسي الدائم للمشروع وملفات الذاكرة `AGENTS.md`, `PROJECT_CONTEXT.md`, `SPEC.md`, `DECISIONS.md`, `HANDOFF.md`.
+- Android project أصلي بـKotlin وJetpack Compose وMaterial 3 وNavigation 3، مع Theme عربي RTL ووضعين فاتح/داكن.
+- وحدة `core:domain` مستقلة للأموال والديون، مع `Money` بوحدات صغرى `Long` دون Floating Point.
+- Ledger مالي append-only، دفعات جزئية/نهائية، وعكس دفعة كحدث مستقل بسبب موثق.
+- Room persistence ومجموعة Migrations صريحة حتى **Schema v7** دون destructive migration.
+- إنشاء شخص ودين، وإنشاء ديون مستقلة لشخص محفوظ دون تكرار Person.
+- استحقاق قابل للتعديل/الإلغاء مع Audit، متابعة ذكية عبر WorkManager، ومنبه قوي اختياري عبر Exact Alarm مع fallback.
+- شاشة Today للاستحقاقات والوعود والأقساط، وبحث Room Reactive وفتح الحساب من النتائج.
+- Payment Promises مستقلة عن Ledger و`due_date` بحالات `PENDING / KEPT / MISSED / CANCELLED`.
+- Installment Plans مع `ACTIVE / SUPERSEDED` وRevision history محفوظ، وتقدم متصالح مع Ledger.
+- مستندات مالية من immutable snapshots:
+  - `PAYMENT_RECEIPT`.
+  - `DEBT_RECEIPT`.
+  - `ACCOUNT_STATEMENT` متعدد الصفحات.
+- هوية مستند قابلة للتخصيص، ترقيم سنوي، Metadata، SHA-256، page count، فتح/مشاركة عبر FileProvider بعد فحص السلامة.
+- `issued_documents` كسجل مستندات موحد، و`payment_issued_documents` View خاصة بإيصالات السداد.
+- Backup تطبيقي يدوي مشفر بكلمة مرور يشمل الجداول وملفات PDF `READY`.
+- Backup envelope باستخدام AES-256-GCM + PBKDF2-HMAC-SHA256 بـ210,000 iteration + gzip JSON.
+- Restore مرحلي عبر Stage + Room مؤقتة، مع فحص Schema والمسارات وSHA-256 وForeign Keys والثوابت المالية وRollback.
+- شاشة إعدادات للخصوصية والنسخ الاحتياطي والمستندات.
+- **App Lock** عبر AndroidX Biometric `1.1.0` و`BiometricPrompt` مع `BIOMETRIC_WEAK | DEVICE_CREDENTIAL`.
+- مهلات App Lock: فورًا / 15 ثانية / دقيقة / 5 دقائق، باستخدام `SystemClock.elapsedRealtime()`.
+- `AppLockViewModel` يحافظ على الجلسة عبر Configuration changes.
+- شاشة قفل تمنع Pointer interaction وتزيل Compose semantics عن المحتوى المالي الخلفي.
+- Recovery صريح لتعطيل App Lock إذا لم تعد مصادقة النظام متاحة، دون حذف بيانات المستخدم.
+- App Lock يفرض `FLAG_SECURE`، مع بقاء خيار الشاشة الآمنة المستقل.
+- اختبارات `AppLockViewModelTest` لمنطق التفعيل/المصادقة/المهلة/Lock now/التعطيل.
+- `SecurityUiInstrumentedTest` يغطي App Lock UI وRecovery و**Dark Mode + Font Scale 2.0**.
+- `MvpAcceptanceInstrumentedTest` لرحلة كاملة: إنشاء دين → restart → دفعات → سداد → عكس → سداد بديل → READY PDF → Backup مشفر → إفساد ملف/إضافة بيانات → Restore والتحقق من الحالة.
+- CI يولد ويفحص ملفات PDF حقيقية بـ`pdfinfo`, `pdftotext`, `pdftoppm` ويرفع أدلة مستقلة.
 
 ### Changed
 
-- تثبيت AndroidX Core 1.18.0 وLifecycle 2.10.0 على compileSdk 36 بدل إدخال منصة Android 37 غير المستقرة.
-- أصبحت الشاشة التأسيسية تقرأ من Room وتعرض حالات Loading وEmpty وError وSuccess.
-- أصبحت تفاصيل الحساب Reactive عبر Room، وتعيد الشاشة رسم الرصيد والسجل بعد كل حدث مالي.
-- أصبحت الرئيسية و«اليوم» و«البحث» وجهات علوية بتنقل سفلي على الشاشات المدمجة.
-- أصبح نموذج «دين جديد» يميز صراحة بين «شخص جديد» و«شخص موجود»، ويحتفظ بالاختيار بالمعرف لا بالاسم.
-- أصبحت إعادة جدولة WorkManager تستبدل العمل الفريد السابق بالمعرف نفسه، وأصبح إلغاء الموعد يلغي العمل الفريد بعد نجاح Transaction.
-- أصبحت شاشة Today تجمع متابعة **الاستحقاقات** و**وعود السداد** مع إبقاء النموذجين منفصلين في البيانات والمنطق.
-- أصبحت تفاصيل الحساب تفصل بصريًا ودلاليًا بين Timeline المالي وبين سجل وعود السداد.
-- أصبح Room Schema الحالي v5 مع سلسلة Migrations كاملة v1→v5.
-- أصبحت رحلة UI الرئيسية للدفع والإيصال تنتظر تحديث Room/Compose صراحةً قبل المتابعة لتقليل Flaky instrumentation tests.
-- أصبحت شاشة Today تجمع الآن **الاستحقاقات ووعود السداد والأقساط** مع إبقاء كل نموذج مستقلًا عن الآخر وعن Ledger المالي.
-- أصبح Room Schema الحالي **v6** مع سلسلة Migrations كاملة v1→v6 ودون destructive migration.
-- أصبحت بوابة CI تتحقق من `6.json` وتقوم برفع Schema v6 بدل v5.
-- أصبح Repository الإنتاجي يمرر قدرات الأقساط عبر `InstallmentAwareWaslRepository` مع الحفاظ على واجهات الاختبار وFallback غير المتاح حيث يلزم.
-- أصبحت مراجعة خطة الأقساط تنشئ Revision جديدة وتحوّل السابقة إلى `SUPERSEDED` بدل تعديل تاريخ الخطة السابقة أو حذفه.
-- أصبحت واجهة الاستحقاق تستخدم مصطلح **«المتابعة الذكية»** و`موعد المتابعة الأساسي` بدل النص القديم الذي يوحي بإشعار وحيد.
-- أصبح تفعيل المنبّه القوي يغير نموذج وَصل فقط؛ طلب Exact Alarm أصبح فعلًا صريحًا منفصلًا يختاره المستخدم، مع إبقاء نافذة التعديل في سياقها.
-- أصبح Room Schema الحالي **v7** مع سلسلة Migrations كاملة v1→v7 ودون destructive migration، وأصبحت بوابة CI تتحقق من `7.json` وترفعه.
-- أصبح `issued_documents` سجلًا عامًا لإيصال السداد وإيصال الدين وكشف الحساب، مع بقاء `payment_issued_documents` View مخصصة لإيصالات السداد فقط.
-- أصبح `ledger_entry_id` اختياريًا في سجل المستندات العام؛ إيصال السداد ما زال يحفظ مرجعه المالي، بينما مستندات الحساب غير المرتبطة بحركة واحدة لا تُجبر على Ledger entry مصطنع.
-- أصبحت بوابة CI تفحص ثلاثة ملفات PDF فعلية بدل إيصال السداد وحده، وترفع Artifact مستقلًا لأدلة مستندات الحساب.
-- أصبح مسار النسخ الاحتياطي المدعوم داخل التطبيق صريحًا ومشفرًا ويشمل المستندات الجاهزة؛ Android Auto Backup يبقى معطلًا عمدًا.
+- أصبح Room Schema الحالي **v7**؛ `issued_documents.ledger_entry_id` nullable لدعم Debt Receipt وAccount Statement دون Ledger entry مصطنع، مع بقاء Payment Receipt مرتبطًا بحركته.
+- أصبحت `payment_issued_documents` طبقة View مخصصة لإيصالات السداد بدل افتراض أن كل `issued_documents` Payment Receipt.
+- أصبحت شاشة Today تجمع الاستحقاقات ووعود السداد والأقساط مع إبقاء النماذج مستقلة عن Ledger.
+- أصبح Production يمرر قدرات الأقساط عبر `InstallmentAwareWaslRepository` بدل Global state أو تكرار Room logic.
+- أصبح مسار النسخ الاحتياطي المدعوم داخل التطبيق صريحًا ومشفرًا؛ Android Auto Backup وDevice Transfer يبقيان معطلين عمدًا.
+- أصبح قفل التطبيق يعتمد مصادقة Android نفسها بدل إنشاء PIN خاص بوَصل.
+- أصبحت مهلة القفل monotonic ولا تتأثر بتغيير ساعة الجهاز/المنطقة الزمنية.
+- أصبحت الحماية من Screenshot/Recent Apps مفروضة تلقائيًا عند تفعيل App Lock.
+- تم تحديث `docs/DATABASE_SCHEMA.md` ليطابق Schema v7 الفعلية بدل وصف v3 القديم.
 
 ### Fixed
 
-- مواءمة إصدارات AndroidX مع منصة SDK المتاحة حتى تنجح اختبارات التطبيق وLint وتجميع APK في GitHub Actions.
-- إبقاء معرفات أمر الإنشاء ثابتة عبر إعادة المحاولة لمنع إنشاء دين مكرر بعد نتيجة حفظ غير مؤكدة.
-- محاذاة وحدات kotlinx-serialization على BOM 1.9.0 لمنع خلط Core وJSON عند جمع Room وNavigation 3.
-- إعادة Recovery لحالة التذكير إلى SCHEDULED قبل إعادة الجدولة، مع إبقاء BLOCKED_PERMISSION ثابتة حتى تصبح الإشعارات متاحة.
-- مزامنة Room Schema v5 الملتزم مع الـSchema الفعلي بعد إضافة Index متابعة الوعود.
-- إصلاح import غير مدعوم في اختبار Today الخاص بوعود السداد.
-- إزالة افتراض أن زر «تسجيل دفعة» عنصر داخل `LazyColumn` في اختبار UI؛ الزر FloatingActionButton ويضغط مباشرة بعد اكتمال تحميل الحساب.
-- تثبيت اختبار الدفع والإيصال ضد سباقات إعادة الرسم بعد إنشاء الدين وحفظ الدفعة.
-- مزامنة Room Schema v6 الحقيقي المولد آليًا بدل كتابة Schema يدويًا، ثم إعادة CI إلى صلاحيات `contents: read` بعد اكتمال المزامنة.
-- تحديث اختبارات Migration baseline القديمة لتصل حتى v6 بدل توقفها عند v5.
-- إصلاح استيراد Compose غير موجود `androidx.compose.ui.test.onNode` في اختبار Today للأقساط، مع استخدام `composeRule.onNode(...)` الصحيح.
-- مزامنة اختبارات واجهة الاستحقاق مع النص الفعلي `موعد المتابعة الأساسي` بدل `موعد التذكير`.
-- إصلاح السبب الجذري لفشل اختبار Exact Alarm: لم يعد تشغيل سويتش المنبّه القوي يطلق نافذة صلاحية/إعدادات Android تلقائيًا فوق Compose؛ التوجيه أصبح داخل التطبيق وبزر مستقل.
-- إصلاح AndroidTest قديم بعد تعميم Snapshot المستندات؛ اختبار إيصال السداد أصبح يتعامل صراحة مع `PaymentReceiptSnapshot` بدل افتراض أن `DocumentSnapshot` العام يملك حقول الدفع مباشرة.
-- إصلاح Migration v6→v7 للـView `payment_issued_documents` بمطابقة SQL الناتج عن `@DatabaseView` حرفيًا؛ أنهى ذلك فشل تحقق Room مع بقاء بيانات Migration سليمة.
+- محاذاة إصدارات AndroidX مع compileSdk 36 المستقر.
+- تثبيت معرفات أوامر الإنشاء/الدفع/العكس عبر إعادة المحاولة لمنع تكرار العمليات بعد نتائج حفظ غير مؤكدة.
+- محاذاة kotlinx-serialization Core/JSON عبر BOM 1.9.0.
+- إصلاح Recovery للتذكيرات وإعادة `BLOCKED_PERMISSION/FAILED` بصورة قابلة للاسترداد دون تغيير الدين.
+- إصلاح Exact Alarm UX بحيث لا تفتح إعدادات Android تلقائيًا من السويتش.
+- مزامنة Room Schema v5/v6/v7 الملتزمة مع المخرجات الفعلية من Room.
+- إصلاح Migration v6→v7 للـView `payment_issued_documents` ليتطابق SQL مع `@DatabaseView` حرفيًا.
+- إصلاح AndroidTest بعد تعميم `DocumentSnapshot` ليتعامل Payment Receipt صراحة مع `PaymentReceiptSnapshot`.
+- إصلاح Compose test imports غير الموجودة في اختبارات Today/Security.
+- إصلاح `MvpAcceptanceInstrumentedTest` بعد اكتشاف `StackOverflowError`: `ContextWrapper.getFilesDir()` أصبح يشير صراحة إلى مجلد الاختبار الخارجي بدل استدعاء getter نفسه.
 
 ### Security
 
-- تعطيل cleartext traffic.
-- تعطيل Android Auto Backup وDevice Transfer عبر قواعد Android الحديثة والقديمة.
-- تجاهل Keystores وملفات الأسرار في Git.
-- التحقق من SHA-256 للمستند قبل فتحه أو مشاركته لمنع التعامل مع ملف مفقود أو متغير على أنه مستند جاهز.
-- إضافة Backup تطبيقي مشفر بكلمة مرور بدل الاعتماد على النسخ السحابي التلقائي.
-- التحقق من SHA-256 لملفات المستندات قبل إدخالها في النسخة الاحتياطية وبعد فكها أثناء الاستعادة.
-- رفض Restore ذي Schema غير المدعوم أو البنية غير المتوقعة أو المسارات غير الآمنة أو Foreign Keys/الثوابت غير المتسقة قبل اعتماد الحالة الجديدة.
+- `usesCleartextTraffic=false`.
+- Android Auto Backup وDevice Transfer معطلان.
+- Keystores وملفات الأسرار غير ملتزمة في Git.
+- إشعارات الاستحقاق `VISIBILITY_PRIVATE` مع Public version عامة لا تعرض الاسم/المبلغ.
+- PDF `READY` يفحص وجود الملف وSHA-256 قبل الفتح أو المشاركة.
+- Backup مشفر ومصدق، مع فحص المستندات قبل النسخ وبعد فكها.
+- Restore يرفض Schema أو بنية أو مسارات أو بصمات أو Foreign Keys غير صالحة قبل اعتماد الحالة.
+- App Lock لا يخزن PIN مخصصًا أو كلمة مرور الجهاز أو قالب بصمة؛ التحقق مفوض إلى Android.
+- المحتوى المالي خلف شاشة القفل غير قابل للتفاعل عبر Pointer أو Compose semantics.
+- Recovery من غياب المصادقة لا يحذف البيانات.
+
+### Verification
+
+آخر بوابة كاملة لكود المرحلة:
+
+- **Android CI #382** — Run `32903618216` — head `be7f67dab355b936c2b5ce62f4710c4f63773bf3`.
+- Unit tests ✅
+- Lint ✅
+- Debug APK ✅
+- Room Schema v7 export/current check ✅
+- Android Emulator instrumentation: **63/63** ✅
+- failures: 0 / errors: 0 / skipped: 0 ✅
+- Payment Receipt PDF evidence ✅
+- Debt Receipt PDF evidence ✅
+- Account Statement PDF evidence ✅
+- App Lock/Font Scale regression ✅
+- MVP end-to-end acceptance ✅
+
+Artifacts من CI #382:
+
+- `Wasl-debug` — `9584098910` — SHA-256 `5dd34c6c702dcb204a2093560b89307bf374943d565c9d76206727140f6f9e38`.
+- `Wasl-room-schema` — `9584099501` — SHA-256 `d1775c619dbd83745c0f61a2124b737ca7aeb67ad76889d64c00de3e5263eebf`.
+- `Wasl-payment-receipt-evidence` — `9584290684` — SHA-256 `b94aed62d4e0f4b4e68803c6cb0eb63429f0fe197b2cd22c19d1232f1a5def79`.
+- `Wasl-account-document-evidence` — `9584291121` — SHA-256 `b68101ddab87fcac7147bf84f894d9d213deda255c7615b3f759e473fc89b636`.
+- `Wasl-room-instrumentation-results` — `9584291541` — SHA-256 `3864c9dfb4d02f483d214c48ffaf193b265ce40ef8b51f07f48ec3fc0d91a7cc`.

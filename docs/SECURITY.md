@@ -1,74 +1,100 @@
 # نموذج الأمان والخصوصية
 
+آخر تحديث: 2026-08-26
+
 ## الأصول الحساسة
 
 - أسماء الأشخاص وبيانات التواصل.
-- مبالغ واتجاهات الديون.
-- Notes ووعود ومطالبات.
-- صور وفواتير وإيصالات وتوقيعات.
-- PDF والنسخ الاحتياطية.
-- مفاتيح التشفير ومواد التوقيع.
+- مبالغ واتجاهات الديون والأقساط والوعود.
+- الملاحظات والأوصاف وسجل العمليات.
+- إيصالات PDF وكشوف الحساب وملفات النسخ الاحتياطية.
+- أي مرفقات مستقبلية وصور وفواتير وتوقيعات.
+- مواد التشفير ومفاتيح التوقيع المستقبلية.
 
-## التهديدات
+## نموذج التهديد
 
-- جهاز مفقود أو مفتوح.
-- تطبيق آخر يحاول قراءة ملف مشارك.
-- Backup غير مشفر.
-- Intent أو Deep link خبيث.
-- Log أو Crash report يحتوي PII.
-- قاعدة تالفة أو Migration ناقصة.
-- استخراج مفتاح من التخزين.
-- Screenshot أو Recent Apps يكشف مبلغًا.
-- Dependency غير موثوقة.
+- جهاز مفقود أو جهاز مفتوح يُترك مع شخص آخر.
+- Screenshot أو Recent Apps يكشف بيانات مالية.
+- إشعار يعرض اسمًا أو مبلغًا على شاشة القفل.
+- تطبيق آخر يحاول قراءة ملف مشترك.
+- نسخة احتياطية غير مشفرة أو معدلة.
+- Path traversal أو ملف PDF تم تغييره بعد الإصدار.
+- قاعدة تالفة أو Migration ناقصة أو Restore جزئي.
+- Intent/Deep link خبيث.
+- Log أو Crash metadata يحتوي PII.
+- Dependency غير لازمة أو غير موثوقة.
 
-## الضوابط الحالية
+## الضوابط المنفذة
+
+### عزل التطبيق والاتصال
 
 - Android sandbox.
-- usesCleartextTraffic=false.
-- allowBackup=false، مع dataExtractionRules وfullBackupContent تستبعد كل Domains من Cloud backup وDevice transfer حتى بناء Backup تطبيقي مشفر.
-- Activity الوحيدة مصدرة فقط لأنها Launcher.
-- .gitignore يمنع Keystores وenv.
-- لا Backend ولا Analytics.
-- Domain يرفض عملة مختلفة وOverpayment وOverflow.
-- Room يفعّل Foreign keys، والسجل المالي بلا Update/Delete DAO، والكتابات المركبة داخل Transactions.
-- إذن POST_NOTIFICATIONS يطلب في سياق تفعيل التذكير ولا يؤدي رفضه إلى فقد البيانات.
-- تتحقق شاشة Today من إذن التطبيق ومن تعطيل إشعارات التطبيق أو قناة المستحقات، وتفتح إعدادات الإشعارات الرسمية عند تعذر الطلب المباشر.
-- إشعار موعد الدين `VISIBILITY_PRIVATE` وله Public version عامة لا تعرض اسمًا أو مبلغًا على شاشة القفل.
-- PendingIntent غير قابل للتعديل ويحمل debt id فقط؛ تفاصيل الحساب تقرأ من Repository.
-
-## الضوابط المطلوبة قبل MVP
+- `usesCleartextTraffic=false`.
+- لا Backend أو Analytics إجباريين في MVP الحالي.
+- Android Auto Backup وDevice Transfer معطلان عمدًا؛ التصدير يتم فقط عبر Backup تطبيقي صريح.
+- `.gitignore` يمنع Keystores وملفات الأسرار.
 
 ### قفل التطبيق
 
-- BiometricPrompt مع Device Credential.
-- سياسة Session timeout قابلة للتخصيص.
-- لا PIN نصي.
-- Rate limiting لمحاولات PIN.
-- Recovery واضح لا يمحو البيانات بصمت.
+- App Lock منفذ عبر AndroidX `BiometricPrompt` stable `1.1.0`.
+- المصادقة المسموحة: `BIOMETRIC_WEAK | DEVICE_CREDENTIAL` عبر Android system authentication.
+- وَصل لا ينشئ ولا يخزن PIN مخصصًا، ولا يخزن كلمة مرور الجهاز أو قالب بصمة.
+- تفعيل القفل يتطلب مصادقة ناجحة أولًا.
+- فتح التطبيق المقفل يتطلب مصادقة ناجحة؛ إلغاء أو فشل المصادقة يبقي المحتوى مقفلًا.
+- المهلة قابلة للاختيار: فورًا، 15 ثانية، دقيقة، 5 دقائق؛ الافتراضي 15 ثانية.
+- حساب المهلة يستخدم `SystemClock.elapsedRealtime()` حتى لا يتأثر بتغيير التاريخ أو المنطقة الزمنية.
+- `AppLockViewModel` يحافظ على حالة الجلسة عبر Configuration change، ولا تعتبر عملية التدوير خروجًا من التطبيق.
+- عند القفل تُزال Semantics عن المحتوى المالي خلف شاشة القفل وتُستهلك Pointer events، فلا يبقى المحتوى الخلفي قابلًا للتفاعل أو الاكتشاف عبر Compose semantics.
+- App Lock يفرض `FLAG_SECURE` حتى لو كان خيار الشاشة الآمنة المستقل غير مفعّل.
+- إذا لم تعد وسيلة مصادقة Android متاحة، يظهر Recovery صريح لتعطيل App Lock دون حذف الديون أو المستندات أو النسخ.
 
-### التشفير
+### الشاشة والإشعارات
 
-- مفاتيح محلية عبر Android Keystore.
-- تقييم تشفير حقول أو قاعدة كاملة بعد Prototype أداء وتوافق Backup.
-- المرفقات شديدة الحساسية يمكن تشفيرها لكل ملف بمفتاح بيانات مغلف.
-- لا يعاد استخدام IV مع AES-GCM.
-- نسخة النقل تستخدم مفتاحًا مشتقًا من Passphrase عبر KDF موثق، لا مفتاح Keystore غير القابل للنقل.
+- خيار مستقل لـ`FLAG_SECURE` يحمي Screenshot/Recent Apps عند اختياره.
+- تفعيل App Lock يفرض الحماية نفسها تلقائيًا.
+- Privacy mode للإشعارات يخفي التفاصيل الحساسة عند تفعيله.
+- إشعار موعد الدين يستخدم `VISIBILITY_PRIVATE` مع Public version عامة لا تعرض اسم الشخص أو المبلغ.
+- PendingIntent غير قابل للتعديل ويحمل معرف الدين فقط؛ البيانات تقرأ من Repository بعد فتح التطبيق.
 
-### الملفات
+### سلامة المال والبيانات
 
-- Internal storage افتراضيًا.
-- FileProvider عند المشاركة.
-- URI grant مؤقت ولتطبيق يختاره المستخدم.
-- MIME لا يؤخذ من الاسم وحده.
-- حدود حجم وHash واسم آمن.
-- تنظيف الملفات المؤقتة بعد النجاح والفشل.
+- Domain يمنع Currency mismatch وOverpayment وOverflow.
+- الأموال ليست Floating Point.
+- Ledger append-only؛ التصحيح بعكس موثق.
+- Foreign Keys مفعلة.
+- الكتابات المركبة داخل Room Transactions.
+- لا destructive migrations في Production.
+- Schema JSON ملتزم ومقارن آليًا مع Schema التي يولدها Room في CI.
+
+### المستندات والملفات
+
+- PDF داخل Internal storage افتراضيًا.
+- المشاركة عبر FileProvider وURI grant للقراءة.
+- مسار PDF يجب أن يكون نسبيًا ومباشرة داخل مجلد `documents` وبامتداد PDF.
+- مستند `READY` يتطلب SHA-256 محفوظًا، ويعاد فحص الملف قبل الفتح أو المشاركة.
+- التوليد يستخدم ملفًا مؤقتًا ثم نقلًا ذريًا قدر الإمكان.
+- Snapshot المالي وهوية المصدر ثابتان وقت الإصدار؛ لا يعاد تفسير مستند تاريخي من الحالة الحية.
+
+### النسخ الاحتياطي والاستعادة
+
+- Backup يدوي مشفر بكلمة مرور يختاره المستخدم.
+- Payload منطقي ومحمول، وليس نسخة خامًا من SQLite الحية.
+- AES-256-GCM يوفر authenticated encryption.
+- KDF: PBKDF2-HMAC-SHA256 بـ210,000 iteration مع Salt مستقل.
+- Payload الداخلي gzip JSON ويشمل الجداول المدعومة وملفات PDF الخاصة بالمستندات `READY`.
+- قبل النسخ: فحص وجود ملفات المستندات وSHA-256.
+- عند Restore: رفض Schema غير المدعوم، البنية غير المتوقعة، المسارات المطلقة/الخارجة، الملفات غير المطابقة والبصمات الفاشلة.
+- الملفات تُفك في Stage، والبيانات تُختبر أولًا في Room مؤقتة.
+- تُفحص Foreign Keys وثوابت مالية قبل اعتماد الحالة الجديدة.
+- استبدال الملفات وقاعدة البيانات له مسار Rollback ولا يعلن النجاح في حالة جزئية.
+- مصفوفات كلمات المرور المؤقتة تُمسح بعد الاستخدام في مسارات الاختبار/الخدمة التي تملكها.
 
 ### Logs
 
 مسموح:
 
 - Event تقني عام.
-- Error code.
+- Error code محدود.
 - Duration وعدادات غير شخصية.
 
 ممنوع:
@@ -78,37 +104,44 @@
 - Description أو note.
 - URI كامل أو محتوى ملف.
 - SQL rows.
-- Tokens أو keys.
+- Backup passphrase أو tokens أو keys.
 
-### الشاشة والإشعارات
+## ما لم يُنفذ بعد ولا يجب الادعاء بوجوده
 
-- خيار FLAG_SECURE للشاشات الحساسة أو التطبيق كاملًا.
-- Notification privacy mode يخفي الاسم والمبلغ.
-- Lock-screen visibility مضبوطة حسب اختيار المستخدم.
+- تشفير كامل لقاعدة البيانات وهي ساكنة عبر SQLCipher أو بديل.
+- تشفير كل حقل/مرفق محلي بمفتاح Android Keystore.
+- PIN مستقل خاص بوَصل؛ القرار الحالي عمدًا هو عدم إنشاء PIN مخصص.
+- Remote wipe أو Cloud recovery.
+- Certificate pinning؛ لا توجد حاليًا شبكة Backend تتطلبه.
+- Release signing للإنتاج داخل CI.
 
-### Integrity
+إذا اعتمد تشفير At-rest مستقبلًا، يجب قياس أثره على Room وMigration وBackup/Restore والأداء قبل اعتماده، وعدم جعل مفتاح Keystore غير القابل للنقل مفتاح النسخة المحمولة.
 
-- Foreign keys وConstraints.
-- Transactions.
-- Backup checksum وauthenticated encryption.
-- Restore في قاعدة مؤقتة قبل الاستبدال.
-- PDF hash وDocument snapshot.
+## اختبارات الأمان الحالية
+
+- `AppLockViewModelTest`: التهيئة، المصادقة، المهلة، العودة قبل/بعد المهلة، Lock now والتعطيل.
+- `SecurityUiInstrumentedTest`: شاشة الأمان، Recovery، الزر، Dark Mode وFont Scale 2.0.
+- `BackupRestoreInstrumentedTest`: Round-trip وكلمة مرور خاطئة دون تغيير الحالة الحية.
+- `AccountDocumentBackupInstrumentedTest`: استعادة سجل PDF جاهز والملف وبصمته.
+- Migration/Room tests: القيود والذرية وIdempotency والتزامن.
+- PDF tests: توليد ملفات فعلية وفحص سلامتها ومحتواها/صفحاتها.
+- `MvpAcceptanceInstrumentedTest`: رحلة مالية كاملة مع restart، عكس، PDF، Backup، فساد متعمد للملف، بيانات بعد النسخة، ثم Restore.
+- CI #382: 63/63 Android instrumentation، 0 فشل/خطأ/تخطي.
 
 ## Dependency policy
 
-- مصدر رسمي أو مشروع موثوق وترخيص معروف.
-- Stable افتراضيًا.
-- Release notes وBreaking changes قبل الترقية.
-- Lock/version catalog محدث.
-- لا مكتبة Analytics أو Network غير لازمة.
+- Stable افتراضيًا ومن مصدر رسمي/موثوق وترخيص معروف.
+- لا ترقية لمجرد وجود إصدار أحدث؛ تقرأ Release notes وBreaking changes أولًا.
+- لا مكتبة Analytics أو Network بلا حاجة منتج واضحة.
+- أي Dependency أمنية جديدة تحتاج اختبار أثر وRollback plan.
 
 ## استجابة حادث
 
 إذا اكتشف تسريب أو فساد:
 
-1. أوقف المسار المتسبب دون حذف بيانات.
+1. أوقف المسار المتسبب دون حذف بيانات المستخدم.
 2. احفظ أدلة تقنية خالية من PII.
-3. حدد النطاق والإصدارات.
+3. حدد النطاق والإصدارات المتأثرة.
 4. أصلح السبب الجذري وأضف Regression test.
-5. أضف Migration أو Recovery.
-6. وثق التغيير الأمني في CHANGELOG وHANDOFF.
+5. أضف Migration أو Recovery إن لزم.
+6. وثق التغيير في `CHANGELOG.md` و`HANDOFF.md` و`DECISIONS.md` إذا غيّر قرارًا معماريًا.

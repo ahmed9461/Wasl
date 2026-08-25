@@ -1,272 +1,311 @@
 # تصميم قاعدة البيانات
 
-الحالة: Schema v3 منفذ للجداول المالية والتذكير المحلي وتدقيق تعديل الاستحقاق
-المحرك: Room 2.8.4 فوق SQLite، وتوليد الكود عبر KSP 2.3.11
-المبدأ: Ledger هو مصدر الحقيقة، والجداول المشتقة Projections فقط.
+آخر تحديث: 2026-08-26
+
+الحالة: **Room Schema v7 منفذة ومتحقق منها في CI**
+
+- المحرك: Room 2.8.4 فوق SQLite، وتوليد الكود عبر KSP 2.3.11.
+- ملف Schema المرجعي: `app/schemas/com.wasl.app.data.local.WaslDatabase/7.json`.
+- `identityHash`: `d2c9fe45f2707138bc1476639617e255`.
+- المبدأ: Ledger هو مصدر الحقيقة المالي؛ Projections والحالات المشتقة لا تستبدله.
+- لا `fallbackToDestructiveMigration` في Production.
 
 ## قواعد عامة
 
-- IDs نصية ثابتة مثل UUID.
-- Instant يخزن epoch milliseconds بصيغة INTEGER.
-- LocalDate يخزن epoch day بصيغة INTEGER.
-- Money يخزن amount_minor INTEGER وcurrency_code TEXT بطول 3.
-- Foreign keys مفعلة.
+- IDs نصية ثابتة.
+- `Instant` يخزن epoch milliseconds في INTEGER.
+- `LocalDate` يخزن epoch day في INTEGER.
+- الأموال تخزن `amount_minor` INTEGER و`currency_code` TEXT.
+- Foreign Keys مفعلة حيث توجد علاقات صريحة.
 - لا Cascade delete لسجل مالي.
 - كل Migration تصدر Schema JSON وتملك اختبارًا.
-- لا تخزن صور أو PDF كبيرة داخل BLOB؛ تخزن ملفات خاصة بالتطبيق وMetadata في DB.
-- ملفات Schema المصدّرة تحفظ تحت `app/schemas/com.wasl.app.data.local.WaslDatabase/`.
-- v1 هو Baseline؛ `MIGRATION_1_2` تضيف reminders، و`MIGRATION_2_3` تضيف audit_events دون تغيير الأشخاص أو الديون أو Ledger.
+- PDF لا يخزن BLOB؛ الملف في Internal storage وMetadata/Hash في Room.
+- Android Auto Backup ليس مسار النسخ المعتمد؛ Backup التطبيق منطقي ومشفر.
 
-## persons
+## الجداول الحالية
 
-| العمود | النوع | القيد |
-|---|---|---|
-| id | TEXT | Primary key |
-| display_name | TEXT | غير فارغ |
-| phone | TEXT | اختياري |
-| email | TEXT | اختياري |
-| photo_uri | TEXT | اختياري، URI داخلي |
-| notes | TEXT | اختياري |
-| created_at | INTEGER | مطلوب |
-| updated_at | INTEGER | مطلوب |
-| archived_at | INTEGER | اختياري |
+### `persons`
+
+الأعمدة:
+
+- `id` TEXT PK NOT NULL.
+- `display_name` TEXT NOT NULL.
+- `phone`, `email`, `photo_uri`, `notes` TEXT nullable.
+- `created_at`, `updated_at` INTEGER NOT NULL.
+- `archived_at` INTEGER nullable.
 
 Indexes:
 
-- display_name للبحث.
-- phone عند اعتماد Normalization واضح.
-- archived_at لتصفية النشط.
+- `display_name`.
+- `archived_at`.
 
-يستخدم منتقي الشخص استعلامًا Reactive على السجلات غير المؤرشفة بحد صريح، مع LIKE مهرب عند وجود عبارة وبدون تحميل غير محدود عند تركها فارغة. يبقى `id` وحده مفتاح الربط المالي؛ الاسم ليس مفتاحًا ولا يمنع تشابه الأسماء.
+الاسم ليس مفتاحًا ماليًا؛ `person_id` هو الربط الحقيقي، لذلك يسمح بتشابه الأسماء.
 
-## debts
+### `debts`
 
-| العمود | النوع | القيد |
-|---|---|---|
-| id | TEXT | Primary key |
-| person_id | TEXT | FK persons، Restrict |
-| direction | TEXT | RECEIVABLE أو PAYABLE |
-| original_amount_minor | INTEGER | أكبر من صفر |
-| currency_code | TEXT | ثلاث حروف |
-| opened_at | INTEGER | مطلوب |
-| due_date_epoch_day | INTEGER | اختياري |
-| description | TEXT | اختياري |
-| notes | TEXT | اختياري |
-| lifecycle_state | TEXT | ACTIVE أو ARCHIVED أو VOID |
-| created_at | INTEGER | مطلوب |
-| updated_at | INTEGER | مطلوب |
-| closed_at | INTEGER | Projection اختياري، يجب مطابقته للLedger |
+الأعمدة:
+
+- `id` TEXT PK.
+- `person_id` TEXT FK→`persons.id` RESTRICT.
+- `direction` TEXT.
+- `original_amount_minor` INTEGER.
+- `currency_code` TEXT.
+- `opened_at` INTEGER.
+- `due_date_epoch_day` INTEGER nullable.
+- `description`, `notes` TEXT nullable.
+- `lifecycle_state` TEXT.
+- `created_at`, `updated_at` INTEGER.
+- `closed_at` INTEGER nullable projection.
 
 Indexes:
 
-- person_id مع opened_at.
-- lifecycle_state مع due_date_epoch_day.
-- currency_code مع direction.
+- (`person_id`, `opened_at`).
+- (`lifecycle_state`, `due_date_epoch_day`).
+- (`currency_code`, `direction`).
 
-استعلام Today يستخدم الفهرس المركب الأول لاختيار `ACTIVE` ذات `due_date_epoch_day <= LocalDate` و`closed_at IS NULL` قبل تحميل العلاقات، فلا يحمل الديون القادمة أو المسددة ثم يصفيها في الواجهة.
+`closed_at` مشتق من Ledger ولا يمثل رصيدًا ماليًا مستقلًا.
 
-استعلام البحث الأول يصل `debts` بـ`persons` ويطابق `display_name` أو `description` عبر LIKE بنمط مهرب وحد أقصى يمرره Repository. لا يضيف Projection أو جدول فهرسة منفصل في v2، ويجلب 51 سجلًا فقط لاكتشاف تجاوز حد العرض 50. إذا أثبتت القياسات أن مسح النص لا يناسب حجم البيانات الفعلي، يعتمد FTS في Migration واختبارات مستقلة بدل إضافة Cache غير متزامن.
+### `ledger_entries`
 
-لا يخزن current_balance كمصدر حقيقة. إذا أضيف Projection للأداء فيكون قابلًا لإعادة البناء وتوجد مقارنة آلية مع Replay.
+الأعمدة:
 
-## ledger_entries
+- `id` TEXT PK.
+- `command_id` TEXT NOT NULL UNIQUE.
+- `debt_id` TEXT FK→`debts.id` RESTRICT.
+- `kind` TEXT (`PAYMENT` / `PAYMENT_REVERSAL`).
+- `amount_minor`, `currency_code`, `occurred_at` nullable بحسب نوع الحدث.
+- `recorded_at` INTEGER NOT NULL.
+- `reverses_entry_id` nullable FK→`ledger_entries.id` RESTRICT.
+- `note`, `reason` nullable بحسب النوع.
+- `sequence_number` INTEGER NOT NULL.
 
-| العمود | النوع | القيد |
-|---|---|---|
-| id | TEXT | Primary key |
-| command_id | TEXT | Unique وIdempotency |
-| debt_id | TEXT | FK debts، Restrict |
-| kind | TEXT | PAYMENT أو PAYMENT_REVERSAL |
-| amount_minor | INTEGER | مطلوب وموجب للدفع، null للعكس |
-| currency_code | TEXT | مطلوب للدفع ومطابق للدين |
-| occurred_at | INTEGER | وقت السداد للدفع |
-| recorded_at | INTEGER | وقت التسجيل، مطلوب |
-| reverses_entry_id | TEXT | FK ledger_entries للدفع المعكوس |
-| note | TEXT | اختياري |
-| reason | TEXT | مطلوب للعكس |
-| sequence_number | INTEGER | متزايد داخل الدين |
+Indexes/قيود:
 
-Constraints منطقية داخل Transaction وDomain:
+- `command_id` UNIQUE.
+- (`debt_id`, `sequence_number`) UNIQUE.
+- `reverses_entry_id` UNIQUE عندما يكون غير null.
+- الدفع لا يتجاوز الرصيد، ويطابق عملة الدين.
+- العكس يشير إلى Payment سابق ولا يمحو الحدث الأصلي.
+- التشغيل العادي لا يوفر Update/Delete لحدث مالي.
 
-- ID وcommand_id فريدان.
-- Payment لا يتجاوز الرصيد في MVP.
-- Reversal يشير إلى Payment سابق في الدين نفسه.
-- Unique على reverses_entry_id غير الفارغ يمنع عكس الدفعة مرتين.
-- recorded_at للعكس لا يسبق Payment.
-- لا Update أو Delete لصف مالي في التشغيل العادي.
+### `reminders`
 
-## Idempotency في المسار المركب
+الأعمدة:
 
-- `debt_id` هو مفتاح Idempotency لإنشاء الشخص والدين والتذكير الاختياري معًا، ويولد قبل الكتابة ويبقى ثابتًا عبر Retry.
-- عند اختيار شخص موجود، يتحقق المسار من `person_id` ثم ينشئ الدين والتذكير الاختياري ذريًا دون تعديل `persons`؛ ويستخدم `debt_id` نفسه لإعادة التشغيل الآمن.
-- تكرار الأمر نفسه يعيد الحساب الموجود، واستخدام `debt_id` نفسه مع Payload مختلف يفشل بـCommandConflict.
-- `command_id` الفريد هو مفتاح دفعات وعكس الدفعات.
-- لا تعرض DAOs أي Update أو Delete لـledger_entries.
-
-Index: debt_id مع sequence_number فريد.
-
-## debt_balance_projection
-
-جدول اختياري يبدأ فقط إذا أثبتت القياسات حاجة الأداء.
-
-| العمود | النوع | القيد |
-|---|---|---|
-| debt_id | TEXT | Primary key |
-| balance_minor | INTEGER | من صفر إلى الأصل |
-| last_sequence_number | INTEGER | آخر حدث مطبق |
-| calculated_at | INTEGER | مطلوب |
-
-يحدث في Transaction نفسها ويُعاد بناؤه من Ledger. اختبار Integrity يقارن عينات أو كل البيانات عند Backup وMigration.
-
-## promises
-
-| العمود | النوع | الوصف |
-|---|---|---|
-| id | TEXT | Primary key |
-| debt_id | TEXT | FK |
-| promised_for | INTEGER | Instant أو LocalDate حسب UX المعتمد |
-| status | TEXT | UPCOMING، FULFILLED، MISSED، CANCELLED |
-| fulfilled_payment_id | TEXT | FK اختياري |
-| created_at | INTEGER | مطلوب |
-| resolved_at | INTEGER | اختياري |
-| note | TEXT | اختياري |
-
-لا يستبدل Promise جديد القديم.
-
-## reminders
-
-منفذ منذ Schema v2 لأول تذكير DUE_DATE غير متكرر. صُممت أعمدة subject وschedule لتوسعة الأنواع لاحقًا دون ادعاء تنفيذها الآن.
-
-| العمود | النوع | الوصف |
-|---|---|---|
-| id | TEXT | Primary key |
-| subject_type | TEXT | DEBT حاليًا؛ الأنواع الأخرى لاحقًا |
-| subject_id | TEXT | debt id في التنفيذ الحالي |
-| reminder_type | TEXT | DUE_DATE حاليًا |
-| schedule_type | TEXT | WORK حاليًا؛ INEXACT وEXACT لاحقًا |
-| trigger_at | INTEGER | Instant |
-| zone_id | TEXT | Timezone IANA |
-| repeat_rule | TEXT | صيغة موثقة أو null |
-| status | TEXT | SCHEDULED، DELIVERED، BLOCKED_PERMISSION، CANCELLED، FAILED |
-| platform_request_code | INTEGER | Unique اختياري لمسارات AlarmManager اللاحقة |
-| last_failure_code | TEXT | رمز تقني محدود بلا بيانات مالية |
-| delivered_at | INTEGER | Instant اختياري |
-| created_at | INTEGER | مطلوب |
-| updated_at | INTEGER | مطلوب |
-
-قيود وفهارس:
-
-- Unique على subject_type + subject_id + reminder_type يمنع تذكير استحقاق مكرر للدين نفسه.
-- Index على status + trigger_at للاسترداد وإعادة الجدولة.
-- Index على subject_id لقراءة علاقة الدين بالتذكير بكفاءة.
-- جدولة WorkManager فريدة باسم مشتق من reminder id وتستبدل العمل السابق فقط.
-- إنشاء الدين وصف reminder يتمان داخل Transaction واحدة؛ جدولة المنصة تحصل بعد Commit، وأي فشل يبقي السجل قابلًا للاسترداد ولا يلغي الدين.
-- تعديل due date وصف reminder وحدث audit يتم في Transaction واحدة. يحتفظ تغيير الموعد أو إعادة التفعيل بـreminder id، ويعيد الحالة إلى SCHEDULED ويمسح بيانات التسليم/الفشل؛ وإزالة الموعد تغيّر الحالة إلى CANCELLED.
-- بعد Commit يستبدل Scheduler الـUnique Work عند إعادة الجدولة، أو يلغيه عند إزالة الموعد. تكرار الإجراء بالـcommand id نفسه لا يضيف سجلًا أو عملًا ثانيًا.
-- trigger_at هو Instant تنفيذي، وzone_id يحفظ المعنى المدني. عند تغيير المنطقة الزمنية يعاد بناء اللحظة من التاريخ/الوقت المدني ثم تحفظ وتجدول Idempotently.
-
-## installments
-
-- id Primary key.
-- debt_id FK.
-- installment_number.
-- planned_amount_minor.
-- currency_code مطابق للدين.
-- due_date_epoch_day.
-- lifecycle state.
-- Unique debt_id مع installment_number.
-
-دفعات الأقساط لا تنشئ مصدر مال منفصلًا؛ تحتاج جدول allocation يربط Ledger payment بقسط ومبلغ موزع.
-
-## attachments
-
-- id.
-- debt_id.
-- ledger_entry_id اختياري.
-- internal_uri.
-- original_name.
-- mime_type.
-- size_bytes.
-- sha256.
-- created_at.
-- archived_at اختياري.
-
-Hash يستخدم للتحقق من سلامة الملف لا لكشف تشابه معلومات المستخدم خارجيًا.
-
-## document_identities
-
-- id.
-- display_name.
-- service_or_business_name.
-- phone، email، address.
-- logo_uri، stamp_uri، signature_uri.
-- primary_color.
-- footer_text.
-- created_at، updated_at، archived_at.
-
-## documents
-
-- id.
-- document_number Unique.
-- type.
-- debt_id اختياري.
-- ledger_entry_id اختياري.
-- person_id.
-- currency_code وamount fields اللازمة.
-- issued_at.
-- template_key وtemplate_version.
-- identity_snapshot_json.
-- financial_snapshot_json.
-- pdf_uri.
-- pdf_sha256.
-- verification_token_hash اختياري.
-- status.
-
-Snapshots Versioned ولا تعاد قراءتها من الهوية الحالية عند عرض نسخة تاريخية.
-
-## audit_events
-
-منفذ في Schema v3 لأول حدث غير مالي: `DUE_SCHEDULE_CHANGED` على Aggregate الدين. لا يغير Ledger ولا يستعمل كبديل له.
-
-| العمود | النوع | الوصف |
-|---|---|---|
-| id | TEXT | Primary key |
-| command_id | TEXT | Unique، مفتاح Idempotency للأمر |
-| aggregate_type | TEXT | DEBT حاليًا |
-| aggregate_id | TEXT | debt id |
-| event_type | TEXT | DUE_SCHEDULE_CHANGED حاليًا |
-| occurred_at | INTEGER | Instant التسجيل |
-| actor | TEXT | LOCAL_USER في MVP |
-| before_snapshot | TEXT | JSON محدود للحالة السابقة |
-| after_snapshot | TEXT | JSON محدود للحالة الجديدة |
-| reason | TEXT | اختياري؛ null لهذا الحدث حاليًا |
+- `id` TEXT PK.
+- `subject_type`, `subject_id`, `reminder_type`, `schedule_type` TEXT.
+- `trigger_at` INTEGER.
+- `zone_id` TEXT.
+- `repeat_rule` TEXT nullable.
+- `status` TEXT.
+- `platform_request_code` INTEGER nullable.
+- `last_failure_code` TEXT nullable.
+- `delivered_at` INTEGER nullable.
+- `created_at`, `updated_at` INTEGER.
 
 Indexes:
 
-- Unique على command_id يمنع تكرار الحدث ويتيح التحقق من Replay المتطابق.
-- aggregate_id مع aggregate_type وoccurred_at لقراءة Timeline بكفاءة.
+- (`subject_type`, `subject_id`, `reminder_type`) UNIQUE.
+- (`status`, `trigger_at`).
+- `subject_id`.
+- `platform_request_code` UNIQUE عندما يكون غير null.
 
-يحمل Snapshot فقط due date وreminder id وtrigger instant وzone id؛ لا يخزن اسم شخص أو مبلغًا أو Secret أو ملفًا. يظهر قبل/بعد في Timeline، ويُرفض الأمر إذا أعيد command_id نفسه ببيانات مختلفة.
+تستخدم WorkManager للمتابعة وExact Alarm فقط للمنبه القوي، ولا يغير أي منهما Ledger.
 
-## Transactions المطلوبة
+### `audit_events`
 
-- إنشاء شخص ودين وتذكير استحقاق اختياري عند المسار المركب.
-- إنشاء دين وتذكير استحقاق اختياري لشخص موجود بعد التحقق من ID وحالة الأرشفة، دون تكرار الشخص.
-- تسجيل دفعة وإغلاق Projection.
-- عكس دفعة وإعادة فتح Projection.
-- تعديل/إلغاء due date وصف reminder وإضافة audit event قبل/بعد.
-- إصدار رقم مستند وحفظ Snapshot.
-- تعديل جدول أقساط.
-- Restore النهائي.
+الأعمدة:
 
-## Migration policy
+- `id` TEXT PK.
+- `command_id` TEXT UNIQUE.
+- `aggregate_type`, `aggregate_id`, `event_type` TEXT.
+- `occurred_at` INTEGER.
+- `actor` TEXT.
+- `before_snapshot`, `after_snapshot`, `reason` TEXT nullable.
 
-1. لا تستخدم destructiveMigration في Production.
-2. كل Version له exported schema.
-3. Migration test يبدأ من أقدم إصدار مدعوم إلى الحالي.
-4. بعد Migration يعاد Replay للأرصدة وتفحص Foreign keys وUnique constraints.
-5. Backup قبل Migration الكبرى عند توفر مساحة، دون تخزين نسخة غير مشفرة خارجيًا.
+Index:
 
-## نطاق التنفيذ الحالي
+- (`aggregate_id`, `aggregate_type`, `occurred_at`).
 
-نُفذت persons وdebts وledger_entries وreminders وaudit_events في Schema v3 لمسار الدين والسداد وتذكير الاستحقاق وتعديله المدقق. يبقى audit_events محدودًا بهذا الحدث فقط؛ وبقية الجداول في هذه الوثيقة تصميم معتمد لشرائح لاحقة وليست جزءًا من Schema الفعلية حتى الآن.
+Audit يسجل تغييرات غير مالية مثل جدول الاستحقاق ولا يحل محل Ledger.
+
+### `document_identities`
+
+الأعمدة:
+
+- `id` TEXT PK.
+- `display_name` TEXT.
+- `activity_name`, `phone`, `footer_text` TEXT nullable.
+- `is_default` INTEGER.
+- `created_at`, `updated_at` INTEGER.
+
+Index: `is_default`.
+
+### `issued_documents`
+
+السجل العام للمستندات المالية.
+
+الأعمدة:
+
+- `id` TEXT PK.
+- `command_id` TEXT UNIQUE.
+- `document_type` TEXT.
+- `status` TEXT.
+- `document_number` TEXT UNIQUE.
+- `issue_year`, `sequence_number` INTEGER.
+- `debt_id` TEXT FK→`debts.id` RESTRICT.
+- `ledger_entry_id` TEXT **nullable** FK→`ledger_entries.id` RESTRICT.
+- `identity_id` TEXT FK→`document_identities.id` RESTRICT.
+- `person_id`, `person_name_snapshot` TEXT.
+- `amount_minor` INTEGER.
+- `currency_code` TEXT.
+- `issued_at` INTEGER.
+- `snapshot_version` INTEGER.
+- `snapshot_json` TEXT.
+- `pdf_relative_path` TEXT.
+- `pdf_sha256` TEXT nullable حتى يصبح المستند READY.
+- `page_count` INTEGER nullable.
+- `failure_code` TEXT nullable.
+- `created_at`, `updated_at` INTEGER.
+
+Indexes:
+
+- `command_id` UNIQUE.
+- `document_number` UNIQUE.
+- (`document_type`, `ledger_entry_id`) UNIQUE.
+- (`issue_year`, `sequence_number`) UNIQUE.
+- (`debt_id`, `issued_at`).
+- `ledger_entry_id`.
+- `identity_id`.
+- `person_id`.
+
+دلالة `ledger_entry_id`:
+
+- `PAYMENT_RECEIPT`: مطلوب ويجب أن يطابق Payment داخل Snapshot.
+- `DEBT_RECEIPT`: null.
+- `ACCOUNT_STATEMENT`: null.
+
+كل مستند يحفظ Snapshot ثابتًا عند الإصدار؛ لا يعاد تفسير الوثيقة من الحالة الحية.
+
+### `payment_promises`
+
+الأعمدة:
+
+- `id` TEXT PK.
+- `create_command_id` TEXT UNIQUE.
+- `debt_id` TEXT FK→`debts.id` RESTRICT.
+- `promised_date_epoch_day` INTEGER.
+- `status` TEXT.
+- `note` TEXT nullable.
+- `created_at` INTEGER.
+- `resolution_command_id` TEXT nullable UNIQUE.
+- `resolved_at` INTEGER nullable.
+- `resolution_note` TEXT nullable.
+- `updated_at` INTEGER.
+
+Indexes:
+
+- `create_command_id` UNIQUE.
+- `resolution_command_id` UNIQUE عندما يكون غير null.
+- (`debt_id`, `promised_date_epoch_day`).
+- (`debt_id`, `status`).
+- (`status`, `promised_date_epoch_day`).
+
+Promise لا تنشئ Payment ولا تغير الرصيد.
+
+### `installment_plans`
+
+الأعمدة:
+
+- `id` TEXT PK.
+- `command_id` TEXT UNIQUE.
+- `debt_id` TEXT FK→`debts.id` RESTRICT.
+- `revision_number` INTEGER.
+- `status` TEXT.
+- `created_at` INTEGER.
+- `supersedes_plan_id` TEXT nullable.
+- `superseded_at`, `superseded_after_sequence` INTEGER nullable.
+- `reason` TEXT nullable.
+
+Indexes:
+
+- `command_id` UNIQUE.
+- (`debt_id`, `revision_number`) UNIQUE.
+- (`debt_id`, `status`).
+- `supersedes_plan_id`.
+
+Revision جديدة لا تعدل السابقة؛ تحولها إلى `SUPERSEDED` وتبقي التاريخ.
+
+### `installments`
+
+الأعمدة:
+
+- `id` TEXT PK.
+- `plan_id` TEXT FK→`installment_plans.id` RESTRICT.
+- `debt_id` TEXT FK→`debts.id` RESTRICT.
+- `sequence_number` INTEGER.
+- `due_date_epoch_day` INTEGER.
+- `amount_minor` INTEGER.
+- `currency_code` TEXT.
+- `created_at` INTEGER.
+
+Indexes:
+
+- (`plan_id`, `sequence_number`) UNIQUE.
+- (`plan_id`, `due_date_epoch_day`).
+- (`debt_id`, `due_date_epoch_day`).
+
+القسط لا يملك رصيدًا ماليًا موازيًا؛ paid/remaining مشتقان من Ledger عند العرض.
+
+## الـView الحالية
+
+### `payment_issued_documents`
+
+```sql
+SELECT *
+FROM issued_documents
+WHERE document_type = 'PAYMENT_RECEIPT'
+```
+
+الغرض: إبقاء استعلامات إيصالات السداد صريحة بعد تعميم `issued_documents` على أنواع مستندات الحساب.
+
+## سلسلة Migrations
+
+- **v1→v2**: إضافة `reminders`.
+- **v2→v3**: إضافة `audit_events`.
+- **v3→v4**: إضافة `document_identities` و`issued_documents` لإيصال السداد.
+- **v4→v5**: إضافة `payment_promises` وفهارسها.
+- **v5→v6**: إضافة `installment_plans` و`installments` ودعم Revisions.
+- **v6→v7**: إعادة بناء `issued_documents` مع `ledger_entry_id` nullable، نسخ البيانات السابقة، إعادة إنشاء الفهارس و`payment_issued_documents`.
+
+Migration v6→v7 تختبر على قاعدة v6 فعلية وتثبت:
+
+- بقاء Payment Receipt القديمة.
+- `ledger_entry_id` لم يعد NOT NULL.
+- إمكانية إدخال مستند حساب دون Ledger source.
+- View الخاصة بالسداد لا تعرض الأنواع الأخرى.
+
+## Backup contract
+
+Backup v7 المنطقي يشمل الجداول العشرة أعلاه وملفات PDF المرتبطة بسجلات `issued_documents` ذات الحالة `READY`.
+
+قبل Restore:
+
+- Schema يجب أن تكون مدعومة.
+- شكل الجداول والصفوف يجب أن يكون متوقعًا.
+- المسارات يجب أن تبقى داخل مجلد المستندات.
+- SHA-256 يجب أن يطابق.
+- البيانات تختبر في Room مؤقتة.
+- Foreign Keys والثوابت المالية تفحص قبل الاستبدال.
+
+أي جدول جديد يدخل مصدر الحقيقة أو أي ملف مهم جديد يجب أن يحدث Backup contract واختبارات Round-trip في نفس المرحلة.
+
+## بوابة التحقق
+
+CI #382 على head `be7f67d`:
+
+- Room Schema v7 generated/current check ✅
+- Baseline migrations + v6→v7 ✅
+- Android instrumentation **63/63** ✅
+- Backup/Restore ✅
+- PDF records/files/checksums ✅

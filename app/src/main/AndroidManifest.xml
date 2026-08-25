@@ -21,7 +21,8 @@
 
         <activity
             android:name=".GeneralRemindersHubActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:noHistory="true" />
 
         <activity
             android:name=".MainActivity"

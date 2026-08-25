@@ -63,6 +63,18 @@
 - اختبارات ViewModel وRoom وCompose للوعود، بما فيها التأكد أن حسم الوعد لا يغير الرصيد ولا due date.
 - اختبار Compose لرحلة Today الخاصة بالوعود مع Clock ثابت لتجنب الاعتماد على تاريخ الجهاز.
 - بوابة CI نهائية على Emulator تشمل **44/44** اختبار Android ناجحًا، إلى جانب Unit/Lint/APK/Room Schema وفحص PDF.
+- Schema v6 مع تخزين خطط الأقساط والأقساط وMigration v5→v6، مع ملف `6.json` مولد من Room وملتزم بهوية `ea8a5a8df2311a0842d64bc34ef91454`.
+- نماذج `InstallmentPlan` و`Installment` مع حالات `ACTIVE` و`SUPERSEDED` وتاريخ Revisions محفوظ بدل الكتابة فوق الخطة السابقة.
+- أوامر Idempotent لإنشاء خطة أقساط ومراجعتها، مع التحقق من تطابق العملة والمبالغ والتسلسل وعدم إنشاء رصيد مالي مستقل عن Ledger.
+- اشتقاق `paidAmount` و`remainingAmount` لكل قسط مع ثابت المصالحة `paidAmount + remainingAmount == scheduledAmount`.
+- استعلام Reactive للأقساط القابلة للمتابعة حتى تاريخ محدد، واستبعاد الأقساط المستقبلية والمدفوعة بالكامل من Today.
+- مركز «الأقساط» في واجهة Material3 لعرض الحسابات والخطة النشطة وإنشاء الخطة أو تعديلها وفتح الحساب المرتبط.
+- `InstallmentAwareWaslRepository` كتركيب Production يجمع `WaslRepository` و`InstallmentPlanStore` بالتفويض دون تكرار منطق Room أو استخدام Global state.
+- عرض **الأقساط المتأخرة** و**أقساط اليوم** في شاشة Today مع المجدول والمدفوع والمتبقي وحالة السداد الجزئي وفتح الحساب لتسجيل الدفعة الفعلية عبر Ledger.
+- اختبارات Baseline للانتقال من قواعد v1 وv2 وv3 حتى Schema v6 دون فقد البيانات، مع التحقق من جداول الأقساط الجديدة.
+- اختبارات Room/ViewModel/Compose للأقساط، بما فيها رحلة Today التي تثبت ظهور المتأخر واليوم، إخفاء القسط المستقبلي، وفتح الحساب الصحيح.
+- بوابة Android CI #218 على الرأس `9874c58` نجحت بالكامل مع **48/48** اختبار Android و0 فشل، إلى جانب Unit/Lint/APK/Room Schema v6 وفحص PDF.
+- Artifacts موثقة من CI #218 للـDebug APK وSchema v6 وإيصال PDF وتقارير Android instrumentation.
 
 ### Changed
 
@@ -76,6 +88,11 @@
 - أصبحت تفاصيل الحساب تفصل بصريًا ودلاليًا بين Timeline المالي وبين سجل وعود السداد.
 - أصبح Room Schema الحالي v5 مع سلسلة Migrations كاملة v1→v5.
 - أصبحت رحلة UI الرئيسية للدفع والإيصال تنتظر تحديث Room/Compose صراحةً قبل المتابعة لتقليل Flaky instrumentation tests.
+- أصبحت شاشة Today تجمع الآن **الاستحقاقات ووعود السداد والأقساط** مع إبقاء كل نموذج مستقلًا عن الآخر وعن Ledger المالي.
+- أصبح Room Schema الحالي **v6** مع سلسلة Migrations كاملة v1→v6 ودون destructive migration.
+- أصبحت بوابة CI تتحقق من `6.json` وتقوم برفع Schema v6 بدل v5.
+- أصبح Repository الإنتاجي يمرر قدرات الأقساط عبر `InstallmentAwareWaslRepository` مع الحفاظ على واجهات الاختبار وFallback غير المتاح حيث يلزم.
+- أصبحت مراجعة خطة الأقساط تنشئ Revision جديدة وتحوّل السابقة إلى `SUPERSEDED` بدل تعديل تاريخ الخطة السابقة أو حذفه.
 
 ### Fixed
 
@@ -87,6 +104,9 @@
 - إصلاح import غير مدعوم في اختبار Today الخاص بوعود السداد.
 - إزالة افتراض أن زر «تسجيل دفعة» عنصر داخل `LazyColumn` في اختبار UI؛ الزر FloatingActionButton ويضغط مباشرة بعد اكتمال تحميل الحساب.
 - تثبيت اختبار الدفع والإيصال ضد سباقات إعادة الرسم بعد إنشاء الدين وحفظ الدفعة.
+- مزامنة Room Schema v6 الحقيقي المولد آليًا بدل كتابة Schema يدويًا، ثم إعادة CI إلى صلاحيات `contents: read` بعد اكتمال المزامنة.
+- تحديث اختبارات Migration baseline القديمة لتصل حتى v6 بدل توقفها عند v5.
+- إصلاح استيراد Compose غير موجود `androidx.compose.ui.test.onNode` في اختبار Today للأقساط، مع استخدام `composeRule.onNode(...)` الصحيح.
 
 ### Security
 

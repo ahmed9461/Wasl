@@ -30,5 +30,5 @@ data class DebtAggregate(
         parentColumn = "id",
         entityColumn = "debt_id",
     )
-    val issuedDocuments: List<IssuedDocumentEntity>,
+    val issuedDocuments: List<PaymentIssuedDocumentView>,
 )

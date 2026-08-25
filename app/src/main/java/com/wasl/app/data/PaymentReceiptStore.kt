@@ -5,8 +5,16 @@ import java.time.Instant
 interface PaymentReceiptStore {
     suspend fun getDefaultDocumentIdentity(): DocumentIdentityRecord?
 
+    suspend fun prepareDebtReceipt(
+        command: PrepareDebtReceiptCommand,
+    ): IssuedDocumentRecord
+
     suspend fun preparePaymentReceipt(
         command: PreparePaymentReceiptCommand,
+    ): IssuedDocumentRecord
+
+    suspend fun prepareAccountStatement(
+        command: PrepareAccountStatementCommand,
     ): IssuedDocumentRecord
 
     suspend fun getIssuedDocument(documentId: String): IssuedDocumentRecord?

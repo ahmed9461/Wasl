@@ -249,11 +249,8 @@ fun WaslApp(
                                     homeViewModel.updateRemindOnDueDate(enabled)
                                     if (enabled && !notificationsAvailable) requestNotificationAccess()
                                 },
-                                onStrongAlarmChange = { enabled ->
-                                    homeViewModel.updateStrongAlarm(enabled)
-                                    if (enabled && !notificationsAvailable) requestNotificationAccess()
-                                    if (enabled && !exactAlarmsAvailable) requestExactAlarmAccess()
-                                },
+                                onStrongAlarmChange = homeViewModel::updateStrongAlarm,
+                                onRequestExactAlarmAccess = ::requestExactAlarmAccess,
                                 notificationPermissionGranted = notificationsAvailable,
                                 exactAlarmAccessGranted = exactAlarmsAvailable,
                                 onSave = homeViewModel::createDebt,
@@ -383,11 +380,8 @@ fun WaslApp(
                                         requestNotificationAccess()
                                     }
                                 },
-                                onDueScheduleStrongAlarmChange = { enabled ->
-                                    detailsViewModel.updateDueScheduleStrongAlarm(enabled)
-                                    if (enabled && !notificationsAvailable) requestNotificationAccess()
-                                    if (enabled && !exactAlarmsAvailable) requestExactAlarmAccess()
-                                },
+                                onDueScheduleStrongAlarmChange = detailsViewModel::updateDueScheduleStrongAlarm,
+                                onRequestExactAlarmAccess = ::requestExactAlarmAccess,
                                 onConfirmDueSchedule = detailsViewModel::confirmDueSchedule,
                                 onOpenPaymentPromise = detailsViewModel::openPaymentPromiseDialog,
                                 onDismissPaymentPromise = detailsViewModel::dismissPaymentPromiseDialog,
@@ -431,6 +425,7 @@ private fun WaslHomeScreen(
     onDueDateChange: (LocalDate?) -> Unit,
     onReminderChange: (Boolean) -> Unit,
     onStrongAlarmChange: (Boolean) -> Unit,
+    onRequestExactAlarmAccess: () -> Unit,
     notificationPermissionGranted: Boolean,
     exactAlarmAccessGranted: Boolean,
     onSave: () -> Unit,
@@ -627,6 +622,7 @@ private fun WaslHomeScreen(
             onDueDateChange = onDueDateChange,
             onReminderChange = onReminderChange,
             onStrongAlarmChange = onStrongAlarmChange,
+            onRequestExactAlarmAccess = onRequestExactAlarmAccess,
             notificationPermissionGranted = notificationPermissionGranted,
             exactAlarmAccessGranted = exactAlarmAccessGranted,
             onSave = onSave,
@@ -658,6 +654,7 @@ private fun CreateDebtDialog(
     onDueDateChange: (LocalDate?) -> Unit,
     onReminderChange: (Boolean) -> Unit,
     onStrongAlarmChange: (Boolean) -> Unit,
+    onRequestExactAlarmAccess: () -> Unit,
     notificationPermissionGranted: Boolean,
     exactAlarmAccessGranted: Boolean,
     onSave: () -> Unit,
@@ -876,12 +873,21 @@ private fun CreateDebtDialog(
                     )
                 }
                 if (form.strongAlarmEnabled && !exactAlarmAccessGranted) {
-                    Text(
-                        "Android يحتاج إذن «المنبهات والتذكيرات» لتشغيل المنبه القوي بدقة. المتابعة الذكية ستبقى فعالة.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.testTag("create-exact-alarm-permission-warning"),
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            "Android يحتاج إذن «المنبهات والتذكيرات» لتشغيل المنبه القوي بدقة. المتابعة الذكية ستبقى فعالة.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.testTag("create-exact-alarm-permission-warning"),
+                        )
+                        TextButton(
+                            onClick = onRequestExactAlarmAccess,
+                            enabled = !isSaving,
+                            modifier = Modifier.testTag("create-request-exact-alarm-access"),
+                        ) {
+                            Text("السماح بالمنبه الدقيق")
+                        }
+                    }
                 }
 
                 Text("اتجاه الدين", fontWeight = FontWeight.SemiBold)
@@ -1364,6 +1370,7 @@ private fun WaslHomeScreenPreview() {
                 onDueDateChange = {},
                 onReminderChange = {},
                 onStrongAlarmChange = {},
+                onRequestExactAlarmAccess = {},
                 notificationPermissionGranted = true,
                 exactAlarmAccessGranted = true,
                 onSave = {},

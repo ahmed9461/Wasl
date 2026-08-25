@@ -94,7 +94,7 @@ class DueDateUiInstrumentedTest {
         composeRule.onNodeWithText("2026-08-14", substring = true)
             .performScrollTo()
             .assertIsDisplayed()
-        composeRule.onNodeWithText("موعد التذكير")
+        composeRule.onNodeWithText("موعد المتابعة الأساسي")
             .performScrollTo()
             .assertIsDisplayed()
         composeRule.onNodeWithText("مجدول")
@@ -150,7 +150,12 @@ class DueDateUiInstrumentedTest {
         waitForTag("edit-strong-alarm")
         composeRule.onNodeWithTag("edit-strong-alarm").performClick()
         waitForTag("exact-alarm-permission-warning")
-        composeRule.onNodeWithTag("exact-alarm-permission-warning").assertIsDisplayed()
+        composeRule.onNodeWithTag("exact-alarm-permission-warning")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag("request-exact-alarm-access")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     private fun waitForText(text: String) {

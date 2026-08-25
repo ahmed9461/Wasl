@@ -107,6 +107,7 @@ internal fun AccountDetailsScreen(
     onDueScheduleDateChange: (LocalDate?) -> Unit,
     onDueScheduleReminderChange: (Boolean) -> Unit,
     onDueScheduleStrongAlarmChange: (Boolean) -> Unit,
+    onRequestExactAlarmAccess: () -> Unit,
     onConfirmDueSchedule: () -> Unit,
     onOpenPaymentPromise: () -> Unit,
     onDismissPaymentPromise: () -> Unit,
@@ -292,6 +293,7 @@ internal fun AccountDetailsScreen(
             onDueDateChange = onDueScheduleDateChange,
             onReminderChange = onDueScheduleReminderChange,
             onStrongAlarmChange = onDueScheduleStrongAlarmChange,
+            onRequestExactAlarmAccess = onRequestExactAlarmAccess,
             onConfirm = onConfirmDueSchedule,
         )
     }
@@ -687,6 +689,7 @@ private fun DueScheduleDialog(
     onDueDateChange: (LocalDate?) -> Unit,
     onReminderChange: (Boolean) -> Unit,
     onStrongAlarmChange: (Boolean) -> Unit,
+    onRequestExactAlarmAccess: () -> Unit,
     onConfirm: () -> Unit,
 ) {
     var showDatePicker by remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -776,12 +779,21 @@ private fun DueScheduleDialog(
                     )
                 }
                 if (form.strongAlarmEnabled && !exactAlarmAccessGranted) {
-                    Text(
-                        "المنبه القوي محفوظ، لكن Android يحتاج إذن «المنبهات والتذكيرات» لتشغيله بدقة. ستستمر المتابعة الذكية.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.testTag("exact-alarm-permission-warning"),
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            "المنبه القوي محفوظ، لكن Android يحتاج إذن «المنبهات والتذكيرات» لتشغيله بدقة. ستستمر المتابعة الذكية.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.testTag("exact-alarm-permission-warning"),
+                        )
+                        TextButton(
+                            onClick = onRequestExactAlarmAccess,
+                            enabled = !isSaving,
+                            modifier = Modifier.testTag("request-exact-alarm-access"),
+                        ) {
+                            Text("السماح بالمنبه الدقيق")
+                        }
+                    }
                 }
                 error?.let {
                     Surface(

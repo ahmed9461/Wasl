@@ -23,13 +23,17 @@ interface PaymentReceiptService {
 
     suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord
 
-    suspend fun issueDebtReceipt(command: PrepareDebtReceiptCommand): IssuedDocumentRecord
+    suspend fun issueDebtReceipt(command: PrepareDebtReceiptCommand): IssuedDocumentRecord =
+        error("Account document service is unavailable.")
 
-    suspend fun issueAccountStatement(command: PrepareAccountStatementCommand): IssuedDocumentRecord
+    suspend fun issueAccountStatement(
+        command: PrepareAccountStatementCommand,
+    ): IssuedDocumentRecord = error("Account document service is unavailable.")
 
     suspend fun retry(documentId: String): IssuedDocumentRecord
 
-    suspend fun retryAccountDocument(documentId: String): IssuedDocumentRecord
+    suspend fun retryAccountDocument(documentId: String): IssuedDocumentRecord =
+        error("Account document service is unavailable.")
 }
 
 object UnavailablePaymentReceiptService : PaymentReceiptService {

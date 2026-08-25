@@ -27,14 +27,17 @@ class MainActivity : ComponentActivity() {
             val waslApplication = application as WaslApplication
             var installmentsOpen by remember { mutableStateOf(false) }
             var settingsOpen by remember { mutableStateOf(false) }
+            var documentsOpen by remember { mutableStateOf(false) }
             Box(modifier = Modifier.fillMaxSize()) {
                 CompositionLocalProvider(
                     LocalOpenInstallmentsHub provides {
                         settingsOpen = false
+                        documentsOpen = false
                         installmentsOpen = true
                     },
                     LocalOpenSettingsHub provides {
                         installmentsOpen = false
+                        documentsOpen = false
                         settingsOpen = true
                     },
                 ) {
@@ -63,10 +66,24 @@ class MainActivity : ComponentActivity() {
                         backupService = waslApplication.backupService,
                         privacyPreferences = waslApplication.privacyPreferences,
                         onBack = { settingsOpen = false },
+                        onOpenDocuments = {
+                            settingsOpen = false
+                            documentsOpen = true
+                        },
                         onRestored = {
                             waslApplication.reminderScheduler.requestRecovery()
                         },
                         onSecureScreenChanged = ::applySecureScreenPreference,
+                    )
+                }
+                if (documentsOpen) {
+                    DocumentsHubRoute(
+                        repository = waslApplication.repository,
+                        documentService = waslApplication.paymentReceiptService,
+                        onBack = {
+                            documentsOpen = false
+                            settingsOpen = true
+                        },
                     )
                 }
             }

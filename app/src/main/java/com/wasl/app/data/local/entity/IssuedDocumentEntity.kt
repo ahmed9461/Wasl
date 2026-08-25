@@ -61,7 +61,7 @@ data class IssuedDocumentEntity(
     @ColumnInfo(name = "debt_id")
     val debtId: String,
     @ColumnInfo(name = "ledger_entry_id")
-    val ledgerEntryId: String,
+    val ledgerEntryId: String?,
     @ColumnInfo(name = "identity_id")
     val identityId: String,
     @ColumnInfo(name = "person_id")

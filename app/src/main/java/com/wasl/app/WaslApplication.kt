@@ -22,6 +22,7 @@ import com.wasl.app.document.PaymentReceiptService
 import com.wasl.app.privacy.PrivacyPreferences
 import com.wasl.app.reminder.GeneralReminderNotificationPublisher
 import com.wasl.app.reminder.GeneralReminderScheduler
+import com.wasl.app.reminder.GeneralReminderService
 import com.wasl.app.reminder.HybridReminderScheduler
 import com.wasl.app.reminder.ReminderNotificationPublisher
 import com.wasl.app.reminder.ReminderScheduler
@@ -76,6 +77,15 @@ class WaslApplication : Application() {
         LazyThreadSafetyMode.SYNCHRONIZED,
     ) {
         WorkManagerGeneralReminderScheduler(this)
+    }
+
+    val generalReminderService: GeneralReminderService by lazy(
+        LazyThreadSafetyMode.SYNCHRONIZED,
+    ) {
+        GeneralReminderService(
+            store = generalReminderStore,
+            scheduler = generalReminderScheduler,
+        )
     }
 
     private val accountDocumentStore: RoomAccountDocumentStore by lazy(

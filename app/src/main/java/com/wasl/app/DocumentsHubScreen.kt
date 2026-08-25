@@ -264,7 +264,7 @@ internal fun DocumentsHubRoute(
                                 }) { Text("مشاركة") }
                             }
                         }
-                    )
+                    }
                 }
             }
 

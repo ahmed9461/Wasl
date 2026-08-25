@@ -6,6 +6,7 @@ import androidx.work.WorkerParameters
 import com.wasl.app.WaslApplication
 import com.wasl.app.data.ReminderStatus
 import java.time.Instant
+import java.time.ZoneId
 import kotlinx.coroutines.CancellationException
 
 class GeneralReminderDeliveryWorker(
@@ -90,10 +91,12 @@ class GeneralReminderRecoveryWorker(
     override suspend fun doWork(): Result {
         val application = applicationContext as? WaslApplication ?: return Result.failure()
         val now = Instant.now()
+        val currentZone = ZoneId.systemDefault()
         return try {
             application.generalReminderStore.getRecoverableReminders().forEach { stored ->
                 val plan = planGeneralReminderRecovery(
                     stored = stored,
+                    currentZone = currentZone,
                     now = now,
                     canNotify = application.generalReminderNotificationPublisher.canNotify(),
                 )

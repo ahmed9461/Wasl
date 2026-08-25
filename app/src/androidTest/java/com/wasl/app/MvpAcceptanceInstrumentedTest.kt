@@ -58,7 +58,7 @@ class MvpAcceptanceInstrumentedTest {
         }
         isolatedContext = object : ContextWrapper(baseContext) {
             override fun getApplicationContext(): Context = this
-            override fun getFilesDir(): File = filesDir
+            override fun getFilesDir(): File = this@MvpAcceptanceInstrumentedTest.filesDir
         }
         openDatabase()
     }

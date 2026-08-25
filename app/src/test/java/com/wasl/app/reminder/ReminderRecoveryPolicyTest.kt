@@ -115,6 +115,29 @@ class ReminderRecoveryPolicyTest {
         assertFalse(past.shouldPersistScheduledState)
     }
 
+    @Test
+    fun strongAlarmTimezoneChangePreservesCivilTimeWhenExactAccessIsAvailable() {
+        val stored = reminder(ReminderStatus.SCHEDULED, lastFailureCode = null).copy(
+            triggerAt = Instant.parse("2026-08-15T06:00:00Z"),
+            zoneId = ZoneId.of("Asia/Riyadh"),
+            type = ReminderType.STRONG_ALARM,
+            scheduleType = ReminderScheduleType.EXACT_ALARM,
+        )
+
+        val plan = planReminderRecovery(
+            stored = stored,
+            currentZone = ZoneId.of("Europe/London"),
+            now = now,
+            canNotify = true,
+            canScheduleExactAlarms = true,
+        )
+
+        assertTrue(plan.shouldSchedule)
+        assertEquals(Instant.parse("2026-08-15T08:00:00Z"), plan.triggerAt)
+        assertEquals(ZoneId.of("Europe/London"), plan.zoneId)
+        assertTrue(plan.shouldPersistScheduledState)
+    }
+
     private fun reminder(
         status: ReminderStatus,
         lastFailureCode: String? = "TEST_FAILURE",

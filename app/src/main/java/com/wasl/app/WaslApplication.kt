@@ -1,6 +1,8 @@
 package com.wasl.app
 
 import android.app.Application
+import com.wasl.app.backup.AndroidBackupService
+import com.wasl.app.backup.BackupService
 import com.wasl.app.data.InstallmentAwareWaslRepository
 import com.wasl.app.data.InstallmentPlanStore
 import com.wasl.app.data.PaymentPromiseStore
@@ -12,8 +14,9 @@ import com.wasl.app.data.local.RoomWaslRepository
 import com.wasl.app.data.local.WaslDatabase
 import com.wasl.app.document.AndroidPaymentReceiptService
 import com.wasl.app.document.PaymentReceiptService
-import com.wasl.app.reminder.ReminderNotificationPublisher
+import com.wasl.app.privacy.PrivacyPreferences
 import com.wasl.app.reminder.HybridReminderScheduler
+import com.wasl.app.reminder.ReminderNotificationPublisher
 import com.wasl.app.reminder.ReminderScheduler
 
 class WaslApplication : Application() {
@@ -61,6 +64,17 @@ class WaslApplication : Application() {
         AndroidPaymentReceiptService(
             context = this,
             store = roomRepository,
+        )
+    }
+
+    val privacyPreferences: PrivacyPreferences by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        PrivacyPreferences(this)
+    }
+
+    val backupService: BackupService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        AndroidBackupService(
+            context = this,
+            database = database,
         )
     }
 

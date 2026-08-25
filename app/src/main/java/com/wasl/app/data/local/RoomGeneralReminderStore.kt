@@ -29,7 +29,7 @@ class RoomGeneralReminderStore(
         reminderDao.findGeneralForDebt(debtId.value)?.toGeneralRecord()
 
     override suspend fun getRecoverableReminders(): List<GeneralReminderRecord> =
-        reminderDao.findRecoverableGeneral().map(ReminderEntity::toGeneralRecord)
+        reminderDao.findRecoverableGeneral().map { it.toGeneralRecord() }
 
     override suspend fun upsertReminder(
         command: UpsertGeneralReminderCommand,

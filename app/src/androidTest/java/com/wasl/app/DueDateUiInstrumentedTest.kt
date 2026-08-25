@@ -156,6 +156,7 @@ class DueDateUiInstrumentedTest {
         composeRule.onNodeWithTag("request-exact-alarm-access")
             .performScrollTo()
             .assertIsDisplayed()
+        composeRule.onNodeWithTag("save-due-schedule").assertIsDisplayed()
     }
 
     private fun waitForText(text: String) {

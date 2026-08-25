@@ -62,6 +62,7 @@ internal fun SettingsHubRoute(
     backupService: BackupService,
     privacyPreferences: PrivacyPreferences,
     onBack: () -> Unit,
+    onOpenDocuments: () -> Unit,
     onRestored: () -> Unit,
     onSecureScreenChanged: () -> Unit,
 ) {
@@ -186,6 +187,25 @@ internal fun SettingsHubRoute(
                         CircularProgressIndicator()
                         Text(message, fontWeight = FontWeight.Medium)
                     }
+                }
+            }
+
+            SettingsSectionCard(
+                title = "المستندات",
+                subtitle = "إصدار إيصال الدين وكشف الحساب من بيانات وَصل المحفوظة.",
+            ) {
+                Text(
+                    text = "إيصال السداد يبقى مرتبطًا بالدفعة نفسها، بينما تجد هنا مستندات الحساب العامة.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("open-documents-hub"),
+                    onClick = onOpenDocuments,
+                ) {
+                    Text("فتح مركز المستندات")
                 }
             }
 

@@ -301,7 +301,7 @@ abstract class WaslDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `issued_documents_new` RENAME TO `issued_documents`")
                 createIssuedDocumentIndexes(db, includeLedgerIndex = true)
                 db.execSQL(
-                    "CREATE VIEW IF NOT EXISTS `payment_issued_documents` AS SELECT * FROM `issued_documents` WHERE `document_type` = 'PAYMENT_RECEIPT'",
+                    "CREATE VIEW IF NOT EXISTS `payment_issued_documents` AS SELECT * FROM issued_documents WHERE document_type = 'PAYMENT_RECEIPT'",
                 )
             }
         }

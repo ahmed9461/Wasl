@@ -1,6 +1,6 @@
 # القرارات المعمارية والتقنية
 
-آخر تحديث: 2026-08-13
+آخر تحديث: 2026-08-25
 
 أي تغيير في قرار معتمد هنا يحتاج سببًا موثقًا واختبارات أثر. لا تُرقّى المكتبات لمجرد وجود إصدار أحدث.
 
@@ -60,27 +60,34 @@
 
 ## ADR-006 — Room 2.8.4 وMigrations صريحة
 
-- الحالة: معتمد ومنفذ حتى Schema v3
-- القرار: استخدام Room 2.8.4 مع KSP 2.3.11 وتصدير Schema واختبارات Migration. بدأ v1 بـpersons وdebts وledger_entries، وتضيف v1→v2 جدول reminders، ثم تضيف v2→v3 جدول audit_events عند تنفيذ أول سلوك تدقيق فعلي لتعديل الاستحقاق.
+- الحالة: معتمد ومنفذ حتى **Schema v7**
+- القرار: استخدام Room 2.8.4 مع KSP 2.3.11 وتصدير Schema واختبارات Migration، مع سلسلة يدوية صريحة من v1 حتى v7 ودون `fallbackToDestructiveMigration` في Production.
 - السبب: Android-only يحتاج حلًا مستقرًا ومجربًا، والتحقق وقت الترجمة من SQL ومسار Migrations. Room موصى به رسميًا بدل SQLite المباشر.
 - البدائل:
   - SQLite API مباشرة: مرفوضة لكثرة Boilerplate وضعف التحقق وقت البناء.
-  - Room 3.0.1: إصدار Stable لكنه Major حديث جدًا يركز على KMP ويتطلب KSP وSQLiteDriver فقط. لا توجد حاجة KMP الآن، لذا لا نتحمل مخاطرة انتقال مبكر. يُعاد تقييمه بعد استقرار MVP وتحقق تكاملات التشفير والنسخ.
-  - قاعدة بيانات سحابية: مرفوضة لأنها تكسر Local-first.
+  - Room 3.x: لا توجد حاجة KMP حاليًا، ولذلك لا يتحمل المشروع Major migration قبل وجود سبب فعلي.
+  - قاعدة بيانات سحابية كمصدر رئيسي: مرفوضة لأنها تكسر Local-first.
 - المصادر:
   - [Room موصى به بدل SQLite المباشر](https://developer.android.com/training/data-storage/room)
   - [Room 2 release notes](https://developer.android.com/jetpack/androidx/releases/room)
-  - [Room 3.0 والفروق الجوهرية](https://developer.android.com/jetpack/androidx/releases/room3)
+  - [Room 3](https://developer.android.com/jetpack/androidx/releases/room3)
   - [KSP](https://github.com/google/ksp)
 - النتيجة التنفيذية:
-  - ملفات `1.json` و`2.json` و`3.json` تحت `app/schemas/com.wasl.app.data.local.WaslDatabase/` جزء دائم من المستودع، ويمنع CI أي انحراف في Schema المولدة.
-  - لا يوجد `fallbackToDestructiveMigration` في Production.
-  - يُحاذى kotlinx-serialization Core وJSON معًا عبر BOM 1.9.0؛ Navigation 3 يحتاج Serialization للمفاتيح المحفوظة، وفرض BOM يمنع خلط Room JSON 1.8.1 مع Core مختلف في AndroidTest runtime.
-  - Version 1 هو Baseline؛ `MIGRATION_1_2` و`MIGRATION_2_3` انتقالان يدويان مسجلان بالترتيب في `ALL_MIGRATIONS` ومختبران من v1 وv2 إلى الحالي.
+  - ملفات `1.json` حتى `7.json` تحت `app/schemas/com.wasl.app.data.local.WaslDatabase/` جزء دائم من المستودع.
+  - CI يولد Schema الحالية ويمنع انحرافها عن `7.json` الملتزم.
+  - هوية Schema v7 الحالية: `d2c9fe45f2707138bc1476639617e255`.
+  - v1→v2: reminders.
+  - v2→v3: audit events.
+  - v3→v4: document identities + issued documents.
+  - v4→v5: payment promises + indexes.
+  - v5→v6: installment plans/installments وتاريخ Revisions.
+  - v6→v7: إعادة بناء `issued_documents` بحيث يصبح `ledger_entry_id` nullable للسماح بمستندات حساب غير مرتبطة بحركة واحدة، مع نسخ الصفوف السابقة وإعادة إنشاء الفهارس والـView.
+  - تعريف `payment_issued_documents` في Migration يجب أن يطابق نص `@DatabaseView` حرفيًا؛ Room يتحقق من تعريف الـView في اختبارات Migration.
+  - kotlinx-serialization Core وJSON محاذيان عبر BOM 1.9.0 لمنع خلط الإصدارات في AndroidTest runtime.
 
 ## ADR-007 — Compose وMaterial 3 وNavigation 3
 
-- الحالة: معتمد ومطبق لمسارات الرئيسية وToday وتفاصيل الحساب
+- الحالة: معتمد ومطبق
 - القرار: Single-activity وJetpack Compose وMaterial 3. تستخدم الواجهة Navigation 3 stable 1.1.6 بدل Router خاص، مع `NavKey` Serializable وBack stack واحد مملوك للتطبيق.
 - السبب: Compose هو Toolkit الحديث الموصى به، وNavigation 3 يمنح Back stack صريحًا ويدعم الواجهات التكيفية.
 - البدائل:
@@ -92,22 +99,20 @@
   - [Navigation 3](https://developer.android.com/guide/navigation/navigation-3)
   - [Navigation bar في Compose](https://developer.android.com/develop/ui/compose/components/navigation-bar)
   - [Compose BOM](https://developer.android.com/develop/ui/compose/bom)
-- النتيجة التنفيذية: `HomeRoute` و`TodayRoute` وجهتان علويتان بتنقل سفلي مدمج، و`AccountDetailsRoute` يحمل المعرف الصغير فقط. تفاصيل الحساب وToday تقرآن Reactive من Repository، و`rememberNavBackStack` يحفظ مفاتيح المسار القابلة للتسلسل.
+- النتيجة التنفيذية: الوجهات تحمل معرفات صغيرة لا كيانات كاملة، وتقرأ الحالة Reactive من Repository. توسعت الواجهة إلى الرئيسية واليوم والبحث وتفاصيل الحساب والأقساط والمستندات والإعدادات دون Global mutable navigation state.
 
 ## ADR-008 — سياسة التذكيرات والمنبهات
 
-- الحالة: معتمد ومنفذ لأول تذكير DUE_DATE
+- الحالة: معتمد ومنفذ
 - القرار:
-  - WorkManager 2.11.2 للتذكير العادي المؤجل الذي يقبل نافذة تنفيذ النظام؛ كل تذكير OneTimeWork فريد باسم مشتق من reminder id.
-  - AlarmManager غير الدقيق لتذكير مستخدم بوقت يمكن أن يتحمل نافذة.
-  - Exact Alarm فقط لمنبه قوي فعّله المستخدم صراحة ويحتاج لحظة دقيقة.
-  - التحقق من صلاحية Exact Alarm وتقديم Fallback واضح.
-  - WorkManager يتولى بقاء العمل عبر إعادة التشغيل. يشغّل التطبيق Recovery idempotent عند بدء العملية وبعد تغيير الوقت أو المنطقة الزمنية، ويعيد بناء Instant من الوقت المدني المحفوظ عند تغير المنطقة.
-  - إذن POST_NOTIFICATIONS يطلب عند تفعيل التذكير على Android 13+؛ رفضه لا يلغي الدين أو التذكير، بل يسجل BLOCKED_PERMISSION ويعاد الاسترداد بعد السماح.
-  - يتحقق التطبيق من إذن التطبيق ومن تعطيل الإشعارات أو قناة المستحقات. تبقى BLOCKED_PERMISSION دون جدولة ما دام الحظر قائمًا؛ وبعد السماح أو Retry للفشل يعيد Recovery الحالة إلى SCHEDULED قبل Unique Work.
-  - قناة `wasl_due_accounts` مستقلة، والإشعار الخاص يملك نسخة عامة لا تكشف الشخص أو المبلغ على شاشة القفل ويفتح الحساب المقصود.
-  - تعديل موعد DUE_DATE يحافظ على reminder ID ويستبدل Unique Work السابق. إزالة الموعد تعلّم السجل `CANCELLED` داخل Transaction ثم تلغي العمل بعد Commit؛ ويظهر التغيير كحدث تدقيق قبل/بعد.
-- السبب: Exact alarms مكلفة ومقيدة، ووثائق Android توصي بعدم استخدامها للأعمال الدورية.
+  - WorkManager 2.11.2 للمتابعة التي تقبل نافذة تنفيذ النظام؛ كل عمل فريد باسم مشتق من reminder id.
+  - Exact Alarm فقط لمنبه قوي فعّله المستخدم صراحة ويحتاج وقتًا دقيقًا.
+  - WorkManager والمتابعة الذكية يبقيان fallback عند تعذر Exact Alarm.
+  - Recovery idempotent يعمل عند بدء العملية وبعد تغير الوقت أو المنطقة الزمنية.
+  - إذن POST_NOTIFICATIONS وحالة القناة يفحصان صراحة؛ الحظر يسجل `BLOCKED_PERMISSION` بدل تغيير أصل الدين.
+  - طلب إعداد Exact Alarm لا يفتح إعدادات Android تلقائيًا عند تشغيل السويتش؛ الانتقال يحدث فقط عند فعل صريح من المستخدم.
+  - تعديل الموعد يحافظ على reminder ID ويستبدل Unique Work السابق، وإزالة الموعد تعلّم السجل `CANCELLED` ثم تلغي العمل بعد نجاح Transaction.
+- السبب: Exact alarms مكلفة ومقيدة، ووثائق Android توصي بعدم استخدامها للأعمال التي لا تحتاج لحظة دقيقة.
 - البدائل:
   - Exact لكل تذكير: مرفوض بسبب البطارية والصلاحيات والرفض الافتراضي.
   - WorkManager لكل موعد دقيق: مرفوض لأنه لا يضمن لحظة دقيقة.
@@ -116,26 +121,28 @@
   - [Getting started with WorkManager](https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started)
   - [Unique Work](https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/manage-work#unique-work)
   - [Notification runtime permission](https://developer.android.com/develop/ui/compose/notifications/notification-permission)
-  - [Implicit broadcast exceptions for time and timezone changes](https://developer.android.com/develop/background-work/background-tasks/broadcasts/broadcast-exceptions)
 
 ## ADR-009 — الأمان Local-first
 
-- الحالة: معتمد كسياسة، التنفيذ تدريجي
+- الحالة: معتمد، ومسار النسخ الاحتياطي التطبيقي أصبح مطبقًا
 - القرار:
   - لا Backend إجباري.
-  - Android Keystore لمفاتيح التشفير غير القابلة للتصدير.
-  - BiometricPrompt مع Device Credential للحماية المحلية عند التنفيذ.
-  - Auto Backup معطل حتى يتوفر Backup تطبيقي مشفر ومُصدّر باختيار المستخدم.
-  - usesCleartextTraffic معطل.
-  - الملفات داخل مساحة التطبيق وتشارك لاحقًا عبر FileProvider.
+  - Android Keystore هو المسار المخطط للمفاتيح المحلية غير القابلة للتصدير عند تنفيذ قفل التطبيق.
+  - BiometricPrompt مع Device Credential للحماية المحلية عند تنفيذها.
+  - Android Auto Backup وDevice Transfer معطلان عمدًا.
+  - النسخ الاحتياطي المدعوم هو Backup تطبيقي صريح يختاره المستخدم ويُحمى بكلمة مرور، ويشمل بيانات التطبيق وملفات المستندات الجاهزة.
+  - `usesCleartextTraffic` معطل.
+  - الملفات داخل مساحة التطبيق وتشارك عبر FileProvider عند الحاجة.
   - لا بيانات مالية في Logs أو Crash metadata.
-- السبب: بيانات مالية حساسة ويجب ألا تصبح Cloud أو Logs شرط تشغيل أو تسريبًا.
+- السبب: بيانات مالية حساسة ويجب ألا تصبح Cloud أو Logs شرط تشغيل أو مسار تسريب، كما يجب أن يظل قرار تصدير النسخة بيد المستخدم.
 - البدائل:
+  - Android Auto Backup غير المقيد: مرفوض لأن دورة الحياة وجهة التخزين لا تكونان تحت سيطرة وَصل بما يكفي لبيانات مالية ومستندات.
   - تخزين PIN أو مفتاح خام: مرفوض.
   - الاعتماد على حماية الجهاز وحدها لكل الحالات: غير كافٍ لخيار قفل مستقل داخل التطبيق.
 - المصادر:
   - [Android Keystore](https://developer.android.com/privacy-and-security/keystore)
   - [Biometric authentication](https://developer.android.com/identity/sign-in/biometric-auth)
+  - [Data backup overview](https://developer.android.com/identity/data/autobackup)
 
 ## ADR-010 — إصدارات البناء وAPI
 
@@ -150,38 +157,77 @@
   - compileSdk 36 وtargetSdk 36
   - minSdk 26
 - السبب:
-  - AGP 9.3 يدعم API 37 ويتطلب Gradle 9.5 وJDK 17، لكن منصة android-37 غير متاحة عبر sdkmanager المستقر بتاريخ القرار.
-  - Core 1.19.0 وLifecycle 2.11.0 يتطلبان compileSdk 37؛ لذلك ثُبّت آخر إصدارين مستقرين متوافقين مع منصة 36 بدل إدخال SDK تجريبي.
-  - Android 17 ما زال Beta بتاريخ القرار، لذلك يبقى compileSdk وtargetSdk على 36 ولا يشترك MVP في منصة غير نهائية.
-  - target 36 يطابق متطلبات 2026 ويمنح وقتًا لاختبار تغييرات Android 17 قبل رفعه.
-  - min 26 يوفر java.time وNotification Channels مباشرة ويغطي أجهزة حديثة دون Desugaring إضافي.
+  - تثبيت منصة مستقرة متوافقة بدل إدخال Android SDK أحدث قبل الحاجة والاختبار.
+  - min 26 يوفر java.time وNotification Channels مباشرة ويقلل مسارات التوافق.
 - البدائل:
-  - compileSdk أو targetSdk 37 الآن: مرفوض مؤقتًا لأن Android 17 غير نهائي ولأن منصة 37 غير منشورة في قناة SDK المستقرة.
-  - min 23: ممكن، لكنه يحتاج Desugaring ومسارات توافق إضافية؛ يعاد تقييمه إذا أثبتت بيانات المستخدمين حاجة حقيقية.
+  - رفع compileSdk/targetSdk لمجرد توفر إصدار أحدث: مرفوض دون اختبار أثر.
+  - min 23: ممكن، لكنه يحتاج مسارات توافق إضافية؛ يعاد تقييمه عند وجود حاجة مستخدمين مثبتة.
 - المصادر:
-  - [AGP 9.3 compatibility](https://developer.android.com/build/releases/agp-9-3-0-release-notes)
+  - [AGP release notes](https://developer.android.com/build/releases/gradle-plugin)
   - [AndroidX Core releases](https://developer.android.com/jetpack/androidx/releases/core)
   - [AndroidX Lifecycle releases](https://developer.android.com/jetpack/androidx/releases/lifecycle)
-  - [Android 17 release notes](https://developer.android.com/about/versions/17/release-notes)
   - [Target API requirements](https://developer.android.com/google/play/requirements/target-sdk)
 
-## ADR-011 — توليد PDF عبر Platform مع بوابة عربية
+## ADR-011 — توليد PDF عبر Android Platform مع دعم عربي
 
-- الحالة: معتمد مبدئيًا بشرط نجاح Prototype
-- القرار: البدء بـandroid.graphics.pdf.PdfDocument وStaticLayout أو TextLayout مناسب للرسم العربي، مع Snapshot ثابت لبيانات الهوية والمستند وقت الإصدار.
-- سبب الاختيار: لا يضيف مكتبة ثقيلة، يعمل Offline، ويستخدم تشكيل النص في Android عند الرسم الصحيح.
-- بوابة القبول قبل اعتماد التنفيذ: PDF عربي متعدد الصفحات يحتوي RTL وLTR ومبالغ كبيرة وخطًا مضمنًا أو ثابتًا، ويطابق بيانات Domain في اختبار.
+- الحالة: **معتمد ومطبق**
+- القرار: استخدام `android.graphics.pdf.PdfDocument` مع رسم نص مناسب لـRTL/LTR، مع Snapshot ثابت لبيانات الهوية والمستند وقت الإصدار.
+- سبب الاختيار: لا يضيف مكتبة PDF ثقيلة، يعمل Offline، ويستفيد من تشكيل النص في Android عند الرسم الصحيح.
+- بوابة القبول: لم تعد نظرية؛ CI يولد ويفحص ملفات PDF فعلية من التطبيق.
+- التحقق الحالي يشمل:
+  - إيصال سداد عربي متعدد الصفحات مع RTL/LTR ومبلغ كبير.
+  - إيصال دين.
+  - كشف حساب متعدد الصفحات وتاريخ عمليات ومراجع.
+  - فحص عبر `pdfinfo` و`pdftotext` وتحويل الصفحات إلى PNG عبر `pdftoppm`.
 - البدائل:
-  - AndroidX PDF: موجه للعرض وما زال Alpha، وليس أساس توليد مستندات مالية.
-  - مكتبة PDF خارجية كبيرة: تؤجل حتى يثبت أن Platform لا يحقق Arabic shaping أو الطباعة.
-- النتيجة: إذا فشل Prototype، يوثق قرار بديل بمقارنة الترخيص والحجم والتشكيل والأمان.
+  - AndroidX PDF: موجه أساسًا للعرض وليس أساس توليد المستندات المالية المطلوبة.
+  - مكتبة PDF خارجية كبيرة: لا حاجة لها بعد نجاح بوابة Platform الحالية؛ تعاد المقارنة فقط عند ظهور متطلب لا يحققه التنفيذ الحالي.
+- النتيجة: Platform PDF هو المسار المعتمد حاليًا، وأي استبدال له يحتاج مقارنة ترخيص/حجم/تشكيل/أمان وبوابة Regression للمستندات الحالية.
 
 ## ADR-012 — إبقاء Composition root اليدوي ما دام صغيرًا
 
 - الحالة: معتمد ومطبق مؤقتًا
-- القرار: Constructor injection يدوي في البداية. يضاف Hilt فقط عندما توجد عدة Implementations أو Workers أو ViewModels تجعل Composition root اليدوي عبئًا حقيقيًا.
-- السبب: لا توجد Dependencies تشغيلية الآن تبرر Annotation processing وتعقيده.
+- القرار: Constructor injection يدوي. يضاف Hilt فقط عندما توجد Implementations أو Workers أو ViewModels تجعل Composition root اليدوي عبئًا حقيقيًا.
+- السبب: لا توجد Dependencies تشغيلية تبرر Annotation processing وتعقيده حاليًا.
 - البدائل:
   - Service locator عالمي: مرفوض.
   - Hilt من أول ملف: غير ضروري في هذه المرحلة.
-- النتيجة: `WaslApplication` هو Composition root الصغير، و`RoomWaslRepository` وViewModels وReminder workers تصل إلى واجهات صريحة منه. دخول Workerين لم يجعل الرسم اليدوي غامضًا بعد؛ يعاد تقييم Hilt عند تعدد Implementations أو الحاجة إلى WorkerFactory مخصص.
+- النتيجة: `WaslApplication` يبقى Composition root الصغير، والقدرات تمر عبر واجهات صريحة. يعاد تقييم Hilt عند تحول الرسم اليدوي إلى مصدر تعقيد فعلي.
+
+## ADR-013 — سجل مستندات موحد مع Snapshots ثابتة
+
+- الحالة: معتمد ومطبق في Schema v7
+- المشكلة: إيصال السداد يرتبط بحركة Ledger واحدة، بينما إيصال الدين وكشف الحساب قد يمثلان الحساب ككل ولا يملكان Ledger entry وحيدًا. إنشاء جدول منفصل لكل نوع يكرر الهوية والترقيم والحالة والملفات والبصمات.
+- القرار:
+  - يبقى `issued_documents` سجل المستندات العام.
+  - `document_type` يميز `PAYMENT_RECEIPT` و`DEBT_RECEIPT` و`ACCOUNT_STATEMENT` وغيرها مستقبلًا.
+  - `ledger_entry_id` أصبح nullable في v7، لأن وجوده خاص بالمستندات التي تتطلب حركة محددة وليس شرطًا لكل مستند مالي.
+  - View `payment_issued_documents` يبقى طبقة توافق/استعلام خاصة بإيصالات السداد فقط.
+  - كل مستند يحفظ Snapshot ثابتًا وقت الإصدار، ورقم مستند، وتسلسلًا سنويًا، وحالة، ومسار PDF، وSHA-256 وعدد الصفحات.
+  - إعداد المستندات يتم بأوامر Idempotent؛ إعادة المحاولة لا يجب أن تنتج مستندًا ماليًا مكررًا لنفس الأمر.
+- السبب: توحيد lifecycle للمستندات مع الحفاظ على اختلاف دلالاتها، ومنع إعادة تفسير مستند تاريخي من بيانات حية تغيرت لاحقًا.
+- البدائل:
+  - جدول مستقل لكل نوع: مرفوض الآن بسبب تكرار البنية والمنطق.
+  - ربط كل مستند قسرًا بـLedger entry: مرفوض لأنه غير صحيح دلاليًا لكشف الحساب وإيصال الدين.
+  - توليد PDF مباشرة من الحالة الحية دون Snapshot: مرفوض لأنه قد يغير محتوى مستند تاريخي بعد تعديلات لاحقة.
+- النتيجة: أي نوع مستند جديد يجب أن يحدد Snapshot صريحًا ودلالته، ويمكنه إعادة استخدام lifecycle العام دون كسر قيود الأنواع القائمة.
+
+## ADR-014 — Backup يدوي مشفر واستعادة مرحلية محكومة
+
+- الحالة: معتمد ومطبق
+- المشكلة: المنتج Local-first، وAndroid Auto Backup معطل عمدًا، ومع ذلك يحتاج المستخدم مسارًا واضحًا لنقل/حفظ بياناته ومستنداته دون تسليم قاعدة البيانات الخام أو الاعتماد على Cloud إجباري.
+- القرار:
+  - المستخدم ينشئ النسخة ويستعيدها بفعل صريح وكلمة مرور.
+  - Payload يشمل الجداول المدعومة وملفات PDF الخاصة بالمستندات `READY`.
+  - قبل النسخ، يتحقق النظام من وجود ملفات المستندات وبصمة SHA-256.
+  - الاستعادة تقبل Schema المدعوم فقط وتتحقق من شكل الجداول والصفوف والملفات والمسارات والبصمات.
+  - الملفات تفك في مساحة Stage منفصلة، والبيانات تختبر أولًا في Room database مؤقتة.
+  - قبل قبول الحالة الجديدة تُفحص Foreign Keys وثوابت مالية أساسية.
+  - استبدال مجلد المستندات يملك Rollback إذا فشل استبدال قاعدة البيانات، ولا تعتبر الاستعادة ناجحة قبل اكتمال المسارين.
+  - المسارات المطلقة أو Path traversal أو الملفات خارج مجلد المستندات أو PDF غير المتوقع تُرفض.
+- السبب: فصل التحقق عن البيانات الحية يقلل احتمال أن تترك نسخة تالفة التطبيق في حالة جزئية، ويجعل النسخة المحمولة تشمل الدليل المستندي نفسه لا سجلاته فقط.
+- البدائل:
+  - نسخ ملف SQLite الخام فقط: مرفوض لأنه لا يشمل مستندات PDF ولا يوفر Contract واضحًا للتحقق.
+  - Auto Backup: يبقى معطلًا لأن النسخ يجب أن يكون قرارًا صريحًا وتحت تحكم التطبيق.
+  - Restore مباشر فوق الحالة الحية قبل التحقق: مرفوض لخطر الفساد الجزئي.
+- النتيجة: أي توسعة مستقبلية للـSchema أو ملفات التطبيق يجب أن تحدث Contract النسخة واختبارات Create/Restore معًا؛ لا يضاف جدول أو ملف مهم إلى النسخة ضمنيًا دون اختبار استعادة.

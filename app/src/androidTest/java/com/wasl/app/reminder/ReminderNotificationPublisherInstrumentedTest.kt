@@ -46,36 +46,36 @@ class ReminderNotificationPublisherInstrumentedTest {
     }
 
     @Test
+    fun ensureChannelsCreatesIndependentReminderCategories() {
+        val publisher = ReminderNotificationPublisher(context)
+        publisher.ensureChannels()
+        val manager = context.getSystemService(NotificationManager::class.java)
+
+        assertNotNull(
+            manager.getNotificationChannel(ReminderNotificationPublisher.UPCOMING_ACCOUNTS_CHANNEL_ID),
+        )
+        assertNotNull(
+            manager.getNotificationChannel(ReminderNotificationPublisher.DUE_ACCOUNTS_CHANNEL_ID),
+        )
+        assertNotNull(
+            manager.getNotificationChannel(ReminderNotificationPublisher.OVERDUE_ACCOUNTS_CHANNEL_ID),
+        )
+        assertNotNull(
+            manager.getNotificationChannel(ReminderNotificationPublisher.ALARMS_CHANNEL_ID),
+        )
+        assertNotNull(
+            manager.getNotificationChannel(ReminderNotificationPublisher.INSTALLMENTS_CHANNEL_ID),
+        )
+        assertNotNull(
+            manager.getNotificationChannel(ReminderNotificationPublisher.PROMISES_CHANNEL_ID),
+        )
+    }
+
+    @Test
     fun dueReminderPublishesAVisibleNotificationWithStableTag() {
         val now = Instant.parse("2026-08-13T00:00:00Z")
-        val reminder = ReminderRecord(
-            id = reminderId,
-            debtId = DebtId("debt-1"),
-            triggerAt = now,
-            zoneId = ZoneOffset.UTC,
-            status = ReminderStatus.SCHEDULED,
-            createdAt = now,
-            updatedAt = now,
-        )
-        val account = AccountOverview(
-            person = PersonRecord(
-                id = PersonId("person-1"),
-                displayName = "أحمد",
-                createdAt = now,
-                updatedAt = now,
-            ),
-            ledger = DebtLedger(
-                DebtHeader(
-                    id = DebtId("debt-1"),
-                    personId = PersonId("person-1"),
-                    direction = DebtDirection.RECEIVABLE,
-                    originalAmount = Money(100_000L, CurrencyCode.YER),
-                    openedAt = now,
-                ),
-            ),
-            lifecycleState = DebtLifecycleState.ACTIVE,
-            dueReminder = reminder,
-        )
+        val reminder = reminder(now)
+        val account = account(now, reminder)
         val publisher = ReminderNotificationPublisher(context)
 
         publisher.publish(reminder, account)
@@ -86,6 +86,52 @@ class ReminderNotificationPublisherInstrumentedTest {
         assertNotNull(posted)
         assertNotNull(posted.notification.contentIntent)
     }
+
+    @Test
+    fun overdueOccurrencePublishesThroughTheSameStableReminderTag() {
+        val now = Instant.parse("2026-08-13T00:00:00Z")
+        val reminder = reminder(now)
+        val account = account(now, reminder)
+        val publisher = ReminderNotificationPublisher(context)
+
+        publisher.publish(reminder, account, ReminderOccurrence.OVERDUE_TWO_DAYS)
+
+        val posted = awaitPostedNotification(
+            context.getSystemService(NotificationManager::class.java),
+        )
+        assertNotNull(posted)
+        assertNotNull(posted.notification.contentIntent)
+    }
+
+    private fun reminder(now: Instant) = ReminderRecord(
+        id = reminderId,
+        debtId = DebtId("debt-1"),
+        triggerAt = now,
+        zoneId = ZoneOffset.UTC,
+        status = ReminderStatus.SCHEDULED,
+        createdAt = now,
+        updatedAt = now,
+    )
+
+    private fun account(now: Instant, reminder: ReminderRecord) = AccountOverview(
+        person = PersonRecord(
+            id = PersonId("person-1"),
+            displayName = "أحمد",
+            createdAt = now,
+            updatedAt = now,
+        ),
+        ledger = DebtLedger(
+            DebtHeader(
+                id = DebtId("debt-1"),
+                personId = PersonId("person-1"),
+                direction = DebtDirection.RECEIVABLE,
+                originalAmount = Money(100_000L, CurrencyCode.YER),
+                openedAt = now,
+            ),
+        ),
+        lifecycleState = DebtLifecycleState.ACTIVE,
+        dueReminder = reminder,
+    )
 
     private fun awaitPostedNotification(
         manager: NotificationManager,

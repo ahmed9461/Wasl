@@ -66,7 +66,7 @@ class AccountDocumentMigrationInstrumentedTest {
                     issued_at, snapshot_version, snapshot_json, pdf_relative_path,
                     created_at, updated_at
                 ) VALUES (
-                    'document-v6', 'document-command-v6', 'PAYMENT_RECEIPT', 'PENDING',
+                    'document-v6', 'document-command-v6', 'PAYMENT_RECEIPT', 'PENDING_PDF',
                     'PAY-2026-00001', 2026, 1, 'debt-v6', 'payment-v6', 'identity-v6',
                     'person-v6', 'عميل الإصدار السادس', 25000, 'YER', 3, 1, '{}',
                     'documents/PAY-2026-00001.pdf', 3, 3
@@ -115,7 +115,7 @@ class AccountDocumentMigrationInstrumentedTest {
                     issued_at, snapshot_version, snapshot_json, pdf_relative_path,
                     created_at, updated_at
                 ) VALUES (
-                    'debt-document-v7', 'debt-document-command-v7', 'DEBT_RECEIPT', 'PENDING',
+                    'debt-document-v7', 'debt-document-command-v7', 'DEBT_RECEIPT', 'PENDING_PDF',
                     'DEBT-2026-00002', 2026, 2, 'debt-v6', NULL, 'identity-v6',
                     'person-v6', 'عميل الإصدار السادس', 75000, 'YER', 4, 1, '{}',
                     'documents/DEBT-2026-00002.pdf', 4, 4

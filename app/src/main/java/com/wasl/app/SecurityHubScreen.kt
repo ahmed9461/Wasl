@@ -1,5 +1,6 @@
 package com.wasl.app
 
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -45,11 +47,26 @@ internal fun SecuritySettingsEntryButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    FilledTonalButton(
-        modifier = modifier.testTag("open-security-hub"),
-        onClick = onClick,
+    val context = LocalContext.current
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("الأمان")
+        FilledTonalButton(
+            modifier = Modifier.testTag("open-security-hub"),
+            onClick = onClick,
+        ) {
+            Text("الأمان")
+        }
+        OutlinedButton(
+            modifier = Modifier.testTag("open-general-reminders-hub"),
+            onClick = {
+                context.startActivity(Intent(context, GeneralRemindersHubActivity::class.java))
+            },
+        ) {
+            Text("التذكيرات")
+        }
     }
 }
 

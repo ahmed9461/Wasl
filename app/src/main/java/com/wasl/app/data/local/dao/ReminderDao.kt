@@ -27,7 +27,7 @@ interface ReminderDao {
     @Query(
         """
         SELECT * FROM reminders
-        WHERE status IN ('SCHEDULED', 'BLOCKED_PERMISSION', 'FAILED')
+        WHERE status IN ('SCHEDULED', 'DELIVERED', 'BLOCKED_PERMISSION', 'FAILED')
         ORDER BY trigger_at, id
         """,
     )

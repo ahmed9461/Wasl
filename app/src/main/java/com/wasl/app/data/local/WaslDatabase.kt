@@ -21,6 +21,7 @@ import com.wasl.app.data.local.entity.InstallmentEntity
 import com.wasl.app.data.local.entity.InstallmentPlanEntity
 import com.wasl.app.data.local.entity.IssuedDocumentEntity
 import com.wasl.app.data.local.entity.LedgerEntryEntity
+import com.wasl.app.data.local.entity.PaymentIssuedDocumentView
 import com.wasl.app.data.local.entity.PaymentPromiseEntity
 import com.wasl.app.data.local.entity.PersonEntity
 import com.wasl.app.data.local.entity.ReminderEntity
@@ -38,26 +39,19 @@ import com.wasl.app.data.local.entity.ReminderEntity
         InstallmentPlanEntity::class,
         InstallmentEntity::class,
     ],
+    views = [PaymentIssuedDocumentView::class],
     version = 7,
     exportSchema = true,
 )
 abstract class WaslDatabase : RoomDatabase() {
     abstract fun personDao(): PersonDao
-
     abstract fun debtDao(): DebtDao
-
     abstract fun ledgerDao(): LedgerDao
-
     abstract fun reminderDao(): ReminderDao
-
     abstract fun auditEventDao(): AuditEventDao
-
     abstract fun documentIdentityDao(): DocumentIdentityDao
-
     abstract fun issuedDocumentDao(): IssuedDocumentDao
-
     abstract fun paymentPromiseDao(): PaymentPromiseDao
-
     abstract fun installmentPlanDao(): InstallmentPlanDao
 
     companion object {
@@ -86,18 +80,10 @@ abstract class WaslDatabase : RoomDatabase() {
                     )
                     """.trimIndent(),
                 )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_reminders_subject_type_subject_id_reminder_type` ON `reminders` (`subject_type`, `subject_id`, `reminder_type`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_reminders_status_trigger_at` ON `reminders` (`status`, `trigger_at`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_reminders_subject_id` ON `reminders` (`subject_id`)",
-                )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_reminders_platform_request_code` ON `reminders` (`platform_request_code`)",
-                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_reminders_subject_type_subject_id_reminder_type` ON `reminders` (`subject_type`, `subject_id`, `reminder_type`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_reminders_status_trigger_at` ON `reminders` (`status`, `trigger_at`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_reminders_subject_id` ON `reminders` (`subject_id`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_reminders_platform_request_code` ON `reminders` (`platform_request_code`)")
             }
         }
 
@@ -120,12 +106,8 @@ abstract class WaslDatabase : RoomDatabase() {
                     )
                     """.trimIndent(),
                 )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_audit_events_command_id` ON `audit_events` (`command_id`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_audit_events_aggregate_id_aggregate_type_occurred_at` ON `audit_events` (`aggregate_id`, `aggregate_type`, `occurred_at`)",
-                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_audit_events_command_id` ON `audit_events` (`command_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_audit_events_aggregate_id_aggregate_type_occurred_at` ON `audit_events` (`aggregate_id`, `aggregate_type`, `occurred_at`)")
             }
         }
 
@@ -146,9 +128,7 @@ abstract class WaslDatabase : RoomDatabase() {
                     )
                     """.trimIndent(),
                 )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_document_identities_is_default` ON `document_identities` (`is_default`)",
-                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_document_identities_is_default` ON `document_identities` (`is_default`)")
                 db.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS `issued_documents` (
@@ -182,27 +162,7 @@ abstract class WaslDatabase : RoomDatabase() {
                     )
                     """.trimIndent(),
                 )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_command_id` ON `issued_documents` (`command_id`)",
-                )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_document_number` ON `issued_documents` (`document_number`)",
-                )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_document_type_ledger_entry_id` ON `issued_documents` (`document_type`, `ledger_entry_id`)",
-                )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_issue_year_sequence_number` ON `issued_documents` (`issue_year`, `sequence_number`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_debt_id_issued_at` ON `issued_documents` (`debt_id`, `issued_at`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_identity_id` ON `issued_documents` (`identity_id`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_person_id` ON `issued_documents` (`person_id`)",
-                )
+                createIssuedDocumentIndexes(db, includeLedgerIndex = false)
             }
         }
 
@@ -227,24 +187,12 @@ abstract class WaslDatabase : RoomDatabase() {
                     )
                     """.trimIndent(),
                 )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_payment_promises_create_command_id` ON `payment_promises` (`create_command_id`)",
-                )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_payment_promises_resolution_command_id` ON `payment_promises` (`resolution_command_id`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_payment_promises_debt_id_promised_date_epoch_day` ON `payment_promises` (`debt_id`, `promised_date_epoch_day`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_payment_promises_debt_id_status` ON `payment_promises` (`debt_id`, `status`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_payment_promises_status_promised_date_epoch_day` ON `payment_promises` (`status`, `promised_date_epoch_day`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_ledger_entry_id` ON `issued_documents` (`ledger_entry_id`)",
-                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_payment_promises_create_command_id` ON `payment_promises` (`create_command_id`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_payment_promises_resolution_command_id` ON `payment_promises` (`resolution_command_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_payment_promises_debt_id_promised_date_epoch_day` ON `payment_promises` (`debt_id`, `promised_date_epoch_day`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_payment_promises_debt_id_status` ON `payment_promises` (`debt_id`, `status`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_payment_promises_status_promised_date_epoch_day` ON `payment_promises` (`status`, `promised_date_epoch_day`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_issued_documents_ledger_entry_id` ON `issued_documents` (`ledger_entry_id`)")
             }
         }
 
@@ -268,18 +216,10 @@ abstract class WaslDatabase : RoomDatabase() {
                     )
                     """.trimIndent(),
                 )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_installment_plans_command_id` ON `installment_plans` (`command_id`)",
-                )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_installment_plans_debt_id_revision_number` ON `installment_plans` (`debt_id`, `revision_number`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_installment_plans_debt_id_status` ON `installment_plans` (`debt_id`, `status`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_installment_plans_supersedes_plan_id` ON `installment_plans` (`supersedes_plan_id`)",
-                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_installment_plans_command_id` ON `installment_plans` (`command_id`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_installment_plans_debt_id_revision_number` ON `installment_plans` (`debt_id`, `revision_number`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_installment_plans_debt_id_status` ON `installment_plans` (`debt_id`, `status`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_installment_plans_supersedes_plan_id` ON `installment_plans` (`supersedes_plan_id`)")
                 db.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS `installments` (
@@ -297,20 +237,15 @@ abstract class WaslDatabase : RoomDatabase() {
                     )
                     """.trimIndent(),
                 )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_installments_plan_id_sequence_number` ON `installments` (`plan_id`, `sequence_number`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_installments_plan_id_due_date_epoch_day` ON `installments` (`plan_id`, `due_date_epoch_day`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_installments_debt_id_due_date_epoch_day` ON `installments` (`debt_id`, `due_date_epoch_day`)",
-                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_installments_plan_id_sequence_number` ON `installments` (`plan_id`, `sequence_number`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_installments_plan_id_due_date_epoch_day` ON `installments` (`plan_id`, `due_date_epoch_day`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_installments_debt_id_due_date_epoch_day` ON `installments` (`debt_id`, `due_date_epoch_day`)")
             }
         }
 
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("DROP VIEW IF EXISTS `payment_issued_documents`")
                 db.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS `issued_documents_new` (
@@ -364,29 +299,9 @@ abstract class WaslDatabase : RoomDatabase() {
                 )
                 db.execSQL("DROP TABLE `issued_documents`")
                 db.execSQL("ALTER TABLE `issued_documents_new` RENAME TO `issued_documents`")
+                createIssuedDocumentIndexes(db, includeLedgerIndex = true)
                 db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_command_id` ON `issued_documents` (`command_id`)",
-                )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_document_number` ON `issued_documents` (`document_number`)",
-                )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_document_type_ledger_entry_id` ON `issued_documents` (`document_type`, `ledger_entry_id`)",
-                )
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_issue_year_sequence_number` ON `issued_documents` (`issue_year`, `sequence_number`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_debt_id_issued_at` ON `issued_documents` (`debt_id`, `issued_at`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_ledger_entry_id` ON `issued_documents` (`ledger_entry_id`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_identity_id` ON `issued_documents` (`identity_id`)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_person_id` ON `issued_documents` (`person_id`)",
+                    "CREATE VIEW IF NOT EXISTS `payment_issued_documents` AS SELECT * FROM `issued_documents` WHERE `document_type` = 'PAYMENT_RECEIPT'",
                 )
             }
         }
@@ -399,6 +314,22 @@ abstract class WaslDatabase : RoomDatabase() {
             MIGRATION_5_6,
             MIGRATION_6_7,
         )
+
+        private fun createIssuedDocumentIndexes(
+            db: androidx.sqlite.db.SupportSQLiteDatabase,
+            includeLedgerIndex: Boolean,
+        ) {
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_command_id` ON `issued_documents` (`command_id`)")
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_document_number` ON `issued_documents` (`document_number`)")
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_document_type_ledger_entry_id` ON `issued_documents` (`document_type`, `ledger_entry_id`)")
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_issue_year_sequence_number` ON `issued_documents` (`issue_year`, `sequence_number`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_issued_documents_debt_id_issued_at` ON `issued_documents` (`debt_id`, `issued_at`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_issued_documents_identity_id` ON `issued_documents` (`identity_id`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_issued_documents_person_id` ON `issued_documents` (`person_id`)")
+            if (includeLedgerIndex) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_issued_documents_ledger_entry_id` ON `issued_documents` (`ledger_entry_id`)")
+            }
+        }
 
         fun create(context: Context): WaslDatabase =
             Room.databaseBuilder(

@@ -1,0 +1,33 @@
+name: Apply strong alarm patches
+
+on:
+  push:
+    branches:
+      - agent/bootstrap-wasl-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Apply patches
+        run: |
+          python3 .github/strong_alarm_core.py
+          python3 .github/strong_alarm_ui_tests.py
+
+      - name: Commit feature and remove one-shot files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/strong_alarm_core.py .github/strong_alarm_ui_tests.py .github/workflows/apply-strong-alarm-patches.yml
+          git add app
+          git commit -m "feat: add opt-in strong exact alarms"
+          git push origin HEAD:${GITHUB_REF_NAME}

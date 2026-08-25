@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.wasl.app.data.local.entity.ReminderEntity
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ReminderDao {
@@ -47,6 +48,16 @@ interface ReminderDao {
         """,
     )
     suspend fun findGeneralForDebt(debtId: String): ReminderEntity?
+
+    @Query(
+        """
+        SELECT * FROM reminders
+        WHERE subject_type = 'DEBT'
+          AND subject_id = :debtId
+          AND reminder_type = 'GENERAL'
+        """,
+    )
+    fun observeGeneralForDebt(debtId: String): Flow<ReminderEntity?>
 
     @Query(
         """

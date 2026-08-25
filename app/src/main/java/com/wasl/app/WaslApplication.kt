@@ -8,10 +8,13 @@ import com.wasl.app.data.InstallmentPlanStore
 import com.wasl.app.data.PaymentPromiseStore
 import com.wasl.app.data.ReminderStore
 import com.wasl.app.data.WaslRepository
+import com.wasl.app.data.local.RoomAccountDocumentStore
 import com.wasl.app.data.local.RoomInstallmentPlanStore
 import com.wasl.app.data.local.RoomPaymentPromiseStore
 import com.wasl.app.data.local.RoomWaslRepository
 import com.wasl.app.data.local.WaslDatabase
+import com.wasl.app.document.AccountDocumentService
+import com.wasl.app.document.AndroidAccountDocumentService
 import com.wasl.app.document.AndroidPaymentReceiptService
 import com.wasl.app.document.PaymentReceiptService
 import com.wasl.app.privacy.PrivacyPreferences
@@ -64,6 +67,22 @@ class WaslApplication : Application() {
         AndroidPaymentReceiptService(
             context = this,
             store = roomRepository,
+        )
+    }
+
+    private val accountDocumentStore: RoomAccountDocumentStore by lazy(
+        LazyThreadSafetyMode.SYNCHRONIZED,
+    ) {
+        RoomAccountDocumentStore(
+            database = database,
+            repository = installmentAwareRepository,
+        )
+    }
+
+    val accountDocumentService: AccountDocumentService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        AndroidAccountDocumentService(
+            context = this,
+            store = accountDocumentStore,
         )
     }
 

@@ -38,7 +38,7 @@ import com.wasl.app.data.local.entity.ReminderEntity
         InstallmentPlanEntity::class,
         InstallmentEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class WaslDatabase : RoomDatabase() {
@@ -309,12 +309,95 @@ abstract class WaslDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `issued_documents_new` (
+                        `id` TEXT NOT NULL,
+                        `command_id` TEXT NOT NULL,
+                        `document_type` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `document_number` TEXT NOT NULL,
+                        `issue_year` INTEGER NOT NULL,
+                        `sequence_number` INTEGER NOT NULL,
+                        `debt_id` TEXT NOT NULL,
+                        `ledger_entry_id` TEXT,
+                        `identity_id` TEXT NOT NULL,
+                        `person_id` TEXT NOT NULL,
+                        `person_name_snapshot` TEXT NOT NULL,
+                        `amount_minor` INTEGER NOT NULL,
+                        `currency_code` TEXT NOT NULL,
+                        `issued_at` INTEGER NOT NULL,
+                        `snapshot_version` INTEGER NOT NULL,
+                        `snapshot_json` TEXT NOT NULL,
+                        `pdf_relative_path` TEXT NOT NULL,
+                        `pdf_sha256` TEXT,
+                        `page_count` INTEGER,
+                        `failure_code` TEXT,
+                        `created_at` INTEGER NOT NULL,
+                        `updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`debt_id`) REFERENCES `debts`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT,
+                        FOREIGN KEY(`ledger_entry_id`) REFERENCES `ledger_entries`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT,
+                        FOREIGN KEY(`identity_id`) REFERENCES `document_identities`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `issued_documents_new` (
+                        `id`, `command_id`, `document_type`, `status`, `document_number`,
+                        `issue_year`, `sequence_number`, `debt_id`, `ledger_entry_id`, `identity_id`,
+                        `person_id`, `person_name_snapshot`, `amount_minor`, `currency_code`,
+                        `issued_at`, `snapshot_version`, `snapshot_json`, `pdf_relative_path`,
+                        `pdf_sha256`, `page_count`, `failure_code`, `created_at`, `updated_at`
+                    )
+                    SELECT
+                        `id`, `command_id`, `document_type`, `status`, `document_number`,
+                        `issue_year`, `sequence_number`, `debt_id`, `ledger_entry_id`, `identity_id`,
+                        `person_id`, `person_name_snapshot`, `amount_minor`, `currency_code`,
+                        `issued_at`, `snapshot_version`, `snapshot_json`, `pdf_relative_path`,
+                        `pdf_sha256`, `page_count`, `failure_code`, `created_at`, `updated_at`
+                    FROM `issued_documents`
+                    """.trimIndent(),
+                )
+                db.execSQL("DROP TABLE `issued_documents`")
+                db.execSQL("ALTER TABLE `issued_documents_new` RENAME TO `issued_documents`")
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_command_id` ON `issued_documents` (`command_id`)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_document_number` ON `issued_documents` (`document_number`)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_document_type_ledger_entry_id` ON `issued_documents` (`document_type`, `ledger_entry_id`)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_issued_documents_issue_year_sequence_number` ON `issued_documents` (`issue_year`, `sequence_number`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_debt_id_issued_at` ON `issued_documents` (`debt_id`, `issued_at`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_ledger_entry_id` ON `issued_documents` (`ledger_entry_id`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_identity_id` ON `issued_documents` (`identity_id`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_issued_documents_person_id` ON `issued_documents` (`person_id`)",
+                )
+            }
+        }
+
         val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
             MIGRATION_3_4,
             MIGRATION_4_5,
             MIGRATION_5_6,
+            MIGRATION_6_7,
         )
 
         fun create(context: Context): WaslDatabase =

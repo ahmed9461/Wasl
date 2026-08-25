@@ -4,6 +4,7 @@ import android.content.Context
 import com.wasl.app.data.DocumentIdentityRecord
 import com.wasl.app.data.DocumentStatus
 import com.wasl.app.data.IssuedDocumentRecord
+import com.wasl.app.data.PaymentReceiptSnapshot
 import com.wasl.app.data.PaymentReceiptStore
 import com.wasl.app.data.PreparePaymentReceiptCommand
 import java.io.File
@@ -58,6 +59,8 @@ class AndroidPaymentReceiptService(
 
     private suspend fun ensurePdf(document: IssuedDocumentRecord): IssuedDocumentRecord =
         withContext(Dispatchers.IO) {
+            val snapshot = document.snapshot as? PaymentReceiptSnapshot
+                ?: error("Payment receipt service received a non-payment document.")
             val target = ReceiptFileAccess.resolve(filesDir, document.pdfRelativePath)
             if (document.status == DocumentStatus.READY) {
                 val expectedHash = requireNotNull(document.pdfSha256)
@@ -74,7 +77,7 @@ class AndroidPaymentReceiptService(
                     "Stale receipt temporary file could not be removed."
                 }
                 val pageCount = temporary.outputStream().buffered().use { output ->
-                    renderer.render(document.snapshot, output)
+                    renderer.render(snapshot, output)
                 }
                 val checksum = temporary.sha256Hex()
                 moveAtomically(temporary, target)

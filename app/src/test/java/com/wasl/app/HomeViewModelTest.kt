@@ -141,7 +141,7 @@ class HomeViewModelTest {
         assertEquals(Instant.parse("2026-08-14T06:00:00Z"), command.dueReminder?.triggerAt)
         assertEquals(ZoneId.of("Asia/Riyadh"), command.dueReminder?.zoneId)
         assertEquals(listOf("reminder-1"), scheduler.scheduled.map { it.id })
-        assertEquals("تم حفظ الحساب وجدولة التذكير.", viewModel.uiState.value.successMessage)
+        assertEquals("تم حفظ الحساب وتفعيل المتابعة الذكية.", viewModel.uiState.value.successMessage)
     }
 
     @Test
@@ -189,7 +189,7 @@ class HomeViewModelTest {
         assertNotNull(repository.lastCreateCommand?.dueReminder)
         assertFalse(viewModel.uiState.value.isCreateDialogOpen)
         assertEquals(
-            "تم حفظ الحساب والتذكير، وستُعاد محاولة الجدولة تلقائيًا.",
+            "تم حفظ الحساب والمتابعة، وستُعاد محاولة الجدولة تلقائيًا.",
             viewModel.uiState.value.successMessage,
         )
     }

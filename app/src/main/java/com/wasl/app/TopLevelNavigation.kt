@@ -25,12 +25,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 internal val LocalOpenInstallmentsHub = staticCompositionLocalOf<(() -> Unit)?> { null }
+internal val LocalOpenSettingsHub = staticCompositionLocalOf<(() -> Unit)?> { null }
 
 internal enum class WaslTopLevelDestination {
     HOME,
     TODAY,
     SEARCH,
     INSTALLMENTS,
+    SETTINGS,
 }
 
 @Composable
@@ -41,6 +43,7 @@ internal fun WaslTopLevelNavigation(
     onOpenSearch: () -> Unit,
 ) {
     val onOpenInstallments = LocalOpenInstallmentsHub.current
+    val onOpenSettings = LocalOpenSettingsHub.current
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
@@ -80,6 +83,15 @@ internal fun WaslTopLevelNavigation(
                     label = "الأقساط",
                     testTag = "open-installments-hub",
                     onClick = openInstallments,
+                )
+            }
+            onOpenSettings?.let { openSettings ->
+                WaslNavigationItem(
+                    selected = selected == WaslTopLevelDestination.SETTINGS,
+                    destination = WaslTopLevelDestination.SETTINGS,
+                    label = "الإعدادات",
+                    testTag = "open-settings-hub",
+                    onClick = openSettings,
                 )
             }
         }
@@ -223,6 +235,34 @@ private fun WaslDestinationIcon(
                     strokeWidth = strokeWidth,
                     cap = StrokeCap.Round,
                 )
+            }
+
+            WaslTopLevelDestination.SETTINGS -> {
+                drawCircle(
+                    color = color,
+                    radius = size.minDimension * 0.20f,
+                    center = center,
+                    style = stroke,
+                )
+                val rays = listOf(
+                    Offset(0.50f, 0.10f) to Offset(0.50f, 0.24f),
+                    Offset(0.50f, 0.76f) to Offset(0.50f, 0.90f),
+                    Offset(0.10f, 0.50f) to Offset(0.24f, 0.50f),
+                    Offset(0.76f, 0.50f) to Offset(0.90f, 0.50f),
+                    Offset(0.22f, 0.22f) to Offset(0.32f, 0.32f),
+                    Offset(0.68f, 0.68f) to Offset(0.78f, 0.78f),
+                    Offset(0.78f, 0.22f) to Offset(0.68f, 0.32f),
+                    Offset(0.32f, 0.68f) to Offset(0.22f, 0.78f),
+                )
+                rays.forEach { (start, end) ->
+                    drawLine(
+                        color = color,
+                        start = Offset(size.width * start.x, size.height * start.y),
+                        end = Offset(size.width * end.x, size.height * end.y),
+                        strokeWidth = strokeWidth,
+                        cap = StrokeCap.Round,
+                    )
+                }
             }
         }
     }

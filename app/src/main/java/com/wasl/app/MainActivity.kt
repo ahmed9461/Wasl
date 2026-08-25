@@ -2,6 +2,7 @@ package com.wasl.app
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -21,12 +22,21 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         requestedDebtId.value = intent.getStringExtra(EXTRA_DEBT_ID)
         enableEdgeToEdge()
+        applySecureScreenPreference()
         setContent {
             val waslApplication = application as WaslApplication
             var installmentsOpen by remember { mutableStateOf(false) }
+            var settingsOpen by remember { mutableStateOf(false) }
             Box(modifier = Modifier.fillMaxSize()) {
                 CompositionLocalProvider(
-                    LocalOpenInstallmentsHub provides { installmentsOpen = true },
+                    LocalOpenInstallmentsHub provides {
+                        settingsOpen = false
+                        installmentsOpen = true
+                    },
+                    LocalOpenSettingsHub provides {
+                        installmentsOpen = false
+                        settingsOpen = true
+                    },
                 ) {
                     WaslApp(
                         repository = waslApplication.repository,
@@ -48,6 +58,17 @@ class MainActivity : ComponentActivity() {
                         },
                     )
                 }
+                if (settingsOpen) {
+                    SettingsHubRoute(
+                        backupService = waslApplication.backupService,
+                        privacyPreferences = waslApplication.privacyPreferences,
+                        onBack = { settingsOpen = false },
+                        onRestored = {
+                            waslApplication.reminderScheduler.requestRecovery()
+                        },
+                        onSecureScreenChanged = ::applySecureScreenPreference,
+                    )
+                }
             }
         }
     }
@@ -61,8 +82,18 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         val waslApplication = application as WaslApplication
+        applySecureScreenPreference()
         if (waslApplication.reminderNotificationPublisher.canNotify()) {
             waslApplication.reminderScheduler.requestRecovery()
+        }
+    }
+
+    private fun applySecureScreenPreference() {
+        val preferences = (application as WaslApplication).privacyPreferences
+        if (preferences.secureScreen) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
 

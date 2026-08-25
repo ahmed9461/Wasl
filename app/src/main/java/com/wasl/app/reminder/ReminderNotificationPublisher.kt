@@ -16,6 +16,7 @@ import com.wasl.app.MainActivity
 import com.wasl.app.R
 import com.wasl.app.data.AccountOverview
 import com.wasl.app.data.ReminderRecord
+import com.wasl.app.privacy.PrivacyPreferences
 import com.wasl.domain.MoneyInputParser
 import java.math.BigDecimal
 import java.text.NumberFormat
@@ -24,6 +25,8 @@ import java.util.Locale
 class ReminderNotificationPublisher(
     private val context: Context,
 ) {
+    private val privacyPreferences = PrivacyPreferences(context)
+
     fun ensureChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java)
@@ -98,22 +101,27 @@ class ReminderNotificationPublisher(
         val channelId = occurrence.channelId()
         if (!isChannelEnabled(channelId)) return false
 
-        val openAccount = Intent(context, MainActivity::class.java).apply {
-            action = MainActivity.ACTION_OPEN_DEBT
-            putExtra(MainActivity.EXTRA_DEBT_ID, reminder.debtId.value)
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
+        val openAccount = accountIntent(reminder)
         val contentIntent = PendingIntent.getActivity(
             context,
             reminder.id.hashCode(),
             openAccount,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val title = occurrence.title()
-        val body = occurrence.body(
-            personName = account.person.displayName,
-            money = formatMoney(account),
-        )
+        val hideSensitive = privacyPreferences.hideSensitiveNotifications
+        val title = if (hideSensitive) {
+            "تذكير من وَصل"
+        } else {
+            occurrence.title()
+        }
+        val body = if (hideSensitive) {
+            "لديك متابعة مالية تحتاج إلى انتباهك. افتح وَصل لمراجعتها."
+        } else {
+            occurrence.body(
+                personName = account.person.displayName,
+                money = formatMoney(account),
+            )
+        }
         val publicNotification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("تذكير من وَصل")
@@ -144,18 +152,19 @@ class ReminderNotificationPublisher(
         ensureChannels()
         if (!isChannelEnabled(ALARMS_CHANNEL_ID)) return false
 
-        val openAccount = Intent(context, MainActivity::class.java).apply {
-            action = MainActivity.ACTION_OPEN_DEBT
-            putExtra(MainActivity.EXTRA_DEBT_ID, reminder.debtId.value)
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
         val contentIntent = PendingIntent.getActivity(
             context,
             reminder.id.hashCode(),
-            openAccount,
+            accountIntent(reminder),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val body = "حساب ${account.person.displayName} يحتاج انتباهك الآن. المتبقي ${formatMoney(account)}."
+        val hideSensitive = privacyPreferences.hideSensitiveNotifications
+        val title = if (hideSensitive) "منبه وَصل" else "منبه قوي للاستحقاق"
+        val body = if (hideSensitive) {
+            "لديك حساب يحتاج انتباهك الآن. افتح وَصل لمراجعته."
+        } else {
+            "حساب ${account.person.displayName} يحتاج انتباهك الآن. المتبقي ${formatMoney(account)}."
+        }
         val publicNotification = NotificationCompat.Builder(context, ALARMS_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("منبه وَصل")
@@ -163,7 +172,7 @@ class ReminderNotificationPublisher(
             .build()
         val notification = NotificationCompat.Builder(context, ALARMS_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("منبه قوي للاستحقاق")
+            .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(contentIntent)
@@ -181,6 +190,13 @@ class ReminderNotificationPublisher(
         )
         return true
     }
+
+    private fun accountIntent(reminder: ReminderRecord): Intent =
+        Intent(context, MainActivity::class.java).apply {
+            action = MainActivity.ACTION_OPEN_DEBT
+            putExtra(MainActivity.EXTRA_DEBT_ID, reminder.debtId.value)
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
 
     private fun isChannelEnabled(channelId: String): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||

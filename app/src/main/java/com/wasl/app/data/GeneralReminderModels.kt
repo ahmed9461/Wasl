@@ -16,7 +16,9 @@ data class GeneralReminderRepeatRule(
 ) {
     init {
         when (frequency) {
-            GeneralReminderFrequency.MONTHLY -> require(monthlyDayOfMonth in 1..31) {
+            GeneralReminderFrequency.MONTHLY -> require(
+                monthlyDayOfMonth != null && monthlyDayOfMonth in 1..31,
+            ) {
                 "A monthly reminder requires an anchor day from 1 to 31."
             }
             GeneralReminderFrequency.DAILY,

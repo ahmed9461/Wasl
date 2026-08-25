@@ -149,6 +149,7 @@ class MainActivity : FragmentActivity() {
                                 },
                                 onRestored = {
                                     waslApplication.reminderScheduler.requestRecovery()
+                                    waslApplication.generalReminderService.requestRecovery()
                                 },
                                 onSecureScreenChanged = ::applySecureScreenPreference,
                             )
@@ -243,6 +244,9 @@ class MainActivity : FragmentActivity() {
         }
         if (waslApplication.reminderNotificationPublisher.canNotify()) {
             waslApplication.reminderScheduler.requestRecovery()
+        }
+        if (waslApplication.generalReminderNotificationPublisher.canNotify()) {
+            waslApplication.generalReminderService.requestRecovery()
         }
     }
 

@@ -45,7 +45,9 @@ data class AccountOverview(
 )
 
 enum class DocumentType {
+    DEBT_RECEIPT,
     PAYMENT_RECEIPT,
+    ACCOUNT_STATEMENT,
 }
 
 enum class DocumentStatus {
@@ -81,17 +83,62 @@ data class DocumentIdentitySnapshot(
     }
 }
 
+sealed interface DocumentSnapshot {
+    val version: Int
+    val documentId: String
+    val documentNumber: String
+    val issuedAt: Instant
+    val issueZoneId: ZoneId
+    val debtId: DebtId
+    val personId: PersonId
+    val personName: String
+    val direction: DebtDirection
+    val identity: DocumentIdentitySnapshot
+}
+
+data class DebtReceiptSnapshot(
+    override val version: Int,
+    override val documentId: String,
+    override val documentNumber: String,
+    override val issuedAt: Instant,
+    override val issueZoneId: ZoneId,
+    override val debtId: DebtId,
+    override val personId: PersonId,
+    override val personName: String,
+    override val direction: DebtDirection,
+    val originalAmount: Money,
+    val balanceAtIssue: Money,
+    val paidAmountAtIssue: Money,
+    val openedAt: Instant,
+    val dueDate: LocalDate? = null,
+    val debtDescription: String? = null,
+    override val identity: DocumentIdentitySnapshot,
+) : DocumentSnapshot {
+    init {
+        require(version > 0) { "Snapshot version must be positive." }
+        require(documentId.isNotBlank()) { "Document ID cannot be blank." }
+        require(documentNumber.isNotBlank()) { "Document number cannot be blank." }
+        require(personName.isNotBlank()) { "Snapshot person name cannot be blank." }
+        require(originalAmount.currency == balanceAtIssue.currency) {
+            "Debt receipt balance currency must match the original debt currency."
+        }
+        require(originalAmount.minus(balanceAtIssue) == paidAmountAtIssue) {
+            "Debt receipt paid amount must match its snapshotted balance."
+        }
+    }
+}
+
 data class PaymentReceiptSnapshot(
-    val version: Int,
-    val documentId: String,
-    val documentNumber: String,
-    val issuedAt: Instant,
-    val issueZoneId: ZoneId,
-    val debtId: DebtId,
+    override val version: Int,
+    override val documentId: String,
+    override val documentNumber: String,
+    override val issuedAt: Instant,
+    override val issueZoneId: ZoneId,
+    override val debtId: DebtId,
     val paymentId: LedgerEntryId,
-    val personId: PersonId,
-    val personName: String,
-    val direction: DebtDirection,
+    override val personId: PersonId,
+    override val personName: String,
+    override val direction: DebtDirection,
     val originalAmount: Money,
     val balanceBefore: Money,
     val paymentAmount: Money,
@@ -99,8 +146,8 @@ data class PaymentReceiptSnapshot(
     val paidAt: Instant,
     val paymentNote: String? = null,
     val debtDescription: String? = null,
-    val identity: DocumentIdentitySnapshot,
-) {
+    override val identity: DocumentIdentitySnapshot,
+) : DocumentSnapshot {
     init {
         require(version > 0) { "Snapshot version must be positive." }
         require(documentId.isNotBlank()) { "Document ID cannot be blank." }
@@ -115,6 +162,72 @@ data class PaymentReceiptSnapshot(
     }
 }
 
+enum class StatementEntryType {
+    PAYMENT,
+    PAYMENT_REVERSAL,
+}
+
+data class StatementLedgerEntrySnapshot(
+    val id: LedgerEntryId,
+    val type: StatementEntryType,
+    val recordedAt: Instant,
+    val amount: Money? = null,
+    val occurredAt: Instant? = null,
+    val note: String? = null,
+    val reversesPaymentId: LedgerEntryId? = null,
+    val reason: String? = null,
+) {
+    init {
+        when (type) {
+            StatementEntryType.PAYMENT -> require(
+                amount != null && occurredAt != null && reversesPaymentId == null && reason == null,
+            ) { "Payment statement entry fields are invalid." }
+            StatementEntryType.PAYMENT_REVERSAL -> require(
+                amount == null && occurredAt == null && reversesPaymentId != null && !reason.isNullOrBlank(),
+            ) { "Reversal statement entry fields are invalid." }
+        }
+    }
+}
+
+data class AccountStatementSnapshot(
+    override val version: Int,
+    override val documentId: String,
+    override val documentNumber: String,
+    override val issuedAt: Instant,
+    override val issueZoneId: ZoneId,
+    override val debtId: DebtId,
+    override val personId: PersonId,
+    override val personName: String,
+    override val direction: DebtDirection,
+    val originalAmount: Money,
+    val balanceAtIssue: Money,
+    val paidAmountAtIssue: Money,
+    val openedAt: Instant,
+    val dueDate: LocalDate? = null,
+    val debtDescription: String? = null,
+    val entries: List<StatementLedgerEntrySnapshot>,
+    override val identity: DocumentIdentitySnapshot,
+) : DocumentSnapshot {
+    init {
+        require(version > 0) { "Snapshot version must be positive." }
+        require(documentId.isNotBlank()) { "Document ID cannot be blank." }
+        require(documentNumber.isNotBlank()) { "Document number cannot be blank." }
+        require(personName.isNotBlank()) { "Snapshot person name cannot be blank." }
+        require(originalAmount.currency == balanceAtIssue.currency) {
+            "Statement balance currency must match the original debt currency."
+        }
+        require(originalAmount.minus(balanceAtIssue) == paidAmountAtIssue) {
+            "Statement paid amount must match its snapshotted balance."
+        }
+        require(entries.map { it.id }.distinct().size == entries.size) {
+            "Statement entry IDs must be unique."
+        }
+        require(entries.all { it.amount == null || it.amount.currency == originalAmount.currency }) {
+            "Statement entry currency must match the debt currency."
+        }
+    }
+}
+
 data class IssuedDocumentRecord(
     val id: String,
     val commandId: String,
@@ -122,10 +235,10 @@ data class IssuedDocumentRecord(
     val status: DocumentStatus,
     val documentNumber: String,
     val debtId: DebtId,
-    val ledgerEntryId: LedgerEntryId,
+    val ledgerEntryId: LedgerEntryId?,
     val identityId: String,
     val issuedAt: Instant,
-    val snapshot: PaymentReceiptSnapshot,
+    val snapshot: DocumentSnapshot,
     val pdfRelativePath: String,
     val pdfSha256: String? = null,
     val pageCount: Int? = null,
@@ -142,12 +255,49 @@ data class IssuedDocumentRecord(
         require(snapshot.documentNumber == documentNumber) {
             "Snapshot document number must match its record."
         }
-        require(snapshot.debtId == debtId && snapshot.paymentId == ledgerEntryId) {
-            "Snapshot source must match its document record."
+        require(snapshot.debtId == debtId) { "Snapshot debt must match its document record." }
+        when (type) {
+            DocumentType.PAYMENT_RECEIPT -> {
+                val payment = snapshot as? PaymentReceiptSnapshot
+                    ?: error("Payment receipt requires a payment snapshot.")
+                require(ledgerEntryId != null && payment.paymentId == ledgerEntryId) {
+                    "Payment receipt source must match its ledger entry."
+                }
+            }
+            DocumentType.DEBT_RECEIPT -> {
+                require(snapshot is DebtReceiptSnapshot && ledgerEntryId == null) {
+                    "Debt receipt cannot reference a ledger entry."
+                }
+            }
+            DocumentType.ACCOUNT_STATEMENT -> {
+                require(snapshot is AccountStatementSnapshot && ledgerEntryId == null) {
+                    "Account statement cannot reference a ledger entry."
+                }
+            }
         }
         require(status != DocumentStatus.READY || !pdfSha256.isNullOrBlank()) {
             "A ready document requires a PDF checksum."
         }
+    }
+}
+
+data class PrepareDebtReceiptCommand(
+    val commandId: String,
+    val documentId: String,
+    val identityId: String,
+    val debtId: DebtId,
+    val issuerDisplayName: String,
+    val issuerActivityName: String? = null,
+    val issuerPhone: String? = null,
+    val footerText: String? = null,
+    val issuedAt: Instant,
+    val issueZoneId: ZoneId,
+) {
+    init {
+        require(commandId.isNotBlank()) { "Document command ID cannot be blank." }
+        require(documentId.isNotBlank()) { "Document ID cannot be blank." }
+        require(identityId.isNotBlank()) { "Document identity ID cannot be blank." }
+        require(issuerDisplayName.isNotBlank()) { "Issuer name cannot be blank." }
     }
 }
 
@@ -157,6 +307,26 @@ data class PreparePaymentReceiptCommand(
     val identityId: String,
     val debtId: DebtId,
     val paymentId: LedgerEntryId,
+    val issuerDisplayName: String,
+    val issuerActivityName: String? = null,
+    val issuerPhone: String? = null,
+    val footerText: String? = null,
+    val issuedAt: Instant,
+    val issueZoneId: ZoneId,
+) {
+    init {
+        require(commandId.isNotBlank()) { "Document command ID cannot be blank." }
+        require(documentId.isNotBlank()) { "Document ID cannot be blank." }
+        require(identityId.isNotBlank()) { "Document identity ID cannot be blank." }
+        require(issuerDisplayName.isNotBlank()) { "Issuer name cannot be blank." }
+    }
+}
+
+data class PrepareAccountStatementCommand(
+    val commandId: String,
+    val documentId: String,
+    val identityId: String,
+    val debtId: DebtId,
     val issuerDisplayName: String,
     val issuerActivityName: String? = null,
     val issuerPhone: String? = null,

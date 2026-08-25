@@ -1,6 +1,7 @@
 package com.wasl.app.reminder
 
 import com.wasl.app.data.ReminderRecord
+import com.wasl.app.data.ReminderScheduleType
 import com.wasl.app.data.ReminderStatus
 import java.time.Instant
 import java.time.ZoneId
@@ -17,7 +18,30 @@ internal fun planReminderRecovery(
     currentZone: ZoneId,
     now: Instant,
     canNotify: Boolean,
+    canScheduleExactAlarms: Boolean = true,
 ): ReminderRecoveryPlan {
+    if (stored.scheduleType == ReminderScheduleType.EXACT_ALARM) {
+        val rebased = if (stored.zoneId != currentZone) {
+            stored.triggerAt.atZone(stored.zoneId)
+                .toLocalDateTime()
+                .atZone(currentZone)
+                .toInstant()
+        } else {
+            stored.triggerAt
+        }
+        val canSchedule = canNotify && canScheduleExactAlarms && rebased.isAfter(now)
+        return ReminderRecoveryPlan(
+            shouldSchedule = canSchedule,
+            triggerAt = rebased,
+            zoneId = currentZone,
+            shouldPersistScheduledState = canSchedule && (
+                stored.zoneId != currentZone ||
+                    stored.status != ReminderStatus.SCHEDULED ||
+                    stored.lastFailureCode != null
+                ),
+        )
+    }
+
     if (stored.status == ReminderStatus.BLOCKED_PERMISSION && !canNotify) {
         return ReminderRecoveryPlan(
             shouldSchedule = false,

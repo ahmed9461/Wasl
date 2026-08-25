@@ -9,6 +9,7 @@ import com.wasl.app.data.CreatePersonWithDebtCommand
 import com.wasl.app.data.DueReminderRequest
 import com.wasl.app.data.PersonRecord
 import com.wasl.app.data.RecordNotFoundException
+import com.wasl.app.data.StrongAlarmRequest
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.reminder.NoOpReminderScheduler
 import com.wasl.app.reminder.ReminderScheduler
@@ -55,6 +56,7 @@ data class CreateDebtForm(
     val description: String = "",
     val dueDate: LocalDate? = null,
     val remindOnDueDate: Boolean = false,
+    val strongAlarmEnabled: Boolean = false,
 )
 
 data class HomeUiState(
@@ -219,11 +221,24 @@ class HomeViewModel(
         copy(
             dueDate = value,
             remindOnDueDate = if (value == null) false else remindOnDueDate,
+            strongAlarmEnabled = if (value == null) false else strongAlarmEnabled,
         )
     }
 
     fun updateRemindOnDueDate(value: Boolean) = updateForm {
-        copy(remindOnDueDate = value && dueDate != null)
+        val enabled = value && dueDate != null
+        copy(
+            remindOnDueDate = enabled,
+            strongAlarmEnabled = strongAlarmEnabled && enabled,
+        )
+    }
+
+    fun updateStrongAlarm(value: Boolean) = updateForm {
+        val enabled = value && dueDate != null
+        copy(
+            strongAlarmEnabled = enabled,
+            remindOnDueDate = if (enabled) true else remindOnDueDate,
+        )
     }
 
     fun createDebt() {
@@ -261,8 +276,10 @@ class HomeViewModel(
             _uiState.update { it.copy(formError = "اختر تاريخ استحقاق اليوم أو بعده.") }
             return
         }
-        if (form.remindOnDueDate && form.dueDate == null) {
-            _uiState.update { it.copy(formError = "اختر تاريخ الاستحقاق قبل تفعيل التذكير.") }
+        if ((form.remindOnDueDate || form.strongAlarmEnabled) && form.dueDate == null) {
+            _uiState.update {
+                it.copy(formError = "اختر تاريخ الاستحقاق قبل تفعيل المتابعة أو المنبه.")
+            }
             return
         }
 
@@ -271,6 +288,19 @@ class HomeViewModel(
             debtId = DebtId(idFactory()),
             reminder = if (form.remindOnDueDate) {
                 DueReminderRequest(
+                    id = idFactory(),
+                    triggerAt = ReminderTime.dueDateTrigger(
+                        dueDate = requireNotNull(form.dueDate),
+                        now = now,
+                        zoneId = zoneId,
+                    ),
+                    zoneId = zoneId,
+                )
+            } else {
+                null
+            },
+            strongAlarm = if (form.strongAlarmEnabled) {
+                StrongAlarmRequest(
                     id = idFactory(),
                     triggerAt = ReminderTime.dueDateTrigger(
                         dueDate = requireNotNull(form.dueDate),
@@ -301,6 +331,7 @@ class HomeViewModel(
                             dueDate = form.dueDate,
                             description = form.description.trim().ifEmpty { null },
                             dueReminder = identity.reminder,
+                            strongAlarm = identity.strongAlarm,
                         ),
                     )
 
@@ -315,12 +346,16 @@ class HomeViewModel(
                             dueDate = form.dueDate,
                             description = form.description.trim().ifEmpty { null },
                             dueReminder = identity.reminder,
+                            strongAlarm = identity.strongAlarm,
                         ),
                     )
                 }
-                val schedulingFailed = created.dueReminder?.let { dueReminder ->
-                    runCatching { reminderScheduler.schedule(dueReminder) }.isFailure
-                } ?: false
+                val schedulingFailed = listOfNotNull(
+                    created.dueReminder,
+                    created.strongAlarm,
+                ).map { reminder ->
+                    runCatching { reminderScheduler.schedule(reminder) }.isFailure
+                }.any { it }
                 if (schedulingFailed) {
                     runCatching { reminderScheduler.requestRecovery() }
                 }
@@ -332,10 +367,14 @@ class HomeViewModel(
                         isCreateDialogOpen = false,
                         createForm = CreateDebtForm(),
                         peopleQuery = "",
-                        successMessage = if (schedulingFailed) {
-                            "تم حفظ الحساب والتذكير، وستُعاد محاولة الجدولة تلقائيًا."
+                        successMessage = if (schedulingFailed && created.strongAlarm != null) {
+                            "تم حفظ الحساب والمتابعة. المنبه القوي يحتاج إذن Android للمنبهات الدقيقة."
+                        } else if (schedulingFailed) {
+                            "تم حفظ الحساب والمتابعة، وستُعاد محاولة الجدولة تلقائيًا."
+                        } else if (created.strongAlarm != null) {
+                            "تم حفظ الحساب وتفعيل المتابعة والمنبه القوي."
                         } else if (created.dueReminder != null) {
-                            "تم حفظ الحساب وجدولة التذكير."
+                            "تم حفظ الحساب وتفعيل المتابعة الذكية."
                         } else if (form.personMode == DebtPersonMode.EXISTING) {
                             "تم حفظ دين جديد للشخص ${created.person.displayName} بنجاح."
                         } else {
@@ -383,6 +422,7 @@ class HomeViewModel(
         val personId: PersonId,
         val debtId: DebtId,
         val reminder: DueReminderRequest?,
+        val strongAlarm: StrongAlarmRequest?,
         val timestamp: Instant,
     )
 

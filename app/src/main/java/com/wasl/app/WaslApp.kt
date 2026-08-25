@@ -84,6 +84,7 @@ import com.wasl.app.data.PaymentPromiseStore
 import com.wasl.app.data.PersonRecord
 import com.wasl.app.data.UnavailablePaymentPromiseStore
 import com.wasl.app.data.WaslRepository
+import com.wasl.app.reminder.ExactAlarmAccess
 import com.wasl.app.reminder.NoOpReminderScheduler
 import com.wasl.app.reminder.ReminderNotificationPublisher
 import com.wasl.app.reminder.ReminderScheduler
@@ -142,6 +143,7 @@ fun WaslApp(
     paymentPromiseStore: PaymentPromiseStore = UnavailablePaymentPromiseStore,
     todayClock: Clock = Clock.systemUTC(),
     todayZoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
+    exactAlarmAccessOverride: Boolean? = null,
     requestedDebtId: String? = null,
     onRequestedDebtHandled: () -> Unit = {},
 ) {
@@ -150,6 +152,9 @@ fun WaslApp(
     val lifecycleOwner = LocalLifecycleOwner.current
     var notificationsAvailable by remember {
         mutableStateOf(canPostNotifications(context))
+    }
+    var exactAlarmsAvailable by remember(exactAlarmAccessOverride) {
+        mutableStateOf(exactAlarmAccessOverride ?: ExactAlarmAccess.canSchedule(context))
     }
     var permissionRequestAttempted by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -162,6 +167,12 @@ fun WaslApp(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 notificationsAvailable = canPostNotifications(context)
+                val exactWasAvailable = exactAlarmsAvailable
+                exactAlarmsAvailable = exactAlarmAccessOverride
+                    ?: ExactAlarmAccess.canSchedule(context)
+                if (!exactWasAvailable && exactAlarmsAvailable) {
+                    reminderScheduler.requestRecovery()
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -179,6 +190,10 @@ fun WaslApp(
 
             else -> openNotificationSettings(context)
         }
+    }
+    fun requestExactAlarmAccess() {
+        if (exactAlarmAccessOverride != null) return
+        ExactAlarmAccess.requestIntent(context)?.let(context::startActivity)
     }
     LaunchedEffect(requestedDebtId) {
         val debtId = requestedDebtId ?: return@LaunchedEffect
@@ -234,7 +249,13 @@ fun WaslApp(
                                     homeViewModel.updateRemindOnDueDate(enabled)
                                     if (enabled && !notificationsAvailable) requestNotificationAccess()
                                 },
+                                onStrongAlarmChange = { enabled ->
+                                    homeViewModel.updateStrongAlarm(enabled)
+                                    if (enabled && !notificationsAvailable) requestNotificationAccess()
+                                    if (enabled && !exactAlarmsAvailable) requestExactAlarmAccess()
+                                },
                                 notificationPermissionGranted = notificationsAvailable,
+                                exactAlarmAccessGranted = exactAlarmsAvailable,
                                 onSave = homeViewModel::createDebt,
                                 onSuccessShown = homeViewModel::clearSuccessMessage,
                             )
@@ -362,6 +383,11 @@ fun WaslApp(
                                         requestNotificationAccess()
                                     }
                                 },
+                                onDueScheduleStrongAlarmChange = { enabled ->
+                                    detailsViewModel.updateDueScheduleStrongAlarm(enabled)
+                                    if (enabled && !notificationsAvailable) requestNotificationAccess()
+                                    if (enabled && !exactAlarmsAvailable) requestExactAlarmAccess()
+                                },
                                 onConfirmDueSchedule = detailsViewModel::confirmDueSchedule,
                                 onOpenPaymentPromise = detailsViewModel::openPaymentPromiseDialog,
                                 onDismissPaymentPromise = detailsViewModel::dismissPaymentPromiseDialog,
@@ -373,6 +399,7 @@ fun WaslApp(
                                 onPaymentPromiseResolutionNoteChange = detailsViewModel::updatePaymentPromiseResolutionNote,
                                 onConfirmPaymentPromiseResolution = detailsViewModel::confirmPaymentPromiseResolution,
                                 notificationPermissionGranted = notificationsAvailable,
+                                exactAlarmAccessGranted = exactAlarmsAvailable,
                                 onNoticeShown = detailsViewModel::clearNotice,
                             )
                         }
@@ -403,7 +430,9 @@ private fun WaslHomeScreen(
     onDescriptionChange: (String) -> Unit,
     onDueDateChange: (LocalDate?) -> Unit,
     onReminderChange: (Boolean) -> Unit,
+    onStrongAlarmChange: (Boolean) -> Unit,
     notificationPermissionGranted: Boolean,
+    exactAlarmAccessGranted: Boolean,
     onSave: () -> Unit,
     onSuccessShown: () -> Unit,
 ) {
@@ -597,7 +626,9 @@ private fun WaslHomeScreen(
             onDescriptionChange = onDescriptionChange,
             onDueDateChange = onDueDateChange,
             onReminderChange = onReminderChange,
+            onStrongAlarmChange = onStrongAlarmChange,
             notificationPermissionGranted = notificationPermissionGranted,
+            exactAlarmAccessGranted = exactAlarmAccessGranted,
             onSave = onSave,
         )
     }
@@ -626,7 +657,9 @@ private fun CreateDebtDialog(
     onDescriptionChange: (String) -> Unit,
     onDueDateChange: (LocalDate?) -> Unit,
     onReminderChange: (Boolean) -> Unit,
+    onStrongAlarmChange: (Boolean) -> Unit,
     notificationPermissionGranted: Boolean,
+    exactAlarmAccessGranted: Boolean,
     onSave: () -> Unit,
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
@@ -816,9 +849,38 @@ private fun CreateDebtDialog(
                 }
                 if (form.remindOnDueDate && !notificationPermissionGranted) {
                     Text(
-                        "سيُحفظ التذكير، لكن لن يظهر الإشعار حتى تسمح بإشعارات وَصل.",
+                        "ستُحفظ المتابعة، لكن لن يظهر الإشعار حتى تسمح بإشعارات وَصل.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("منبه قوي إضافي", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "منبه دقيق قرابة 09:00 يوم الاستحقاق مع إبقاء المتابعة الذكية كبديل.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = form.strongAlarmEnabled,
+                        onCheckedChange = onStrongAlarmChange,
+                        enabled = !isSaving && form.dueDate != null,
+                        modifier = Modifier.testTag("create-strong-alarm"),
+                    )
+                }
+                if (form.strongAlarmEnabled && !exactAlarmAccessGranted) {
+                    Text(
+                        "Android يحتاج إذن «المنبهات والتذكيرات» لتشغيل المنبه القوي بدقة. المتابعة الذكية ستبقى فعالة.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag("create-exact-alarm-permission-warning"),
                     )
                 }
 

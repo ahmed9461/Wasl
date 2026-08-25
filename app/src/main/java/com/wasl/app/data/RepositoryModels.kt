@@ -39,6 +39,7 @@ data class AccountOverview(
     val notes: String? = null,
     val closedAt: Instant? = null,
     val dueReminder: ReminderRecord? = null,
+    val strongAlarm: ReminderRecord? = null,
     val dueScheduleAuditEvents: List<DueScheduleAuditEvent> = emptyList(),
     val issuedDocuments: List<IssuedDocumentRecord> = emptyList(),
 )
@@ -179,12 +180,25 @@ enum class ReminderStatus {
     CANCELLED,
 }
 
+enum class ReminderType {
+    DUE_DATE,
+    STRONG_ALARM,
+}
+
+enum class ReminderScheduleType {
+    WORK,
+    EXACT_ALARM,
+}
+
 data class ReminderRecord(
     val id: String,
     val debtId: DebtId,
     val triggerAt: Instant,
     val zoneId: ZoneId,
     val status: ReminderStatus,
+    val type: ReminderType = ReminderType.DUE_DATE,
+    val scheduleType: ReminderScheduleType = ReminderScheduleType.WORK,
+    val platformRequestCode: Int? = null,
     val lastFailureCode: String? = null,
     val deliveredAt: Instant? = null,
     val createdAt: Instant,
@@ -192,6 +206,11 @@ data class ReminderRecord(
 ) {
     init {
         require(id.isNotBlank()) { "Reminder ID cannot be blank." }
+        require(
+            (type == ReminderType.DUE_DATE && scheduleType == ReminderScheduleType.WORK) ||
+                (type == ReminderType.STRONG_ALARM &&
+                    scheduleType == ReminderScheduleType.EXACT_ALARM),
+        ) { "Reminder type and schedule type are incompatible." }
     }
 }
 
@@ -205,13 +224,27 @@ data class DueReminderRequest(
     }
 }
 
+data class StrongAlarmRequest(
+    val id: String,
+    val triggerAt: Instant,
+    val zoneId: ZoneId,
+) {
+    init {
+        require(id.isNotBlank()) { "Strong alarm ID cannot be blank." }
+    }
+}
+
 data class DueScheduleSnapshot(
     val dueDate: LocalDate?,
     val dueReminder: DueReminderRequest?,
+    val strongAlarm: StrongAlarmRequest? = null,
 ) {
     init {
         require(dueReminder == null || dueDate != null) {
             "A due reminder requires a due date."
+        }
+        require(strongAlarm == null || dueDate != null) {
+            "A strong alarm requires a due date."
         }
     }
 }
@@ -237,6 +270,7 @@ data class UpdateDueScheduleCommand(
     val debtId: DebtId,
     val dueDate: LocalDate?,
     val dueReminder: DueReminderRequest?,
+    val strongAlarm: StrongAlarmRequest? = null,
     val updatedAt: Instant,
 ) {
     init {
@@ -244,6 +278,9 @@ data class UpdateDueScheduleCommand(
         require(auditEventId.isNotBlank()) { "Audit event ID cannot be blank." }
         require(dueReminder == null || dueDate != null) {
             "A due reminder requires a due date."
+        }
+        require(strongAlarm == null || dueDate != null) {
+            "A strong alarm requires a due date."
         }
     }
 }
@@ -261,6 +298,7 @@ data class CreatePersonWithDebtCommand(
     val personNotes: String? = null,
     val debtNotes: String? = null,
     val dueReminder: DueReminderRequest? = null,
+    val strongAlarm: StrongAlarmRequest? = null,
 ) {
     init {
         require(personName.isNotBlank()) { "Person name cannot be blank." }
@@ -277,6 +315,9 @@ data class CreatePersonWithDebtCommand(
         require(dueReminder == null || dueDate != null) {
             "A due reminder requires a due date."
         }
+        require(strongAlarm == null || dueDate != null) {
+            "A strong alarm requires a due date."
+        }
     }
 }
 
@@ -291,6 +332,7 @@ data class CreateDebtForExistingPersonCommand(
     val description: String? = null,
     val debtNotes: String? = null,
     val dueReminder: DueReminderRequest? = null,
+    val strongAlarm: StrongAlarmRequest? = null,
 ) {
     init {
         require(originalAmount.minorUnits > 0L) { "Original amount must be positive." }
@@ -302,6 +344,9 @@ data class CreateDebtForExistingPersonCommand(
         }
         require(dueReminder == null || dueDate != null) {
             "A due reminder requires a due date."
+        }
+        require(strongAlarm == null || dueDate != null) {
+            "A strong alarm requires a due date."
         }
     }
 }

@@ -1,6 +1,8 @@
 package com.wasl.app.reminder
 
 import com.wasl.app.data.ReminderRecord
+import com.wasl.app.data.ReminderScheduleType
+import com.wasl.app.data.ReminderType
 import com.wasl.app.data.ReminderStatus
 import com.wasl.domain.DebtId
 import java.time.Instant
@@ -72,6 +74,40 @@ class ReminderRecoveryPolicyTest {
         assertEquals(Instant.parse("2026-08-15T08:00:00Z"), plan.triggerAt)
         assertEquals(ZoneId.of("Europe/London"), plan.zoneId)
         assertTrue(plan.shouldPersistScheduledState)
+    }
+
+    @Test
+    fun strongAlarmNeedsExactAccessAndMustStillBeInTheFuture() {
+        val futureAlarm = reminder(ReminderStatus.SCHEDULED).copy(
+            type = ReminderType.STRONG_ALARM,
+            scheduleType = ReminderScheduleType.EXACT_ALARM,
+        )
+        val blocked = planReminderRecovery(
+            stored = futureAlarm,
+            currentZone = ZoneOffset.UTC,
+            now = now,
+            canNotify = true,
+            canScheduleExactAlarms = false,
+        )
+        assertFalse(blocked.shouldSchedule)
+
+        val allowed = planReminderRecovery(
+            stored = futureAlarm,
+            currentZone = ZoneOffset.UTC,
+            now = now,
+            canNotify = true,
+            canScheduleExactAlarms = true,
+        )
+        assertTrue(allowed.shouldSchedule)
+
+        val past = planReminderRecovery(
+            stored = futureAlarm.copy(triggerAt = now.minusSeconds(1)),
+            currentZone = ZoneOffset.UTC,
+            now = now,
+            canNotify = true,
+            canScheduleExactAlarms = true,
+        )
+        assertFalse(past.shouldSchedule)
     }
 
     private fun reminder(

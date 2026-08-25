@@ -8,6 +8,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.wasl.app.data.ReminderRecord
+import com.wasl.app.data.ReminderScheduleType
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -20,6 +21,9 @@ class WorkManagerReminderScheduler(
     private val workManager = WorkManager.getInstance(context.applicationContext)
 
     override fun schedule(reminder: ReminderRecord) {
+        require(reminder.scheduleType == ReminderScheduleType.WORK) {
+            "WorkManager scheduler only accepts WORK reminders."
+        }
         val now = Instant.now(clock)
         val planned = ReminderEscalationPolicy.schedules(reminder, now)
             .associateBy { it.occurrence }

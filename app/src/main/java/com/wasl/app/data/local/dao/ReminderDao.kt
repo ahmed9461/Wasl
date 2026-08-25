@@ -27,7 +27,18 @@ interface ReminderDao {
     @Query(
         """
         SELECT * FROM reminders
-        WHERE status IN ('SCHEDULED', 'DELIVERED', 'BLOCKED_PERMISSION', 'FAILED')
+        WHERE subject_type = 'DEBT'
+          AND subject_id = :debtId
+          AND reminder_type = 'STRONG_ALARM'
+        """,
+    )
+    suspend fun findStrongAlarmForDebt(debtId: String): ReminderEntity?
+
+    @Query(
+        """
+        SELECT * FROM reminders
+        WHERE status IN ('SCHEDULED', 'BLOCKED_PERMISSION', 'FAILED')
+           OR (status = 'DELIVERED' AND reminder_type = 'DUE_DATE')
         ORDER BY trigger_at, id
         """,
     )

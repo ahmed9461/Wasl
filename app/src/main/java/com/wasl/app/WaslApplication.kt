@@ -13,8 +13,8 @@ import com.wasl.app.data.local.WaslDatabase
 import com.wasl.app.document.AndroidPaymentReceiptService
 import com.wasl.app.document.PaymentReceiptService
 import com.wasl.app.reminder.ReminderNotificationPublisher
+import com.wasl.app.reminder.HybridReminderScheduler
 import com.wasl.app.reminder.ReminderScheduler
-import com.wasl.app.reminder.WorkManagerReminderScheduler
 
 class WaslApplication : Application() {
     private val database: WaslDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
@@ -54,7 +54,7 @@ class WaslApplication : Application() {
         get() = installmentAwareRepository
 
     val reminderScheduler: ReminderScheduler by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        WorkManagerReminderScheduler(this)
+        HybridReminderScheduler(this)
     }
 
     val paymentReceiptService: PaymentReceiptService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {

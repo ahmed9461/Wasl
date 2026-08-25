@@ -56,6 +56,7 @@ class ReminderNotificationPublisher(
                     NotificationManager.IMPORTANCE_HIGH,
                 ).apply {
                     description = "قناة مخصصة للمنبهات الصريحة التي يفعّلها المستخدم"
+                    enableVibration(true)
                 },
                 NotificationChannel(
                     INSTALLMENTS_CHANNEL_ID,
@@ -134,6 +135,53 @@ class ReminderNotificationPublisher(
         return true
     }
 
+    @SuppressLint("MissingPermission")
+    fun publishStrongAlarm(
+        reminder: ReminderRecord,
+        account: AccountOverview,
+    ): Boolean {
+        check(canNotify()) { "Notifications are disabled." }
+        ensureChannels()
+        if (!isChannelEnabled(ALARMS_CHANNEL_ID)) return false
+
+        val openAccount = Intent(context, MainActivity::class.java).apply {
+            action = MainActivity.ACTION_OPEN_DEBT
+            putExtra(MainActivity.EXTRA_DEBT_ID, reminder.debtId.value)
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val contentIntent = PendingIntent.getActivity(
+            context,
+            reminder.id.hashCode(),
+            openAccount,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val body = "حساب ${account.person.displayName} يحتاج انتباهك الآن. المتبقي ${formatMoney(account)}."
+        val publicNotification = NotificationCompat.Builder(context, ALARMS_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("منبه وَصل")
+            .setContentText("افتح التطبيق لمراجعة حساب مهم.")
+            .build()
+        val notification = NotificationCompat.Builder(context, ALARMS_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("منبه قوي للاستحقاق")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(contentIntent)
+            .setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(publicNotification)
+            .build()
+        NotificationManagerCompat.from(context).notify(
+            reminder.id,
+            STRONG_ALARM_NOTIFICATION_ID,
+            notification,
+        )
+        return true
+    }
+
     private fun isChannelEnabled(channelId: String): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
             context.getSystemService(NotificationManager::class.java)
@@ -189,5 +237,6 @@ class ReminderNotificationPublisher(
         const val INSTALLMENTS_CHANNEL_ID = "wasl_installments"
         const val PROMISES_CHANNEL_ID = "wasl_payment_promises"
         const val NOTIFICATION_ID = 1001
+        const val STRONG_ALARM_NOTIFICATION_ID = 1002
     }
 }

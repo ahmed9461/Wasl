@@ -132,6 +132,27 @@ class DueDateUiInstrumentedTest {
         }
     }
 
+    @Test
+    fun strongAlarmToggleShowsExactAlarmPermissionGuidance() {
+        composeRule.setContent {
+            WaslApp(
+                repository = repository,
+                instanceKey = "strong-alarm-ui-test",
+                exactAlarmAccessOverride = false,
+                requestedDebtId = "debt-due",
+            )
+        }
+
+        waitForTag("edit-due-schedule")
+        composeRule.onNodeWithTag("edit-due-schedule")
+            .performScrollTo()
+            .performClick()
+        waitForTag("edit-strong-alarm")
+        composeRule.onNodeWithTag("edit-strong-alarm").performClick()
+        waitForTag("exact-alarm-permission-warning")
+        composeRule.onNodeWithTag("exact-alarm-permission-warning").assertIsDisplayed()
+    }
+
     private fun waitForText(text: String) {
         composeRule.waitUntil(timeoutMillis = 10_000) {
             runCatching {

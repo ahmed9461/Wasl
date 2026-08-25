@@ -88,6 +88,7 @@ class ReminderRecoveryWorker(
                     currentZone = currentZone,
                     now = now,
                     canNotify = application.reminderNotificationPublisher.canNotify(),
+                    canScheduleExactAlarms = ExactAlarmAccess.canSchedule(applicationContext),
                 )
                 if (!plan.shouldSchedule) return@forEach
                 if (plan.shouldPersistScheduledState) {

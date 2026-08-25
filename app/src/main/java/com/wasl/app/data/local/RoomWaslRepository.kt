@@ -22,8 +22,11 @@ import com.wasl.app.data.PreparePaymentReceiptCommand
 import com.wasl.app.data.RecordNotFoundException
 import com.wasl.app.data.RecordPaymentCommand
 import com.wasl.app.data.ReminderRecord
+import com.wasl.app.data.ReminderScheduleType
 import com.wasl.app.data.ReminderStatus
 import com.wasl.app.data.ReminderStore
+import com.wasl.app.data.ReminderType
+import com.wasl.app.data.StrongAlarmRequest
 import com.wasl.app.data.ReversePaymentCommand
 import com.wasl.app.data.UpdateDueScheduleCommand
 import com.wasl.app.data.WaslRepository
@@ -493,20 +496,31 @@ class RoomWaslRepository(
         }
 
         val existingReminder = reminderDao.findDueDateForDebt(command.debtId.value)
+        val existingStrongAlarm = reminderDao.findStrongAlarmForDebt(command.debtId.value)
         val before = DueScheduleSnapshot(
             dueDate = current.ledger.header.dueDate,
-            dueReminder = existingReminder?.activeRequestOrNull(),
+            dueReminder = existingReminder?.activeDueRequestOrNull(),
+            strongAlarm = existingStrongAlarm?.activeStrongAlarmRequestOrNull(),
         )
         val after = DueScheduleSnapshot(
             dueDate = command.dueDate,
             dueReminder = command.dueReminder,
+            strongAlarm = command.strongAlarm,
         )
         require(before != after) { "Due schedule is unchanged." }
 
-        val requestedReminder = command.dueReminder
-        if (existingReminder != null && requestedReminder != null) {
-            require(existingReminder.id == requestedReminder.id) {
-                "An existing due reminder must keep its stable ID."
+        command.dueReminder?.let { requested ->
+            existingReminder?.let { existing ->
+                require(existing.id == requested.id) {
+                    "An existing due reminder must keep its stable ID."
+                }
+            }
+        }
+        command.strongAlarm?.let { requested ->
+            existingStrongAlarm?.let { existing ->
+                require(existing.id == requested.id) {
+                    "An existing strong alarm must keep its stable ID."
+                }
             }
         }
 
@@ -518,39 +532,18 @@ class RoomWaslRepository(
             ) == 1,
         ) { "Debt due date was not updated." }
 
-        when {
-            requestedReminder == null && existingReminder != null -> {
-                check(
-                    reminderDao.updateStatus(
-                        id = existingReminder.id,
-                        status = ReminderStatus.CANCELLED.name,
-                        failureCode = null,
-                        deliveredAt = null,
-                        updatedAt = command.updatedAt.toEpochMilli(),
-                    ) == 1,
-                ) { "Due reminder was not cancelled." }
-            }
-
-            requestedReminder != null && existingReminder == null -> {
-                reminderDao.insert(
-                    requestedReminder.toEntity(
-                        debtId = command.debtId,
-                        createdAt = command.updatedAt,
-                    ),
-                )
-            }
-
-            requestedReminder != null && existingReminder != null -> {
-                check(
-                    reminderDao.updateSchedule(
-                        id = existingReminder.id,
-                        triggerAt = requestedReminder.triggerAt.toEpochMilli(),
-                        zoneId = requestedReminder.zoneId.id,
-                        updatedAt = command.updatedAt.toEpochMilli(),
-                    ) == 1,
-                ) { "Due reminder was not rescheduled." }
-            }
-        }
+        persistDueReminderChange(
+            debtId = command.debtId,
+            existing = existingReminder,
+            requested = command.dueReminder,
+            updatedAt = command.updatedAt,
+        )
+        persistStrongAlarmChange(
+            debtId = command.debtId,
+            existing = existingStrongAlarm,
+            requested = command.strongAlarm,
+            updatedAt = command.updatedAt,
+        )
 
         auditEventDao.insert(
             AuditEventEntity(
@@ -568,6 +561,74 @@ class RoomWaslRepository(
         )
 
         requireAccount(command.debtId)
+    }
+
+    private suspend fun persistDueReminderChange(
+        debtId: DebtId,
+        existing: ReminderEntity?,
+        requested: DueReminderRequest?,
+        updatedAt: Instant,
+    ) {
+        when {
+            requested == null && existing != null -> cancelReminder(existing.id, updatedAt)
+            requested != null && existing == null -> reminderDao.insert(
+                requested.toEntity(debtId, updatedAt),
+            )
+            requested != null && existing != null -> rescheduleReminder(
+                existing.id,
+                requested.triggerAt,
+                requested.zoneId,
+                updatedAt,
+            )
+        }
+    }
+
+    private suspend fun persistStrongAlarmChange(
+        debtId: DebtId,
+        existing: ReminderEntity?,
+        requested: StrongAlarmRequest?,
+        updatedAt: Instant,
+    ) {
+        when {
+            requested == null && existing != null -> cancelReminder(existing.id, updatedAt)
+            requested != null && existing == null -> reminderDao.insert(
+                requested.toEntity(debtId, updatedAt),
+            )
+            requested != null && existing != null -> rescheduleReminder(
+                existing.id,
+                requested.triggerAt,
+                requested.zoneId,
+                updatedAt,
+            )
+        }
+    }
+
+    private suspend fun cancelReminder(id: String, updatedAt: Instant) {
+        check(
+            reminderDao.updateStatus(
+                id = id,
+                status = ReminderStatus.CANCELLED.name,
+                failureCode = null,
+                deliveredAt = null,
+                updatedAt = updatedAt.toEpochMilli(),
+            ) == 1,
+        ) { "Reminder $id was not cancelled." }
+    }
+
+    private suspend fun rescheduleReminder(
+        id: String,
+        triggerAt: Instant,
+        zoneId: ZoneId,
+        updatedAt: Instant,
+    ) {
+        check(
+            reminderDao.updateSchedule(
+                id = id,
+                triggerAt = triggerAt.toEpochMilli(),
+                zoneId = zoneId.id,
+                updatedAt = updatedAt.toEpochMilli(),
+            ) == 1,
+        ) { "Reminder $id was not rescheduled." }
     }
 
     private suspend fun requireAccount(debtId: DebtId): AccountOverview =
@@ -612,26 +673,11 @@ class RoomWaslRepository(
                 closedAt = null,
             ),
         )
-
         creation.dueReminder?.let { reminder ->
-            reminderDao.insert(
-                ReminderEntity(
-                    id = reminder.id,
-                    subjectType = ReminderSubjectType.DEBT.name,
-                    subjectId = creation.debtId.value,
-                    reminderType = ReminderType.DUE_DATE.name,
-                    scheduleType = ReminderScheduleType.WORK.name,
-                    triggerAt = reminder.triggerAt.toEpochMilli(),
-                    zoneId = reminder.zoneId.id,
-                    repeatRule = null,
-                    status = ReminderStatus.SCHEDULED.name,
-                    platformRequestCode = null,
-                    lastFailureCode = null,
-                    deliveredAt = null,
-                    createdAt = creation.createdAt.toEpochMilli(),
-                    updatedAt = creation.createdAt.toEpochMilli(),
-                ),
-            )
+            reminderDao.insert(reminder.toEntity(creation.debtId, creation.createdAt))
+        }
+        creation.strongAlarm?.let { alarm ->
+            reminderDao.insert(alarm.toEntity(creation.debtId, creation.createdAt))
         }
     }
 
@@ -678,7 +724,22 @@ class RoomWaslRepository(
                 persistedReminder.debtId == creation.debtId &&
                 persistedReminder.triggerAt == expectedReminder.triggerAt &&
                 persistedReminder.zoneId == expectedReminder.zoneId &&
+                persistedReminder.type == ReminderType.DUE_DATE &&
+                persistedReminder.scheduleType == ReminderScheduleType.WORK &&
                 persistedReminder.createdAt == creation.createdAt
+        }
+        val expectedStrongAlarm = creation.strongAlarm
+        val persistedStrongAlarm = persisted.strongAlarm
+        val strongAlarmMatches = when {
+            expectedStrongAlarm == null -> persistedStrongAlarm == null
+            persistedStrongAlarm == null -> false
+            else -> persistedStrongAlarm.id == expectedStrongAlarm.id &&
+                persistedStrongAlarm.debtId == creation.debtId &&
+                persistedStrongAlarm.triggerAt == expectedStrongAlarm.triggerAt &&
+                persistedStrongAlarm.zoneId == expectedStrongAlarm.zoneId &&
+                persistedStrongAlarm.type == ReminderType.STRONG_ALARM &&
+                persistedStrongAlarm.scheduleType == ReminderScheduleType.EXACT_ALARM &&
+                persistedStrongAlarm.createdAt == creation.createdAt
         }
         return persisted.person.id == creation.personId &&
             persisted.ledger.header.direction == creation.direction &&
@@ -688,7 +749,8 @@ class RoomWaslRepository(
             persisted.ledger.header.description == creation.description &&
             persisted.notes == creation.debtNotes &&
             aggregate.debt.createdAt == creation.createdAt.toEpochMilli() &&
-            reminderMatches
+            reminderMatches &&
+            strongAlarmMatches
     }
 
     private fun validatePaymentReplay(
@@ -731,7 +793,7 @@ class RoomWaslRepository(
             persisted.occurredAt == command.updatedAt.toEpochMilli() &&
             persisted.actor == AuditActor.LOCAL_USER.name &&
             persisted.reason == null &&
-            afterSnapshot == DueScheduleSnapshot(command.dueDate, command.dueReminder)
+            afterSnapshot == DueScheduleSnapshot(command.dueDate, command.dueReminder, command.strongAlarm)
         if (!matches) {
             throw CommandConflictException("Command ID was reused with different schedule data.")
         }
@@ -774,6 +836,11 @@ class RoomWaslRepository(
                 it.reminderType == ReminderType.DUE_DATE.name
         }
         check(dueReminders.size <= 1) { "Debt contains duplicate due reminders." }
+        val strongAlarms = aggregate.reminders.filter {
+            it.subjectType == ReminderSubjectType.DEBT.name &&
+                it.reminderType == ReminderType.STRONG_ALARM.name
+        }
+        check(strongAlarms.size <= 1) { "Debt contains duplicate strong alarms." }
 
         return AccountOverview(
             person = aggregate.person.toRecord(),
@@ -782,6 +849,7 @@ class RoomWaslRepository(
             notes = debt.notes,
             closedAt = debt.closedAt?.let(Instant::ofEpochMilli),
             dueReminder = dueReminders.singleOrNull()?.toRecord(),
+            strongAlarm = strongAlarms.singleOrNull()?.toRecord(),
             dueScheduleAuditEvents = aggregate.auditEvents
                 .map(::toDueScheduleAuditEvent)
                 .sortedWith(
@@ -941,18 +1009,21 @@ class RoomWaslRepository(
         check(subjectType == ReminderSubjectType.DEBT.name) {
             "Unsupported reminder subject type: $subjectType"
         }
-        check(reminderType == ReminderType.DUE_DATE.name) {
-            "Unsupported reminder type: $reminderType"
-        }
-        check(scheduleType == ReminderScheduleType.WORK.name) {
-            "Unsupported reminder schedule type: $scheduleType"
-        }
+        val type = ReminderType.valueOf(reminderType)
+        val schedule = ReminderScheduleType.valueOf(scheduleType)
+        check(
+            (type == ReminderType.DUE_DATE && schedule == ReminderScheduleType.WORK) ||
+                (type == ReminderType.STRONG_ALARM && schedule == ReminderScheduleType.EXACT_ALARM),
+        ) { "Unsupported reminder type/schedule combination: $reminderType/$scheduleType" }
         return ReminderRecord(
             id = id,
             debtId = DebtId(subjectId),
             triggerAt = Instant.ofEpochMilli(triggerAt),
             zoneId = ZoneId.of(zoneId),
             status = ReminderStatus.valueOf(status),
+            type = type,
+            scheduleType = schedule,
+            platformRequestCode = platformRequestCode,
             lastFailureCode = lastFailureCode,
             deliveredAt = deliveredAt?.let(Instant::ofEpochMilli),
             createdAt = Instant.ofEpochMilli(createdAt),
@@ -960,11 +1031,24 @@ class RoomWaslRepository(
         )
     }
 
-    private fun ReminderEntity.activeRequestOrNull(): DueReminderRequest? =
+    private fun ReminderEntity.activeDueRequestOrNull(): DueReminderRequest? =
         if (status == ReminderStatus.CANCELLED.name) {
             null
         } else {
+            check(reminderType == ReminderType.DUE_DATE.name)
             DueReminderRequest(
+                id = id,
+                triggerAt = Instant.ofEpochMilli(triggerAt),
+                zoneId = ZoneId.of(zoneId),
+            )
+        }
+
+    private fun ReminderEntity.activeStrongAlarmRequestOrNull(): StrongAlarmRequest? =
+        if (status == ReminderStatus.CANCELLED.name) {
+            null
+        } else {
+            check(reminderType == ReminderType.STRONG_ALARM.name)
+            StrongAlarmRequest(
                 id = id,
                 triggerAt = Instant.ofEpochMilli(triggerAt),
                 zoneId = ZoneId.of(zoneId),
@@ -980,6 +1064,26 @@ class RoomWaslRepository(
         subjectId = debtId.value,
         reminderType = ReminderType.DUE_DATE.name,
         scheduleType = ReminderScheduleType.WORK.name,
+        triggerAt = triggerAt.toEpochMilli(),
+        zoneId = zoneId.id,
+        repeatRule = null,
+        status = ReminderStatus.SCHEDULED.name,
+        platformRequestCode = null,
+        lastFailureCode = null,
+        deliveredAt = null,
+        createdAt = createdAt.toEpochMilli(),
+        updatedAt = createdAt.toEpochMilli(),
+    )
+
+    private fun StrongAlarmRequest.toEntity(
+        debtId: DebtId,
+        createdAt: Instant,
+    ): ReminderEntity = ReminderEntity(
+        id = id,
+        subjectType = ReminderSubjectType.DEBT.name,
+        subjectId = debtId.value,
+        reminderType = ReminderType.STRONG_ALARM.name,
+        scheduleType = ReminderScheduleType.EXACT_ALARM.name,
         triggerAt = triggerAt.toEpochMilli(),
         zoneId = zoneId.id,
         repeatRule = null,
@@ -1048,6 +1152,7 @@ class RoomWaslRepository(
         description = description?.trim(),
         debtNotes = debtNotes?.trim(),
         dueReminder = dueReminder,
+        strongAlarm = strongAlarm,
     )
 
     private fun CreateDebtForExistingPersonCommand.toDebtCreation() = DebtCreation(
@@ -1061,6 +1166,7 @@ class RoomWaslRepository(
         description = description?.trim(),
         debtNotes = debtNotes?.trim(),
         dueReminder = dueReminder,
+        strongAlarm = strongAlarm,
     )
 
     private data class DebtCreation(
@@ -1074,6 +1180,7 @@ class RoomWaslRepository(
         val description: String?,
         val debtNotes: String?,
         val dueReminder: DueReminderRequest?,
+        val strongAlarm: StrongAlarmRequest?,
     )
 
     private enum class LedgerKind {
@@ -1082,10 +1189,6 @@ class RoomWaslRepository(
     }
 
     private enum class ReminderSubjectType { DEBT }
-
-    private enum class ReminderType { DUE_DATE }
-
-    private enum class ReminderScheduleType { WORK }
 
     private enum class AuditAggregateType { DEBT }
 

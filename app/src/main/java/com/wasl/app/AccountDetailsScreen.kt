@@ -106,6 +106,7 @@ internal fun AccountDetailsScreen(
     onDismissDueSchedule: () -> Unit,
     onDueScheduleDateChange: (LocalDate?) -> Unit,
     onDueScheduleReminderChange: (Boolean) -> Unit,
+    onDueScheduleStrongAlarmChange: (Boolean) -> Unit,
     onConfirmDueSchedule: () -> Unit,
     onOpenPaymentPromise: () -> Unit,
     onDismissPaymentPromise: () -> Unit,
@@ -117,6 +118,7 @@ internal fun AccountDetailsScreen(
     onPaymentPromiseResolutionNoteChange: (String) -> Unit,
     onConfirmPaymentPromiseResolution: () -> Unit,
     notificationPermissionGranted: Boolean,
+    exactAlarmAccessGranted: Boolean,
     onNoticeShown: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -285,9 +287,11 @@ internal fun AccountDetailsScreen(
             isSaving = state.isUpdatingDueSchedule,
             error = state.dueScheduleError,
             notificationPermissionGranted = notificationPermissionGranted,
+            exactAlarmAccessGranted = exactAlarmAccessGranted,
             onDismiss = onDismissDueSchedule,
             onDueDateChange = onDueScheduleDateChange,
             onReminderChange = onDueScheduleReminderChange,
+            onStrongAlarmChange = onDueScheduleStrongAlarmChange,
             onConfirm = onConfirmDueSchedule,
         )
     }
@@ -597,7 +601,7 @@ private fun AccountSummaryCard(
                         ledger.header.dueDate?.let(::formatDate) ?: "غير محدد",
                     )
                     account.dueReminder?.let { reminder ->
-                        MetadataRow("موعد التذكير", formatInstant(reminder.triggerAt))
+                        MetadataRow("موعد المتابعة الأساسي", formatInstant(reminder.triggerAt))
                         MetadataRow(
                             "حالة التذكير",
                             when (reminder.status) {
@@ -609,6 +613,11 @@ private fun AccountSummaryCard(
                             },
                         )
                     }
+                    account.strongAlarm
+                        ?.takeIf { it.status != ReminderStatus.CANCELLED }
+                        ?.let { alarm ->
+                            MetadataRow("المنبه القوي", formatInstant(alarm.triggerAt))
+                        }
                     account.closedAt?.let { closedAt ->
                         MetadataRow("تاريخ الإغلاق", formatInstant(closedAt))
                     }
@@ -673,9 +682,11 @@ private fun DueScheduleDialog(
     isSaving: Boolean,
     error: String?,
     notificationPermissionGranted: Boolean,
+    exactAlarmAccessGranted: Boolean,
     onDismiss: () -> Unit,
     onDueDateChange: (LocalDate?) -> Unit,
     onReminderChange: (Boolean) -> Unit,
+    onStrongAlarmChange: (Boolean) -> Unit,
     onConfirm: () -> Unit,
 ) {
     var showDatePicker by remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -741,6 +752,35 @@ private fun DueScheduleDialog(
                         "ستُحفظ المتابعة، لكنها لن تظهر حتى تسمح بإشعارات وَصل.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("منبه قوي إضافي", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "منبه دقيق قرابة 09:00 يوم الاستحقاق. المتابعة الذكية تبقى كبديل آمن.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = form.strongAlarmEnabled,
+                        onCheckedChange = onStrongAlarmChange,
+                        enabled = !isSaving && form.dueDate != null,
+                        modifier = Modifier.testTag("edit-strong-alarm"),
+                    )
+                }
+                if (form.strongAlarmEnabled && !exactAlarmAccessGranted) {
+                    Text(
+                        "المنبه القوي محفوظ، لكن Android يحتاج إذن «المنبهات والتذكيرات» لتشغيله بدقة. ستستمر المتابعة الذكية.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag("exact-alarm-permission-warning"),
                     )
                 }
                 error?.let {
@@ -1478,8 +1518,10 @@ private fun AccountOperationNotice.toDisplayText(): String = when (this) {
             "تم حفظ الموعد في حساب $personName، وستُستكمل مزامنة التذكير تلقائيًا."
 
         dueDate == null -> "تم إلغاء موعد الاستحقاق والتذكير في حساب $personName."
+        strongAlarmEnabled && reminderEnabled ->
+            "تم تحديث موعد الاستحقاق وتفعيل المتابعة الذكية والمنبه القوي في حساب $personName."
         reminderEnabled -> "تم تحديث موعد الاستحقاق وتفعيل المتابعة الذكية في حساب $personName."
-        else -> "تم تحديث موعد الاستحقاق دون تذكير في حساب $personName."
+        else -> "تم تحديث موعد الاستحقاق دون متابعة في حساب $personName."
     }
 
     is AccountOperationNotice.PaymentReceiptIssuedNotice ->

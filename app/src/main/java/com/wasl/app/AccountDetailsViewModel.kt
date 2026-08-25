@@ -15,6 +15,7 @@ import com.wasl.app.data.PreparePaymentReceiptCommand
 import com.wasl.app.data.RecordNotFoundException
 import com.wasl.app.data.RecordPaymentCommand
 import com.wasl.app.data.ReminderStatus
+import com.wasl.app.data.StrongAlarmRequest
 import com.wasl.app.data.ResolvePaymentPromiseCommand
 import com.wasl.app.data.ReversePaymentCommand
 import com.wasl.app.data.UnavailablePaymentPromiseStore
@@ -57,6 +58,7 @@ data class PaymentReview(
 data class DueScheduleForm(
     val dueDate: LocalDate? = null,
     val remindOnDueDate: Boolean = false,
+    val strongAlarmEnabled: Boolean = false,
 )
 
 data class ReceiptIdentityForm(
@@ -93,6 +95,7 @@ sealed interface AccountOperationNotice {
         val personName: String,
         val dueDate: LocalDate?,
         val reminderEnabled: Boolean,
+        val strongAlarmEnabled: Boolean,
         val platformSyncPending: Boolean,
     ) : AccountOperationNotice
 
@@ -737,6 +740,10 @@ class AccountDetailsViewModel(
                         ?.status
                         ?.let { it != ReminderStatus.CANCELLED }
                         ?: false,
+                    strongAlarmEnabled = account.strongAlarm
+                        ?.status
+                        ?.let { it != ReminderStatus.CANCELLED }
+                        ?: false,
                 ),
                 dueScheduleError = null,
                 notice = null,
@@ -765,6 +772,9 @@ class AccountDetailsViewModel(
                     remindOnDueDate = if (value == null) false else {
                         it.dueScheduleForm.remindOnDueDate
                     },
+                    strongAlarmEnabled = if (value == null) false else {
+                        it.dueScheduleForm.strongAlarmEnabled
+                    },
                 ),
                 dueScheduleError = null,
             )
@@ -774,9 +784,25 @@ class AccountDetailsViewModel(
     fun updateDueScheduleReminder(value: Boolean) {
         pendingDueScheduleCommand = null
         _uiState.update {
+            val enabled = value && it.dueScheduleForm.dueDate != null
             it.copy(
                 dueScheduleForm = it.dueScheduleForm.copy(
-                    remindOnDueDate = value && it.dueScheduleForm.dueDate != null,
+                    remindOnDueDate = enabled,
+                    strongAlarmEnabled = it.dueScheduleForm.strongAlarmEnabled && enabled,
+                ),
+                dueScheduleError = null,
+            )
+        }
+    }
+
+    fun updateDueScheduleStrongAlarm(value: Boolean) {
+        pendingDueScheduleCommand = null
+        _uiState.update {
+            val enabled = value && it.dueScheduleForm.dueDate != null
+            it.copy(
+                dueScheduleForm = it.dueScheduleForm.copy(
+                    strongAlarmEnabled = enabled,
+                    remindOnDueDate = if (enabled) true else it.dueScheduleForm.remindOnDueDate,
                 ),
                 dueScheduleError = null,
             )
@@ -798,9 +824,9 @@ class AccountDetailsViewModel(
             }
             return
         }
-        if (form.remindOnDueDate && form.dueDate == null) {
+        if ((form.remindOnDueDate || form.strongAlarmEnabled) && form.dueDate == null) {
             _uiState.update {
-                it.copy(dueScheduleError = "اختر تاريخ الاستحقاق قبل تفعيل التذكير.")
+                it.copy(dueScheduleError = "اختر تاريخ الاستحقاق قبل تفعيل المتابعة أو المنبه.")
             }
             return
         }
@@ -809,11 +835,16 @@ class AccountDetailsViewModel(
             ?.status
             ?.let { it != ReminderStatus.CANCELLED }
             ?: false
+        val currentStrongAlarmEnabled = account.strongAlarm
+            ?.status
+            ?.let { it != ReminderStatus.CANCELLED }
+            ?: false
         if (pendingDueScheduleCommand == null &&
             form.dueDate == account.ledger.header.dueDate &&
-            form.remindOnDueDate == currentReminderEnabled
+            form.remindOnDueDate == currentReminderEnabled &&
+            form.strongAlarmEnabled == currentStrongAlarmEnabled
         ) {
-            _uiState.update { it.copy(dueScheduleError = "لم تغيّر الموعد أو التذكير.") }
+            _uiState.update { it.copy(dueScheduleError = "لم تغيّر الموعد أو المتابعة أو المنبه.") }
             return
         }
 
@@ -839,12 +870,26 @@ class AccountDetailsViewModel(
             } else {
                 null
             }
+            val strongAlarm = if (form.strongAlarmEnabled) {
+                StrongAlarmRequest(
+                    id = account.strongAlarm?.id ?: idFactory(),
+                    triggerAt = ReminderTime.dueDateTrigger(
+                        dueDate = requireNotNull(form.dueDate),
+                        now = now,
+                        zoneId = zoneId,
+                    ),
+                    zoneId = zoneId,
+                )
+            } else {
+                null
+            }
             UpdateDueScheduleCommand(
                 commandId = idFactory(),
                 auditEventId = idFactory(),
                 debtId = debtId,
                 dueDate = form.dueDate,
                 dueReminder = reminder,
+                strongAlarm = strongAlarm,
                 updatedAt = updatedAt,
             ).also { pendingDueScheduleCommand = it }
         }
@@ -853,21 +898,27 @@ class AccountDetailsViewModel(
         viewModelScope.launch {
             try {
                 val updated = repository.updateDueSchedule(command)
-                val persistedReminder = updated.dueReminder
-                val persistedReminderEnabled = persistedReminder
-                    ?.status
-                    ?.let { it != ReminderStatus.CANCELLED }
-                    ?: false
-                val platformSyncFailed = if (persistedReminderEnabled) {
-                    val reminder = requireNotNull(persistedReminder)
+                val activeReminders = listOfNotNull(updated.dueReminder, updated.strongAlarm)
+                    .filter { it.status != ReminderStatus.CANCELLED }
+                val activeIds = activeReminders.mapTo(mutableSetOf()) { it.id }
+                val schedulingFailed = activeReminders.map { reminder ->
                     runCatching { reminderScheduler.schedule(reminder) }
                         .onFailure { runCatching { reminderScheduler.requestRecovery() } }
                         .isFailure
-                } else {
-                    (persistedReminder?.id ?: account.dueReminder?.id)?.let { reminderId ->
-                        runCatching { reminderScheduler.cancel(reminderId) }.isFailure
-                    } ?: false
-                }
+                }.any { it }
+                val cancellationFailed = listOfNotNull(account.dueReminder, account.strongAlarm)
+                    .filter { it.id !in activeIds }
+                    .map { old -> runCatching { reminderScheduler.cancel(old.id) }.isFailure }
+                    .any { it }
+                val persistedReminderEnabled = updated.dueReminder
+                    ?.status
+                    ?.let { it != ReminderStatus.CANCELLED }
+                    ?: false
+                val persistedStrongAlarmEnabled = updated.strongAlarm
+                    ?.status
+                    ?.let { it != ReminderStatus.CANCELLED }
+                    ?: false
+                val platformSyncFailed = schedulingFailed || cancellationFailed
                 pendingDueScheduleCommand = null
                 _uiState.update {
                     it.copy(
@@ -879,6 +930,7 @@ class AccountDetailsViewModel(
                             personName = account.person.displayName,
                             dueDate = updated.ledger.header.dueDate,
                             reminderEnabled = persistedReminderEnabled,
+                            strongAlarmEnabled = persistedStrongAlarmEnabled,
                             platformSyncPending = platformSyncFailed,
                         ),
                     )

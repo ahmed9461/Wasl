@@ -20,3 +20,6 @@ value class LedgerEntryId(val value: String) {
         require(value.isNotBlank()) { "Ledger entry ID cannot be blank." }
     }
 }
+
+/** Maps an optional persisted ledger source to its domain identifier without sentinel values. */
+fun LedgerEntryId(value: String?): LedgerEntryId? = value?.let(::LedgerEntryId)

@@ -101,7 +101,7 @@ class BackupRestoreInstrumentedTest {
         } finally {
             password.fill('\u0000')
         }
-        assertEquals(6, backup.schemaVersion)
+        assertEquals(7, backup.schemaVersion)
         assertEquals(0, backup.documentCount)
 
         val extraDebtId = DebtId("backup-debt-extra")
@@ -133,7 +133,7 @@ class BackupRestoreInstrumentedTest {
         } finally {
             restorePassword.fill('\u0000')
         }
-        assertEquals(6, restored.schemaVersion)
+        assertEquals(7, restored.schemaVersion)
 
         val afterRestore = assertNotNull(repository.getAccount(primaryDebtId))
         assertEquals(beforeBackup.person.displayName, afterRestore.person.displayName)

@@ -429,7 +429,7 @@ class AndroidBackupService(
     )
 
     private companion object {
-        const val SCHEMA_VERSION = 6
+        const val SCHEMA_VERSION = 7
         const val MIN_PASSWORD_LENGTH = 8
         const val READY_STATUS = "READY"
         const val DOCUMENTS_DIRECTORY = "documents"

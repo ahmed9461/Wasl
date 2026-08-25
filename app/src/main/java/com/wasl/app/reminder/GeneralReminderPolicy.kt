@@ -47,12 +47,12 @@ data class GeneralReminderRecoveryPlan(
 
 fun planGeneralReminderRecovery(
     stored: GeneralReminderRecord,
+    currentZone: ZoneId,
     now: Instant,
     canNotify: Boolean,
 ): GeneralReminderRecoveryPlan {
     if (stored.status == ReminderStatus.CANCELLED ||
-        stored.status == ReminderStatus.DELIVERED ||
-        !canNotify
+        stored.status == ReminderStatus.DELIVERED
     ) {
         return GeneralReminderRecoveryPlan(
             shouldSchedule = false,
@@ -61,12 +61,28 @@ fun planGeneralReminderRecovery(
             zoneId = stored.zoneId,
         )
     }
-
-    val plannedTrigger = when {
-        stored.triggerAt.isAfter(now) -> stored.triggerAt
-        stored.repeatRule != null -> nextGeneralReminderTrigger(
-            currentTriggerAt = stored.triggerAt,
+    if (stored.status == ReminderStatus.BLOCKED_PERMISSION && !canNotify) {
+        return GeneralReminderRecoveryPlan(
+            shouldSchedule = false,
+            shouldPersistScheduledState = false,
+            triggerAt = stored.triggerAt,
             zoneId = stored.zoneId,
+        )
+    }
+
+    val rebasedTrigger = if (stored.zoneId == currentZone) {
+        stored.triggerAt
+    } else {
+        stored.triggerAt.atZone(stored.zoneId)
+            .toLocalDateTime()
+            .atZone(currentZone)
+            .toInstant()
+    }
+    val plannedTrigger = when {
+        rebasedTrigger.isAfter(now) -> rebasedTrigger
+        stored.repeatRule != null -> nextGeneralReminderTrigger(
+            currentTriggerAt = rebasedTrigger,
+            zoneId = currentZone,
             repeatRule = stored.repeatRule,
             now = now,
         )
@@ -75,8 +91,10 @@ fun planGeneralReminderRecovery(
     return GeneralReminderRecoveryPlan(
         shouldSchedule = true,
         shouldPersistScheduledState = stored.status != ReminderStatus.SCHEDULED ||
+            stored.lastFailureCode != null ||
+            stored.zoneId != currentZone ||
             plannedTrigger != stored.triggerAt,
         triggerAt = plannedTrigger,
-        zoneId = stored.zoneId,
+        zoneId = currentZone,
     )
 }

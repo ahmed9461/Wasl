@@ -3,12 +3,14 @@ package com.wasl.app
 import android.app.Application
 import com.wasl.app.backup.AndroidBackupService
 import com.wasl.app.backup.BackupService
+import com.wasl.app.data.GeneralReminderStore
 import com.wasl.app.data.InstallmentAwareWaslRepository
 import com.wasl.app.data.InstallmentPlanStore
 import com.wasl.app.data.PaymentPromiseStore
 import com.wasl.app.data.ReminderStore
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.data.local.RoomAccountDocumentStore
+import com.wasl.app.data.local.RoomGeneralReminderStore
 import com.wasl.app.data.local.RoomInstallmentPlanStore
 import com.wasl.app.data.local.RoomPaymentPromiseStore
 import com.wasl.app.data.local.RoomWaslRepository
@@ -18,9 +20,12 @@ import com.wasl.app.document.AndroidAccountDocumentService
 import com.wasl.app.document.AndroidPaymentReceiptService
 import com.wasl.app.document.PaymentReceiptService
 import com.wasl.app.privacy.PrivacyPreferences
+import com.wasl.app.reminder.GeneralReminderNotificationPublisher
+import com.wasl.app.reminder.GeneralReminderScheduler
 import com.wasl.app.reminder.HybridReminderScheduler
 import com.wasl.app.reminder.ReminderNotificationPublisher
 import com.wasl.app.reminder.ReminderScheduler
+import com.wasl.app.reminder.WorkManagerGeneralReminderScheduler
 
 class WaslApplication : Application() {
     private val database: WaslDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
@@ -52,6 +57,10 @@ class WaslApplication : Application() {
     val reminderStore: ReminderStore
         get() = roomRepository
 
+    val generalReminderStore: GeneralReminderStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        RoomGeneralReminderStore(database)
+    }
+
     val paymentPromiseStore: PaymentPromiseStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         RoomPaymentPromiseStore(database)
     }
@@ -61,6 +70,12 @@ class WaslApplication : Application() {
 
     val reminderScheduler: ReminderScheduler by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         HybridReminderScheduler(this)
+    }
+
+    val generalReminderScheduler: GeneralReminderScheduler by lazy(
+        LazyThreadSafetyMode.SYNCHRONIZED,
+    ) {
+        WorkManagerGeneralReminderScheduler(this)
     }
 
     private val accountDocumentStore: RoomAccountDocumentStore by lazy(
@@ -104,9 +119,17 @@ class WaslApplication : Application() {
         ReminderNotificationPublisher(this)
     }
 
+    val generalReminderNotificationPublisher: GeneralReminderNotificationPublisher by lazy(
+        LazyThreadSafetyMode.SYNCHRONIZED,
+    ) {
+        GeneralReminderNotificationPublisher(this)
+    }
+
     override fun onCreate() {
         super.onCreate()
         reminderNotificationPublisher.ensureChannels()
+        generalReminderNotificationPublisher.ensureChannel()
         reminderScheduler.requestRecovery()
+        generalReminderScheduler.requestRecovery()
     }
 }

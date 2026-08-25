@@ -63,13 +63,6 @@ class WaslApplication : Application() {
         HybridReminderScheduler(this)
     }
 
-    val paymentReceiptService: PaymentReceiptService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        AndroidPaymentReceiptService(
-            context = this,
-            store = roomRepository,
-        )
-    }
-
     private val accountDocumentStore: RoomAccountDocumentStore by lazy(
         LazyThreadSafetyMode.SYNCHRONIZED,
     ) {
@@ -83,6 +76,14 @@ class WaslApplication : Application() {
         AndroidAccountDocumentService(
             context = this,
             store = accountDocumentStore,
+        )
+    }
+
+    val paymentReceiptService: PaymentReceiptService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        AndroidPaymentReceiptService(
+            context = this,
+            store = roomRepository,
+            accountDocumentService = accountDocumentService,
         )
     }
 

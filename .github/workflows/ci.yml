@@ -106,8 +106,10 @@ jobs:
           disable-animations: true
           script: |
             gradle --no-daemon -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true :app:connectedDebugAndroidTest
-            mkdir -p app/build/outputs/payment-receipt
+            mkdir -p app/build/outputs/payment-receipt app/build/outputs/account-documents
             adb exec-out run-as com.wasl.app cat files/test-artifacts/wasl-payment-receipt-sample.pdf > app/build/outputs/payment-receipt/wasl-payment-receipt-sample.pdf
+            adb exec-out run-as com.wasl.app cat files/test-artifacts/wasl-debt-receipt-sample.pdf > app/build/outputs/account-documents/wasl-debt-receipt-sample.pdf
+            adb exec-out run-as com.wasl.app cat files/test-artifacts/wasl-account-statement-sample.pdf > app/build/outputs/account-documents/wasl-account-statement-sample.pdf
 
       - name: Install PDF inspection tools
         run: sudo apt-get update && sudo apt-get install -y poppler-utils
@@ -124,12 +126,42 @@ jobs:
           pdftoppm -png -r 144 "$PDF" \
             app/build/outputs/payment-receipt/receipt-page
 
+      - name: Inspect debt receipt and account statement artifacts
+        run: |
+          DEBT_PDF="app/build/outputs/account-documents/wasl-debt-receipt-sample.pdf"
+          STATEMENT_PDF="app/build/outputs/account-documents/wasl-account-statement-sample.pdf"
+
+          DEBT_PAGES="$(pdfinfo "$DEBT_PDF" | awk '/^Pages:/ { print $2 }')"
+          STATEMENT_PAGES="$(pdfinfo "$STATEMENT_PDF" | awk '/^Pages:/ { print $2 }')"
+          test "$DEBT_PAGES" -ge 1
+          test "$STATEMENT_PAGES" -ge 2
+
+          pdftotext -layout "$DEBT_PDF" app/build/outputs/account-documents/debt-receipt-text.txt
+          pdftotext -layout "$STATEMENT_PDF" app/build/outputs/account-documents/account-statement-text.txt
+          grep -F "DEBT-2026-00043" app/build/outputs/account-documents/debt-receipt-text.txt
+          grep -F "AL NOOR TRADING" app/build/outputs/account-documents/debt-receipt-text.txt
+          grep -F "STAT-2026-00044" app/build/outputs/account-documents/account-statement-text.txt
+          grep -F "REF-35" app/build/outputs/account-documents/account-statement-text.txt
+
+          pdftoppm -png -r 144 "$DEBT_PDF" \
+            app/build/outputs/account-documents/debt-receipt-page
+          pdftoppm -png -r 144 "$STATEMENT_PDF" \
+            app/build/outputs/account-documents/account-statement-page
+
       - name: Upload payment receipt PDF evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Wasl-payment-receipt-evidence
           path: app/build/outputs/payment-receipt/
+          if-no-files-found: warn
+
+      - name: Upload account document PDF evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wasl-account-document-evidence
+          path: app/build/outputs/account-documents/
           if-no-files-found: warn
 
       - name: Upload instrumentation test reports

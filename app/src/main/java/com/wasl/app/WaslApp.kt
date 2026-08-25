@@ -1363,7 +1363,9 @@ private fun WaslHomeScreenPreview() {
                 onDescriptionChange = {},
                 onDueDateChange = {},
                 onReminderChange = {},
+                onStrongAlarmChange = {},
                 notificationPermissionGranted = true,
+                exactAlarmAccessGranted = true,
                 onSave = {},
                 onSuccessShown = {},
             )

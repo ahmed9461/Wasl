@@ -624,9 +624,9 @@ private fun AccountSummaryCard(
                 ) {
                     Text(
                         if (ledger.header.dueDate == null) {
-                            "إضافة موعد وتذكير"
+                            "إضافة موعد ومتابعة"
                         } else {
-                            "تعديل الموعد والتذكير"
+                            "تعديل الموعد والمتابعة"
                         },
                         fontWeight = FontWeight.Bold,
                     )
@@ -681,7 +681,7 @@ private fun DueScheduleDialog(
     var showDatePicker by remember { androidx.compose.runtime.mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("الموعد والتذكير") },
+        title = { Text("الموعد والمتابعة") },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -722,9 +722,9 @@ private fun DueScheduleDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("ذكرني يوم الاستحقاق", fontWeight = FontWeight.SemiBold)
+                        Text("متابعة ذكية للاستحقاق", fontWeight = FontWeight.SemiBold)
                         Text(
-                            "تذكير عادي قرابة 09:00 حسب توقيت الجهاز",
+                            "قبل الموعد بيوم، يوم الموعد، بعد يومين، ثم أسبوعيًا حتى السداد.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -738,7 +738,7 @@ private fun DueScheduleDialog(
                 }
                 if (form.remindOnDueDate && !notificationPermissionGranted) {
                     Text(
-                        "سيُحفظ التذكير، لكنه لن يظهر حتى تسمح بإشعارات وَصل.",
+                        "ستُحفظ المتابعة، لكنها لن تظهر حتى تسمح بإشعارات وَصل.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -1328,7 +1328,7 @@ private fun DueScheduleAuditTimelineCard(event: DueScheduleAuditEvent) {
         event.before.dueDate != event.after.dueDate ->
             "تم تعديل تاريخ الاستحقاق"
 
-        else -> "تم تعديل تذكير الاستحقاق"
+        else -> "تم تعديل متابعة الاستحقاق"
     }
     Card(
         modifier = Modifier
@@ -1449,7 +1449,7 @@ private fun formatInstant(instant: Instant): String {
 private fun formatDate(date: LocalDate): String = "\u2066$date\u2069"
 
 private fun reminderSummary(reminder: DueReminderRequest?): String =
-    reminder?.let { "مفعل — ${formatInstant(it.triggerAt)}" } ?: "غير مفعل"
+    reminder?.let { "متابعة ذكية — ${formatInstant(it.triggerAt)}" } ?: "غير مفعل"
 
 private sealed interface AccountTimelineItem {
     val key: String
@@ -1478,7 +1478,7 @@ private fun AccountOperationNotice.toDisplayText(): String = when (this) {
             "تم حفظ الموعد في حساب $personName، وستُستكمل مزامنة التذكير تلقائيًا."
 
         dueDate == null -> "تم إلغاء موعد الاستحقاق والتذكير في حساب $personName."
-        reminderEnabled -> "تم تحديث موعد الاستحقاق وجدولة التذكير في حساب $personName."
+        reminderEnabled -> "تم تحديث موعد الاستحقاق وتفعيل المتابعة الذكية في حساب $personName."
         else -> "تم تحديث موعد الاستحقاق دون تذكير في حساب $personName."
     }
 

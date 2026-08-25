@@ -800,9 +800,9 @@ private fun CreateDebtDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("ذكرني يوم الاستحقاق", fontWeight = FontWeight.SemiBold)
+                        Text("متابعة ذكية للاستحقاق", fontWeight = FontWeight.SemiBold)
                         Text(
-                            "تذكير عادي قرابة 09:00 حسب توقيت الجهاز",
+                            "قبل الموعد بيوم، يوم الموعد، بعد يومين، ثم أسبوعيًا حتى السداد.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

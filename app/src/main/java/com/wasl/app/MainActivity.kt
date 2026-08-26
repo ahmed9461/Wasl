@@ -34,6 +34,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.wasl.app.privacy.AppLockAuthPurpose
 import com.wasl.app.privacy.AppLockViewModel
 import com.wasl.app.reminder.ReminderNotificationActions
+import com.wasl.domain.DebtId
 
 class MainActivity : FragmentActivity() {
     private val requestedDebtId = mutableStateOf<String?>(null)
@@ -80,6 +81,7 @@ class MainActivity : FragmentActivity() {
             var installmentsOpen by remember { mutableStateOf(false) }
             var settingsOpen by remember { mutableStateOf(false) }
             var documentsOpen by remember { mutableStateOf(false) }
+            var documentsDebtId by remember { mutableStateOf<DebtId?>(null) }
             var securityOpen by remember { mutableStateOf(false) }
 
             val appLocked = appLockViewModel.locked
@@ -113,14 +115,23 @@ class MainActivity : FragmentActivity() {
                         LocalOpenInstallmentsHub provides {
                             settingsOpen = false
                             documentsOpen = false
+                            documentsDebtId = null
                             securityOpen = false
                             installmentsOpen = true
                         },
                         LocalOpenSettingsHub provides {
                             installmentsOpen = false
                             documentsOpen = false
+                            documentsDebtId = null
                             securityOpen = false
                             settingsOpen = true
+                        },
+                        LocalOpenAccountDocuments provides { debtId ->
+                            installmentsOpen = false
+                            settingsOpen = false
+                            securityOpen = false
+                            documentsDebtId = debtId
+                            documentsOpen = true
                         },
                     ) {
                         WaslApp(
@@ -158,6 +169,7 @@ class MainActivity : FragmentActivity() {
                                 onBack = { settingsOpen = false },
                                 onOpenDocuments = {
                                     settingsOpen = false
+                                    documentsDebtId = null
                                     documentsOpen = true
                                 },
                                 onRestored = {
@@ -182,9 +194,12 @@ class MainActivity : FragmentActivity() {
                         DocumentsHubRoute(
                             repository = waslApplication.repository,
                             documentService = waslApplication.paymentReceiptService,
+                            initialDebtId = documentsDebtId,
                             onBack = {
+                                val returnToSettings = documentsDebtId == null
                                 documentsOpen = false
-                                settingsOpen = true
+                                documentsDebtId = null
+                                if (returnToSettings) settingsOpen = true
                             },
                         )
                     }

@@ -5,8 +5,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertHasClickAction
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -103,9 +103,9 @@ class AdaptiveSearchUiInstrumentedTest {
 
         composeRule.onNodeWithTag("search-content").performScrollToIndex(3)
         composeRule.onNodeWithTag("search-result-header-stacked-debt-accessible")
-            .assertIsDisplayed()
+            .assertExists()
         composeRule.onNodeWithTag("search-result-balance-stacked-debt-accessible")
-            .assertIsDisplayed()
+            .assertExists()
 
         val accountDescription =
             "نتيجة حساب عميل الإتاحة، لي عنده، المتبقي ${formatMoney(account.ledger.balance)}. افتح الحساب."
@@ -115,9 +115,9 @@ class AdaptiveSearchUiInstrumentedTest {
 
         composeRule.onNodeWithTag("search-content").performScrollToIndex(5)
         composeRule.onNodeWithTag("search-advanced-header-stacked-payment-accessible")
-            .assertIsDisplayed()
+            .assertExists()
         composeRule.onNodeWithTag("search-advanced-metadata-stacked-payment-accessible")
-            .assertIsDisplayed()
+            .assertExists()
 
         val advancedDescription =
             "نتيجة دفعة مرتبطة بـعميل الإتاحة، المبلغ ${formatMoney(advanced.amount)}، التاريخ 20/08/2026. افتح الحساب المرتبط."

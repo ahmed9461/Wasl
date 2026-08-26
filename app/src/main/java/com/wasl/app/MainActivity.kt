@@ -23,6 +23,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProvider
 import com.wasl.app.privacy.AppLockAuthPurpose
@@ -265,6 +266,18 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun readNavigationIntent(intent: Intent) {
+        val notificationTag = intent.getStringExtra(
+            ReminderNotificationActions.EXTRA_NOTIFICATION_TAG,
+        )
+        val notificationId = if (intent.hasExtra(ReminderNotificationActions.EXTRA_NOTIFICATION_ID)) {
+            intent.getIntExtra(ReminderNotificationActions.EXTRA_NOTIFICATION_ID, Int.MIN_VALUE)
+        } else {
+            Int.MIN_VALUE
+        }
+        if (notificationTag != null && notificationId != Int.MIN_VALUE) {
+            NotificationManagerCompat.from(this).cancel(notificationTag, notificationId)
+        }
+
         requestedDebtId.value = intent.getStringExtra(EXTRA_DEBT_ID)
         requestedPaymentIntent.value = intent
             .getStringExtra(ReminderNotificationActions.EXTRA_PAYMENT_INTENT)

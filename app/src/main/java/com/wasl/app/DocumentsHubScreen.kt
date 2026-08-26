@@ -180,12 +180,12 @@ internal fun DocumentsHubRoute(
                     OutlinedButton(onClick = onBack) { Text("رجوع") }
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(
-                            "مركز المستندات",
+                            "تصدير وتقارير PDF",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.ExtraBold,
                         )
                         Text(
-                            "إيصال الدين وكشف الحساب من Snapshot ثابت وقت الإصدار.",
+                            "صدّر إيصال الدين أو كشف حساب كامل يتضمن أصل الدين والرصيد وجميع الدفعات وعمليات العكس حتى لحظة الإصدار.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -310,8 +310,13 @@ internal fun DocumentsHubRoute(
                             onClick = { issue(account, DocumentType.ACCOUNT_STATEMENT) },
                         ) {
                             if (busyKey == statementKey) CircularProgressIndicator()
-                            else Text("إصدار كشف حساب")
+                            else Text("تصدير كل المعاملات PDF")
                         }
+                        Text(
+                            "كشف الحساب يحفظ Snapshot ثابتًا للحساب ويشمل أصل الدين، صافي المسدد، المتبقي، وكل دفعة أو عملية عكس مسجلة حتى وقت التصدير.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
@@ -322,7 +327,7 @@ internal fun DocumentsHubRoute(
 private fun DocumentType.arabicLabel(): String = when (this) {
     DocumentType.DEBT_RECEIPT -> "إيصال الدين"
     DocumentType.PAYMENT_RECEIPT -> "إيصال السداد"
-    DocumentType.ACCOUNT_STATEMENT -> "كشف الحساب"
+    DocumentType.ACCOUNT_STATEMENT -> "كشف الحساب الكامل"
 }
 
 private fun formatDocumentsMoney(money: Money): String {

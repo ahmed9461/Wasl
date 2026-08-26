@@ -12,8 +12,8 @@
 - `main` لم يُدمج ولم يُعدّل ضمن هذه المرحلة.
 - قاعدة البيانات: Room Schema **v7** مع Migrations متسلسلة v1→v7 دون destructive migration.
 - هوية Schema v7: `d2c9fe45f2707138bc1476639617e255`.
-- آخر رأس وظيفي خضع للتحقق الكامل: `c019d3a7160c29360082b12ec1c42559d4d6127b`.
-- آخر تحقق وظيفي كامل: **Android CI #458** — Run `32912759608` — نجاح كامل.
+- آخر رأس وظيفي خضع للتحقق الكامل: `53faec3cd7007c6a9e318b3fa69a2f955bb2ed4d`.
+- آخر تحقق وظيفي كامل: **Android CI #485** — Run `32998478006` — نجاح كامل.
 
 ## ما يعمل الآن
 
@@ -49,7 +49,18 @@
 - مركز **«التذكيرات»** متاح من الإعدادات، يعرض الحسابات ويسمح بإضافة/تعديل/إلغاء تذكير المتابعة لكل حساب.
 - مركز التذكيرات عربي RTL، غير مصدّر خارج التطبيق، ويستخدم `FLAG_SECURE` وفق سياسة الخصوصية/القفل، و`noHistory` حتى لا يبقى مدخلًا جانبيًا يتجاوز App Lock بعد مغادرة التطبيق.
 - Backup/Restore المشفر يحفظ ويستعيد سجل `GENERAL` مع `repeat_rule` والحالة والمنطقة الزمنية.
-- إجراءات الإشعار المالية من REM-006 مثل «تم السداد / دفع جزء / ذكرني لاحقًا» **ليست ضمن هذا Slice** وتبقى مرحلة مستقلة حتى تمر بمسارات التأكيد المالي الصحيحة.
+
+### إجراءات الإشعار الآمنة — REM-006
+
+- لمس جسم إشعار الاستحقاق أو المتابعة العامة يفتح الحساب مباشرة.
+- أزرار الإشعار الثلاثة: **دفع جزء** / **تم السداد** / **ذكرني لاحقًا**؛ فتح الحساب لا يحتاج زرًا رابعًا.
+- «دفع جزء» و«تم السداد» لا يكتبان Payment أو Ledger entry من Notification callback؛ ينقلان المستخدم فقط إلى مسار الدفع داخل التطبيق.
+- «تم السداد» يعبئ المتبقي الحالي كاملًا بدقة العملة قبل صفحة المراجعة؛ YER وSAR وUSD مغطاة باختبار Unit مستقل.
+- المراجعة والتأكيد داخل التطبيق يبقيان إلزاميين قبل أي Commit مالي؛ لا يوجد auto-submit من الإشعار.
+- `MainActivity` يقبل فقط `PARTIAL` / `FULL` ويغلق الإشعار الأصلي باستخدام tag/id.
+- «ذكرني لاحقًا» يستخدم Unique delayed Work قابلًا للاستبدال Idempotently، ولا يغير الرصيد أو `due_date` ولا ينشر من جديد إذا أصبح الحساب مسددًا.
+- PendingIntents تستخدم `FLAG_IMMUTABLE | FLAG_UPDATE_CURRENT`.
+- مسارا نشر DUE_DATE وGENERAL يستخدمان سطح الإجراءات الآمن نفسه عند ملاءمته.
 
 ### وعود السداد والأقساط
 
@@ -63,7 +74,7 @@
 
 - Navigation 3 للرئيسية واليوم والبحث وتفاصيل الحساب ومركز الأقساط والمستندات والإعدادات والأمان، مع مركز تذكيرات مستقل من الإعدادات.
 - بحث Room Reactive باسم الشخص أو بيان الدين بحد نتائج واضح.
-- فتح الحساب من الرئيسية أو Today أو البحث أو مركز الأقساط.
+- فتح الحساب من الرئيسية أو Today أو البحث أو مركز الأقساط أو الإشعار.
 
 ### المستندات المالية PDF
 
@@ -114,9 +125,10 @@
 12. `READY` لا يعني صالحًا للفتح دون ملف صحيح وSHA-256 مطابق.
 13. Backup/Restore لا يتجاوز فحوص Schema والمسارات والبصمات وForeign Keys والثوابت.
 14. App Lock لا يخزن اعتمادًا سريًا مخصصًا داخل وَصل؛ المصادقة مسؤولية Android.
-15. لا destructive migrations.
-16. لا أسرار أو مفاتيح توقيع داخل المستودع.
-17. لا دمج إلى `main` دون طلب صريح من صاحب المشروع.
+15. إجراءات الإشعار المالية لا تكتب Ledger مباشرة؛ كل دفعة تمر بمراجعة وتأكيد داخل التطبيق.
+16. لا destructive migrations.
+17. لا أسرار أو مفاتيح توقيع داخل المستودع.
+18. لا دمج إلى `main` دون طلب صريح من صاحب المشروع.
 
 ## قاعدة البيانات الحالية — Schema v7
 
@@ -146,20 +158,21 @@ Migrations:
 - v5→v6: installment plans/installments + revisions.
 - v6→v7: `issued_documents.ledger_entry_id` أصبح nullable مع حفظ الصفوف السابقة وإعادة الفهارس والـView.
 
-التذكيرات العامة تعيد استخدام `reminders` الحالي؛ **لم تتطلب Schema v8**.
+التذكيرات العامة وإجراءات REM-006 تعيد استخدام النماذج الحالية؛ **لم تتطلب Schema v8**.
 
 Schema artifact الملتزم: `app/schemas/com.wasl.app.data.local.WaslDatabase/7.json`.
 
 ## التحقق الحالي
 
-**Android CI #458** — Run `32912759608` — head `c019d3a7160c29360082b12ec1c42559d4d6127b`:
+**Android CI #485** — Run `32998478006` — head `53faec3cd7007c6a9e318b3fa69a2f955bb2ed4d`:
 
 - Unit tests ✅
 - Lint ✅
 - Debug APK ✅
 - Room Schema v7 generated/current check ✅
-- Android Emulator instrumentation: **65/65** ✅
+- Android Emulator instrumentation: **70/70** ✅
 - 0 failures / 0 errors / 0 skipped ✅
+- REM-006: DUE_DATE/GENERAL Notification actions، Safe payment intents، Snooze Unique Work وCurrency-aware full-payment prefill ✅
 - General Reminder Store/Service/Recovery regression ✅
 - General Reminders Hub UI: إنشاء تذكير أسبوعي ثم إلغاؤه وحفظ `CANCELLED` ✅
 - Backup/Restore: استعادة سجل `GENERAL` وقاعدة التكرار والحالة والمنطقة الزمنية ✅
@@ -169,14 +182,19 @@ Schema artifact الملتزم: `app/schemas/com.wasl.app.data.local.WaslDatabas
 - Migration v1→v7 / v6→v7 ✅
 - Backup/Restore وPDF integrity ✅
 - Payment/Debt/Statement PDF evidence ✅
+- Payment receipt markers: `PAY-2026-00042`, `AL NOOR TRADING`, `123,456.78 USD` ✅
+- Debt receipt marker: `DEBT-2026-00043` ✅
+- Account statement markers: `STAT-2026-00044`, `REF-35`، وعينة 3 صفحات ✅
 
-Artifacts من #458:
+CI #483 — Run `32991533877` — كشف قبل #485 Race واحدة في `GeneralRemindersHubUiInstrumentedTest`: كانت الشاشة تعرض حالة «أسبوعي» قبل اكتمال side effect الخاص بالـscheduler، فقرأ الاختبار قائمة التسجيل مبكرًا. أصلح الاختبار بالانتظار على **حالة Room + scheduler side effect** مع `CopyOnWriteArrayList` بدل sleep أو تأخير اعتباطي؛ #485 أثبت الإصلاح بـ70/70.
 
-- `Wasl-debug` — `9587182455` — SHA-256 `cd8a1b686c5ad4f7e606634fb46fa314b38259c2a903c420128bb8012c74a53f`.
-- `Wasl-room-schema` — `9587182763` — SHA-256 `7466781408776d618a62cade3463f9f68317fcd17e0ce6a7c61289319c8ad187`.
-- `Wasl-payment-receipt-evidence` — `9587332535` — SHA-256 `015278424337baef2043225bc14c1162ef6429b94be05410bf482cc4cf58c10d`.
-- `Wasl-account-document-evidence` — `9587332805` — SHA-256 `e10ba0c68d05d29d219127d0299ffdbbf1d52d9f039b8728b121e966abf10e5e`.
-- `Wasl-room-instrumentation-results` — `9587333092` — SHA-256 `d4c1e2c1e72b9d58b7e2d80e3f00fe6e8beb662e6a9e414d7865c594055f36b8`.
+Artifacts من #485:
+
+- `Wasl-debug` — `9617704751` — SHA-256 `973a3985dd2c94d29a743488948172b444ef4e341b01005f8f9911d53468d539`.
+- `Wasl-room-schema` — `9617705367` — SHA-256 `5fec4cc04f3720ba6bdb4e33499e0ca76e1d3809a68b524948706c79735d9797`.
+- `Wasl-payment-receipt-evidence` — `9617967942` — SHA-256 `3e3f0cf2fbb908f68ae4def535c7325d49d7fa31282c21695216d76c8b6c036c`.
+- `Wasl-account-document-evidence` — `9617968386` — SHA-256 `557a464d264d97d048d37d6fc52c6aad8cc02dd7e310e4b5d5f439d3fd24717e`.
+- `Wasl-room-instrumentation-results` — `9617968909` — SHA-256 `346fb994021ed012d97598aa12b2020cc77e093b59e14aad33ebc3ce0fe9c2cb`.
 
 ## ديون تقنية غير حاجبة
 
@@ -192,7 +210,6 @@ Artifacts من #458:
 
 تُختار من `WASL_MASTER_PROJECT_PROMPT.md` و`SPEC.md` دون إسقاط قرار سابق:
 
-- إجراءات الإشعار الآمنة من REM-006 مثل فتح الحساب/تم السداد/دفع جزء/ذكرني لاحقًا، مع بقاء أي فعل مالي خلف تأكيد صريح.
 - بحث متقدم داخل العمليات والمستندات والمبالغ والتواريخ.
 - مرفقات/مطالبات وإدارة ملفات حساسة عند اعتماد تفاصيلها.
 - توسيع الإتاحة والتكيف مع أحجام النوافذ وTalkBack.

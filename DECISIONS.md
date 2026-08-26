@@ -191,11 +191,34 @@
   - لا يغير التذكير العام أصل الدين أو رصيده أو حالته المالية.
   - لا يغير `due_date` ولا ينشئ Audit ماليًا أو Ledger entry.
   - لا يحول إجراء إشعار إلى Payment تلقائيًا.
-- مؤجل عمدًا:
-  - REM-006: «تم السداد»، «دفع جزء»، «ذكرني لاحقًا» وأي إجراء مالي من الإشعار تبقى Slice مستقلة؛ أي فعل مالي يجب أن يمر بمراجعة وتأكيد آمنين.
 - التحقق:
   - Store tests للهوية الواحدة والتعديل والإلغاء والحالات.
   - UI instrumentation ينشئ تذكيرًا أسبوعيًا من Hub ثم يلغي ويؤكد `CANCELLED` في Room.
   - Backup/Restore instrumentation يعيد Snapshot التذكير العام بعد تغيير الحالة الحية.
   - CI #458 — Run `32912759608`: Android instrumentation **65/65**، صفر failures/skips، مع بقاء Room Schema v7 وPDF regressions خضراء.
 - المصدر: https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started
+
+## ADR-017 — إجراءات الإشعار الآمنة لا تكتب Ledger مباشرة
+
+- الحالة: **معتمد ومطبق**.
+- المشكلة: إجراءات «تم السداد» و«دفع جزء» مفيدة من الإشعار، لكن تنفيذ mutation مالية مباشرة داخل Notification callback قد يسجل دفعة عرضية أو يتجاوز Preview ومراجعة المستخدم ومصدر الحقيقة المالي.
+- القرار:
+  - لمس جسم الإشعار يفتح الحساب، وتُخصص أزرار Android الثلاثة الظاهرة لـ«دفع جزء»، «تم السداد»، «ذكرني لاحقًا».
+  - الإجراء المالي يحمل Intent فقط إلى `MainActivity` ثم إلى مسار الدفع داخل وَصل؛ لا يكتب Notification callback أي Payment أو Ledger entry.
+  - «تم السداد» يملأ المتبقي الحالي كاملًا بصيغة دقيقة للعملة، ثم يظل Review/Confirm المعتاد إلزاميًا قبل Commit.
+  - «دفع جزء» يفتح نموذج الدفع دون مبلغ مؤكد مسبقًا ودون تنفيذ تلقائي.
+  - `MainActivity` لا يقبل إلا نوايا الدفع المعروفة `PARTIAL` و`FULL`، ويلغي الإشعار الأصلي باستخدام notification tag/id.
+  - «ذكرني لاحقًا» يستخدم Unique delayed Work قابلًا للاستبدال Idempotently؛ لا يغير Ledger أو الرصيد أو `due_date`، ويتحقق من بقاء الحساب غير مسدد قبل إعادة النشر.
+  - PendingIntents غير قابلة للتعديل (`FLAG_IMMUTABLE`) وتستخدم `FLAG_UPDATE_CURRENT` لتحديث extras عند إعادة النشر.
+  - نفس سطح الإجراءات يطبق على ناشري DUE_DATE وGENERAL الملائمين، دون Schema v8 أو نموذج مالي جديد.
+- البدائل المرفوضة:
+  - تسجيل دفعة مباشرة من Broadcast/notification action: مرفوض لأنه يتجاوز التأكيد المالي.
+  - زر رابع «فتح الحساب»: مرفوض لأن لمس جسم الإشعار يحقق الغرض ويحافظ على الأزرار الثلاثة المرئية للأفعال الأخرى.
+  - تخزين «تم السداد» كحدث مستقل خارج Ledger: مرفوض لأنه ينشئ مصدر حقيقة ماليًا موازيًا.
+- التحقق:
+  - `ReminderNotificationPublisherInstrumentedTest` و`GeneralReminderNotificationPublisherInstrumentedTest` لسطح الإجراءات والـPendingIntents.
+  - `ReminderSnoozeSchedulerInstrumentedTest` للـUnique Work والحالات غير الصالحة لإعادة الإشعار.
+  - `PaymentFlowUiInstrumentedTest` لمسار الانتقال الآمن إلى الدفع دون auto-submit.
+  - `NotificationPaymentIntentFormattingTest` لدقة YER/SAR/USD عند تعبئة السداد الكامل.
+  - CI #485 — Run `32998478006` — head `53faec3cd7007c6a9e318b3fa69a2f955bb2ed4d`: **70/70** Android instrumentation، صفر failures/skips، وبوابات Unit/Lint/APK/Room/PDF كلها خضراء.
+- المصدر: https://developer.android.com/develop/ui/views/notifications/build-notification

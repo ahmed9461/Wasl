@@ -17,6 +17,11 @@
 - `GeneralReminderService` وStore/Recovery قابلان لإعادة المحاولة بصورة Idempotent؛ الإلغاء يحفظ `CANCELLED` بدل حذف السجل.
 - مركز **«التذكيرات»** من Settings لإضافة/تعديل/إلغاء تذكير المتابعة لكل حساب، مع RTL صريح وحماية الشاشة وComponent غير مصدّر.
 - Backup/Restore يحفظ ويستعيد تذكيرات `GENERAL` مع `repeat_rule` والحالة وZoneId.
+- **REM-006: إجراءات إشعار تفاعلية وآمنة**؛ لمس جسم الإشعار يفتح الحساب، والأزرار الثلاثة هي «دفع جزء» / «تم السداد» / «ذكرني لاحقًا».
+- `ReminderNotificationActions` كمسار موحد لنوايا فتح الحساب والدفع، مع PendingIntents غير قابلة للتعديل وعدم كتابة Ledger من Notification callback.
+- `ReminderSnooze` بجدولة Unique delayed Work قابلة للاستبدال Idempotently، لا تغيّر الرصيد أو `due_date` ولا تعيد إشعار حساب مسدد.
+- اختبار `NotificationPaymentIntentFormattingTest` لدقة تعبئة السداد الكامل في YER/SAR/USD.
+- اختبارات ناشري DUE_DATE وGENERAL وإجراءات Snooze ومسار Payment UI للتأكد أن الإشعار لا ينفذ دفعة تلقائيًا.
 - شاشة Today للاستحقاقات والوعود والأقساط، وبحث Room Reactive وفتح الحساب من النتائج.
 - Payment Promises مستقلة عن Ledger و`due_date` بحالات `PENDING / KEPT / MISSED / CANCELLED`.
 - Installment Plans مع `ACTIVE / SUPERSEDED` وRevision history محفوظ، وتقدم متصالح مع Ledger.
@@ -46,6 +51,9 @@
 
 - أصبح Room Schema الحالي **v7**؛ `issued_documents.ledger_entry_id` nullable لدعم Debt Receipt وAccount Statement دون Ledger entry مصطنع، مع بقاء Payment Receipt مرتبطًا بحركته.
 - التذكيرات العامة تعيد استخدام جدول `reminders` الحالي ونوع `GENERAL`، لذلك لم تتطلب Schema v8 أو جدولًا ماليًا موازيًا.
+- أصبح ناشرا DUE_DATE وGENERAL يستخدمان سطح إجراءات REM-006 الآمن عند ملاءمته، دون إنشاء مصدر حقيقة مالي جديد.
+- «تم السداد» من الإشعار أصبح يفتح مسار الدفع القياسي داخل التطبيق ويعبئ **المتبقي الحالي كاملًا بدقة العملة**، مع بقاء Review/Confirm إلزاميين قبل Commit.
+- لمس جسم الإشعار أصبح هو «فتح الحساب»، للحفاظ على أزرار Android الثلاثة الظاهرة لـ«دفع جزء / تم السداد / ذكرني لاحقًا».
 - أصبحت `payment_issued_documents` طبقة View مخصصة لإيصالات السداد بدل افتراض أن كل `issued_documents` Payment Receipt.
 - أصبحت شاشة Today تجمع الاستحقاقات ووعود السداد والأقساط مع إبقاء النماذج مستقلة عن Ledger.
 - أصبح Production يمرر قدرات الأقساط عبر `InstallmentAwareWaslRepository` بدل Global state أو تكرار Room logic.
@@ -68,7 +76,8 @@
 - إصلاح AndroidTest بعد تعميم `DocumentSnapshot` ليتعامل Payment Receipt صراحة مع `PaymentReceiptSnapshot`.
 - إصلاح Compose test imports غير الموجودة في اختبارات Today/Security.
 - إصلاح `MvpAcceptanceInstrumentedTest` بعد اكتشاف `StackOverflowError`: `ContextWrapper.getFilesDir()` أصبح يشير صراحة إلى مجلد الاختبار الخارجي بدل استدعاء getter نفسه.
-- إصلاح `GeneralRemindersHubUiInstrumentedTest` بعد أن كشف CI أن زر الإلغاء قد يكون خارج viewport داخل Dialog؛ الاختبار أصبح يستخدم `performScrollTo()` قبل الضغط بدل تفسير وجود Semantics node كإمكانية ضغط فعلية.
+- إصلاح `GeneralRemindersHubUiInstrumentedTest` بعد أن كشف CI سابقًا أن زر الإلغاء قد يكون خارج viewport داخل Dialog؛ الاختبار أصبح يستخدم `performScrollTo()` قبل الضغط بدل تفسير وجود Semantics node كإمكانية ضغط فعلية.
+- تثبيت تزامن `GeneralRemindersHubUiInstrumentedTest` بعد أن كشف CI #483 Race بين ظهور «أسبوعي» واكتمال `scheduler.replace()`؛ الاختبار ينتظر الآن حالة Room + side effect الفعلي ويستخدم `CopyOnWriteArrayList` بدل sleep أو تأخير اعتباطي. CI #485 أثبت الإصلاح بـ70/70.
 
 ### Security
 
@@ -76,6 +85,8 @@
 - Android Auto Backup وDevice Transfer معطلان.
 - Keystores وملفات الأسرار غير ملتزمة في Git.
 - إشعارات الاستحقاق `VISIBILITY_PRIVATE` مع Public version عامة لا تعرض الاسم/المبلغ.
+- إجراءات REM-006 المالية لا تنفذ mutation من الإشعار؛ كل Payment يمر بمسار التطبيق المعتاد للمراجعة والتأكيد.
+- PendingIntents الخاصة بإجراءات الإشعار `FLAG_IMMUTABLE`، و`MainActivity` يتحقق من نوايا الدفع المعروفة فقط.
 - PDF `READY` يفحص وجود الملف وSHA-256 قبل الفتح أو المشاركة.
 - Backup مشفر ومصدق، مع فحص المستندات قبل النسخ وبعد فكها.
 - Restore يرفض Schema أو بنية أو مسارات أو بصمات أو Foreign Keys غير صالحة قبل اعتماد الحالة.
@@ -88,25 +99,32 @@
 
 آخر بوابة كاملة لكود المرحلة:
 
-- **Android CI #458** — Run `32912759608` — head `c019d3a7160c29360082b12ec1c42559d4d6127b`.
+- **Android CI #485** — Run `32998478006` — head `53faec3cd7007c6a9e318b3fa69a2f955bb2ed4d`.
 - Unit tests ✅
 - Lint ✅
 - Debug APK ✅
 - Room Schema v7 export/current check ✅
-- Android Emulator instrumentation: **65/65** ✅
+- Android Emulator instrumentation: **70/70** ✅
 - failures: 0 / errors: 0 / skipped: 0 ✅
+- REM-006 DUE_DATE/GENERAL notification action regressions ✅
+- Safe partial/full payment intent path without auto-submit ✅
+- Currency-aware full-payment prefill for YER/SAR/USD ✅
+- Snooze Unique Work / settled-account guard regression ✅
 - General Reminder Store/Service/Hub/Backup regression ✅
+- General Reminder UI synchronization regression discovered by #483 and fixed before #485 ✅
 - Payment Receipt PDF evidence ✅
 - Debt Receipt PDF evidence ✅
 - Account Statement PDF evidence — sample 3 pages ✅
 - App Lock/Font Scale regression ✅
 - MVP end-to-end acceptance ✅
-- توثيق المرحلة مجمّع في commit `ba03c2289c19a325f6f9f29bc9949e438b65b1f2` قبل بوابة الرأس النهائية.
+- Payment receipt markers: `PAY-2026-00042`, `AL NOOR TRADING`, `123,456.78 USD` ✅
+- Debt receipt marker: `DEBT-2026-00043` ✅
+- Account statement markers: `STAT-2026-00044`, `REF-35` ✅
 
-Artifacts من CI #458:
+Artifacts من CI #485:
 
-- `Wasl-debug` — `9587182455` — SHA-256 `cd8a1b686c5ad4f7e606634fb46fa314b38259c2a903c420128bb8012c74a53f`.
-- `Wasl-room-schema` — `9587182763` — SHA-256 `7466781408776d618a62cade3463f9f68317fcd17e0ce6a7c61289319c8ad187`.
-- `Wasl-payment-receipt-evidence` — `9587332535` — SHA-256 `015278424337baef2043225bc14c1162ef6429b94be05410bf482cc4cf58c10d`.
-- `Wasl-account-document-evidence` — `9587332805` — SHA-256 `e10ba0c68d05d29d219127d0299ffdbbf1d52d9f039b8728b121e966abf10e5e`.
-- `Wasl-room-instrumentation-results` — `9587333092` — SHA-256 `d4c1e2c1e72b9d58b7e2d80e3f00fe6e8beb662e6a9e414d7865c594055f36b8`.
+- `Wasl-debug` — `9617704751` — SHA-256 `973a3985dd2c94d29a743488948172b444ef4e341b01005f8f9911d53468d539`.
+- `Wasl-room-schema` — `9617705367` — SHA-256 `5fec4cc04f3720ba6bdb4e33499e0ca76e1d3809a68b524948706c79735d9797`.
+- `Wasl-payment-receipt-evidence` — `9617967942` — SHA-256 `3e3f0cf2fbb908f68ae4def535c7325d49d7fa31282c21695216d76c8b6c036c`.
+- `Wasl-account-document-evidence` — `9617968386` — SHA-256 `557a464d264d97d048d37d6fc52c6aad8cc02dd7e310e4b5d5f439d3fd24717e`.
+- `Wasl-room-instrumentation-results` — `9617968909` — SHA-256 `346fb994021ed012d97598aa12b2020cc77e093b59e14aad33ebc3ce0fe9c2cb`.

@@ -5,12 +5,15 @@ import android.text.format.DateFormat
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+internal val LocalStrongAlarmTimeChange = staticCompositionLocalOf<(LocalTime) -> Unit> { { } }
 
 private val strongAlarmTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
 

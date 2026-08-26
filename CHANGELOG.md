@@ -101,6 +101,7 @@
 - Account Statement PDF evidence — sample 3 pages ✅
 - App Lock/Font Scale regression ✅
 - MVP end-to-end acceptance ✅
+- توثيق المرحلة مجمّع في commit `ba03c2289c19a325f6f9f29bc9949e438b65b1f2` قبل بوابة الرأس النهائية.
 
 Artifacts من CI #458:
 

@@ -2,15 +2,18 @@ package com.wasl.app
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -31,6 +34,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -71,177 +76,186 @@ internal fun SearchScreen(
             )
         },
     ) { scaffoldPadding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(scaffoldPadding),
-            contentPadding = PaddingValues(
-                start = 20.dp,
-                top = 22.dp,
-                end = 20.dp,
-                bottom = 30.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentAlignment = Alignment.TopCenter,
         ) {
-            item("search-heading") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Surface(
-                        shape = RoundedCornerShape(999.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                    ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .widthIn(max = WaslMaxContentWidth)
+                    .fillMaxWidth()
+                    .testTag("search-content"),
+                contentPadding = PaddingValues(
+                    start = 20.dp,
+                    top = 22.dp,
+                    end = 20.dp,
+                    bottom = 30.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                item("search-heading") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                        ) {
+                            Text(
+                                text = "بحث محلي داخل بياناتك",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
                         Text(
-                            text = "بحث محلي داخل بياناتك",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            text = "البحث",
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onBackground,
+                        )
+                        Text(
+                            text = "ابحث بالاسم أو البيان أو ملاحظة عملية أو رقم مستند أو مبلغ أو تاريخ.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Text(
-                        text = "البحث",
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                    Text(
-                        text = "ابحث بالاسم أو البيان أو ملاحظة عملية أو رقم مستند أو مبلغ أو تاريخ.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
-            }
 
-            item("search-input") {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                ) {
-                    OutlinedTextField(
-                        value = state.query,
-                        onValueChange = onQueryChange,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp)
-                            .testTag("search-input"),
-                        label = { Text("اسم، بيان، رقم مستند، مبلغ أو تاريخ") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(18.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                item("search-input") {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
                         ),
-                        trailingIcon = if (state.query.isNotEmpty()) {
-                            {
-                                TextButton(
-                                    onClick = onClearQuery,
-                                    modifier = Modifier.testTag("search-clear"),
-                                ) {
-                                    Text("مسح")
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = state.query,
+                            onValueChange = onQueryChange,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp)
+                                .testTag("search-input"),
+                            label = { Text("اسم، بيان، رقم مستند، مبلغ أو تاريخ") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(18.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                            ),
+                            trailingIcon = if (state.query.isNotEmpty()) {
+                                {
+                                    TextButton(
+                                        onClick = onClearQuery,
+                                        modifier = Modifier.testTag("search-clear"),
+                                    ) {
+                                        Text("مسح")
+                                    }
+                                }
+                            } else {
+                                null
+                            },
+                            supportingText = {
+                                Text("يعرض حتى $SEARCH_RESULT_LIMIT نتيجة في كل قسم.")
+                            },
+                        )
+                    }
+                }
+
+                when {
+                    state.isQueryBlank -> item("search-start") {
+                        SearchMessageCard(
+                            title = "ابحث بسرعة",
+                            message = "اكتب اسمًا أو وصفًا أو رقم مستند، أو أدخل مبلغًا أو تاريخًا مثل 13/08/2026.",
+                            testTag = "search-start",
+                        )
+                    }
+
+                    state.isLoading -> item("search-loading") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.testTag("search-loading"))
+                        }
+                    }
+
+                    state.loadError != null -> item("search-error") {
+                        SearchErrorCard(
+                            message = state.loadError,
+                            onRetry = onRetryLoad,
+                        )
+                    }
+
+                    !state.hasAnyResults -> item("search-empty") {
+                        SearchMessageCard(
+                            title = "لا توجد نتائج",
+                            message = "لا توجد نتائج مطابقة لهذا البحث.",
+                            testTag = "search-empty",
+                        )
+                    }
+
+                    else -> {
+                        if (state.results.isNotEmpty()) {
+                            item("search-results-heading") {
+                                SearchSectionHeading(
+                                    title = "الحسابات والديون",
+                                    subtitle = "مطابقات الاسم وبيان الدين",
+                                    count = state.results.size,
+                                )
+                            }
+                            if (state.hasMoreResults) {
+                                item("search-limit-notice") {
+                                    SearchMessageCard(
+                                        title = "نتائج حسابات إضافية",
+                                        message = "توجد نتائج إضافية. ضيّق عبارة البحث لعرض نتيجة أدق.",
+                                        testTag = "search-limit-notice",
+                                    )
                                 }
                             }
-                        } else {
-                            null
-                        },
-                        supportingText = {
-                            Text("يعرض حتى $SEARCH_RESULT_LIMIT نتيجة في كل قسم.")
-                        },
-                    )
-                }
-            }
-
-            when {
-                state.isQueryBlank -> item("search-start") {
-                    SearchMessageCard(
-                        title = "ابحث بسرعة",
-                        message = "اكتب اسمًا أو وصفًا أو رقم مستند، أو أدخل مبلغًا أو تاريخًا مثل 13/08/2026.",
-                        testTag = "search-start",
-                    )
-                }
-
-                state.isLoading -> item("search-loading") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.testTag("search-loading"))
-                    }
-                }
-
-                state.loadError != null -> item("search-error") {
-                    SearchErrorCard(
-                        message = state.loadError,
-                        onRetry = onRetryLoad,
-                    )
-                }
-
-                !state.hasAnyResults -> item("search-empty") {
-                    SearchMessageCard(
-                        title = "لا توجد نتائج",
-                        message = "لا توجد نتائج مطابقة لهذا البحث.",
-                        testTag = "search-empty",
-                    )
-                }
-
-                else -> {
-                    if (state.results.isNotEmpty()) {
-                        item("search-results-heading") {
-                            SearchSectionHeading(
-                                title = "الحسابات والديون",
-                                subtitle = "مطابقات الاسم وبيان الدين",
-                                count = state.results.size,
-                            )
-                        }
-                        if (state.hasMoreResults) {
-                            item("search-limit-notice") {
-                                SearchMessageCard(
-                                    title = "نتائج حسابات إضافية",
-                                    message = "توجد نتائج إضافية. ضيّق عبارة البحث لعرض نتيجة أدق.",
-                                    testTag = "search-limit-notice",
+                            items(
+                                items = state.results,
+                                key = { "account-${it.ledger.header.id.value}" },
+                            ) { account ->
+                                SearchResultCard(
+                                    account = account,
+                                    onOpen = { onOpenAccount(account.ledger.header.id) },
                                 )
                             }
                         }
-                        items(
-                            items = state.results,
-                            key = { "account-${it.ledger.header.id.value}" },
-                        ) { account ->
-                            SearchResultCard(
-                                account = account,
-                                onOpen = { onOpenAccount(account.ledger.header.id) },
-                            )
-                        }
-                    }
 
-                    if (state.advancedResults.isNotEmpty()) {
-                        item("advanced-search-results-heading") {
-                            SearchSectionHeading(
-                                title = "العمليات والمستندات",
-                                subtitle = "مطابقات المبالغ والتواريخ والملاحظات وأرقام المستندات",
-                                count = state.advancedResults.size,
-                            )
-                        }
-                        if (state.hasMoreAdvancedResults) {
-                            item("advanced-search-limit-notice") {
-                                SearchMessageCard(
-                                    title = "نتائج إضافية",
-                                    message = "توجد عمليات أو مستندات إضافية. استخدم مبلغًا أو تاريخًا أو رقمًا أدق.",
-                                    testTag = "advanced-search-limit-notice",
+                        if (state.advancedResults.isNotEmpty()) {
+                            item("advanced-search-results-heading") {
+                                SearchSectionHeading(
+                                    title = "العمليات والمستندات",
+                                    subtitle = "مطابقات المبالغ والتواريخ والملاحظات وأرقام المستندات",
+                                    count = state.advancedResults.size,
                                 )
                             }
-                        }
-                        items(
-                            items = state.advancedResults,
-                            key = { "advanced-${it.type}-${it.id}" },
-                        ) { result ->
-                            AdvancedSearchResultCard(
-                                result = result,
-                                onOpen = { onOpenAccount(result.debtId) },
-                            )
+                            if (state.hasMoreAdvancedResults) {
+                                item("advanced-search-limit-notice") {
+                                    SearchMessageCard(
+                                        title = "نتائج إضافية",
+                                        message = "توجد عمليات أو مستندات إضافية. استخدم مبلغًا أو تاريخًا أو رقمًا أدق.",
+                                        testTag = "advanced-search-limit-notice",
+                                    )
+                                }
+                            }
+                            items(
+                                items = state.advancedResults,
+                                key = { "advanced-${it.type}-${it.id}" },
+                            ) { result ->
+                                AdvancedSearchResultCard(
+                                    result = result,
+                                    onOpen = { onOpenAccount(result.debtId) },
+                                )
+                            }
                         }
                     }
                 }
@@ -256,34 +270,67 @@ private fun SearchSectionHeading(
     subtitle: String,
     count: Int,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val stack = shouldStackDenseRows(maxWidth)
+        if (stack) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("search-section-heading-stacked"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SearchSectionHeadingText(title = title, subtitle = subtitle)
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    SearchCountPill(count)
+                }
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SearchSectionHeadingText(title = title, subtitle = subtitle)
+                SearchCountPill(count)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchSectionHeadingText(
+    title: String,
+    subtitle: String,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun SearchCountPill(count: Int) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.secondaryContainer,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.secondaryContainer,
-        ) {
-            Text(
-                text = count.toString(),
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-        }
+        Text(
+            text = count.toString(),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+        )
     }
 }
 
@@ -293,10 +340,15 @@ private fun SearchResultCard(
     onOpen: () -> Unit,
 ) {
     val ledger = account.ledger
+    val directionLabel = if (ledger.header.direction == DebtDirection.RECEIVABLE) "لي عنده" else "عليّ له"
     Card(
         onClick = onOpen,
         modifier = Modifier
             .fillMaxWidth()
+            .semantics {
+                contentDescription =
+                    "نتيجة حساب ${account.person.displayName}، $directionLabel، المتبقي ${formatMoney(ledger.balance)}. افتح الحساب."
+            }
             .testTag("search-result-${ledger.header.id.value}"),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
@@ -307,55 +359,70 @@ private fun SearchResultCard(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                PersonAvatar(name = account.person.displayName)
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                    Text(
-                        text = account.person.displayName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    ledger.header.description?.let { description ->
-                        Text(
-                            text = description,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                        )
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val stack = shouldStackDenseRows(maxWidth)
+                if (stack) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("search-result-header-stacked-${ledger.header.id.value}"),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        SearchAccountIdentity(account)
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.CenterEnd,
+                        ) {
+                            DirectionPill(direction = ledger.header.direction)
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        PersonAvatar(name = account.person.displayName)
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            SearchAccountText(account)
+                        }
+                        DirectionPill(direction = ledger.header.direction)
                     }
                 }
-                DirectionPill(direction = ledger.header.direction)
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "المتبقي",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = formatMoney(ledger.balance),
-                        modifier = Modifier.testTag("search-balance-${ledger.header.id.value}"),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        textAlign = TextAlign.Start,
-                    )
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val stack = shouldStackDenseRows(maxWidth)
+                if (stack) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("search-result-balance-stacked-${ledger.header.id.value}"),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        SearchBalance(account)
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.CenterEnd,
+                        ) {
+                            AccountStatePill(state = ledger.state)
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        SearchBalance(account)
+                        AccountStatePill(state = ledger.state)
+                    }
                 }
-                AccountStatePill(state = ledger.state)
             }
 
             Text(
@@ -371,14 +438,72 @@ private fun SearchResultCard(
 }
 
 @Composable
+private fun SearchAccountIdentity(account: AccountOverview) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PersonAvatar(name = account.person.displayName)
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            SearchAccountText(account)
+        }
+    }
+}
+
+@Composable
+private fun SearchAccountText(account: AccountOverview) {
+    Text(
+        text = account.person.displayName,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+    )
+    account.ledger.header.description?.let { description ->
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+        )
+    }
+}
+
+@Composable
+private fun SearchBalance(account: AccountOverview) {
+    val ledger = account.ledger
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = "المتبقي",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = formatMoney(ledger.balance),
+            modifier = Modifier.testTag("search-balance-${ledger.header.id.value}"),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Start,
+        )
+    }
+}
+
+@Composable
 private fun AdvancedSearchResultCard(
     result: AdvancedSearchResult,
     onOpen: () -> Unit,
 ) {
+    val resultTypeLabel = searchTypeLabel(result.type)
     Card(
         onClick = onOpen,
         modifier = Modifier
             .fillMaxWidth()
+            .semantics {
+                contentDescription =
+                    "نتيجة $resultTypeLabel مرتبطة بـ${result.personName}، المبلغ ${formatMoney(result.amount)}، التاريخ ${result.date.format(searchResultDateFormatter)}. افتح الحساب المرتبط."
+            }
             .testTag(
                 "search-advanced-${result.type.name.lowercase(Locale.ROOT)}-${result.id}",
             ),
@@ -391,71 +516,64 @@ private fun AdvancedSearchResultCard(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                PersonAvatar(name = result.personName)
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                    Text(
-                        text = result.personName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = advancedSearchTitle(result),
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    result.description?.takeIf { it.isNotBlank() }?.let { description ->
-                        Text(
-                            text = description,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                        )
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val stack = shouldStackDenseRows(maxWidth)
+                if (stack) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("search-advanced-header-stacked-${result.id}"),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        AdvancedSearchIdentity(result)
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.CenterEnd,
+                        ) {
+                            SearchTypePill(result.type)
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        PersonAvatar(name = result.personName)
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            AdvancedSearchText(result)
+                        }
+                        SearchTypePill(result.type)
                     }
                 }
-                SearchTypePill(result.type)
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "المبلغ",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = formatMoney(result.amount),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                    )
-                }
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        text = "التاريخ",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = result.date.format(searchResultDateFormatter),
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val stack = shouldStackDenseRows(maxWidth)
+                if (stack) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("search-advanced-metadata-stacked-${result.id}"),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        SearchAmount(result)
+                        SearchDate(result, alignEnd = false)
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        SearchAmount(result)
+                        SearchDate(result, alignEnd = true)
+                    }
                 }
             }
 
@@ -479,6 +597,83 @@ private fun AdvancedSearchResultCard(
     }
 }
 
+@Composable
+private fun AdvancedSearchIdentity(result: AdvancedSearchResult) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PersonAvatar(name = result.personName)
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            AdvancedSearchText(result)
+        }
+    }
+}
+
+@Composable
+private fun AdvancedSearchText(result: AdvancedSearchResult) {
+    Text(
+        text = result.personName,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+    )
+    Text(
+        text = advancedSearchTitle(result),
+        style = MaterialTheme.typography.bodyLarge,
+        fontWeight = FontWeight.SemiBold,
+    )
+    result.description?.takeIf { it.isNotBlank() }?.let { description ->
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+        )
+    }
+}
+
+@Composable
+private fun SearchAmount(result: AdvancedSearchResult) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = "المبلغ",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = formatMoney(result.amount),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.ExtraBold,
+        )
+    }
+}
+
+@Composable
+private fun SearchDate(
+    result: AdvancedSearchResult,
+    alignEnd: Boolean,
+) {
+    Column(
+        horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = "التاريخ",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = result.date.format(searchResultDateFormatter),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
 private fun advancedSearchTitle(result: AdvancedSearchResult): String = when (result.type) {
     AdvancedSearchResultType.DEBT -> result.description ?: "دين مطابق"
     AdvancedSearchResultType.PAYMENT -> "دفعة"
@@ -486,20 +681,21 @@ private fun advancedSearchTitle(result: AdvancedSearchResult): String = when (re
     AdvancedSearchResultType.DOCUMENT -> requireNotNull(result.documentNumber)
 }
 
+private fun searchTypeLabel(type: AdvancedSearchResultType): String = when (type) {
+    AdvancedSearchResultType.DEBT -> "دين"
+    AdvancedSearchResultType.PAYMENT -> "دفعة"
+    AdvancedSearchResultType.PAYMENT_REVERSAL -> "عكس دفعة"
+    AdvancedSearchResultType.DOCUMENT -> "مستند"
+}
+
 @Composable
 private fun SearchTypePill(type: AdvancedSearchResultType) {
-    val text = when (type) {
-        AdvancedSearchResultType.DEBT -> "دين"
-        AdvancedSearchResultType.PAYMENT -> "دفعة"
-        AdvancedSearchResultType.PAYMENT_REVERSAL -> "عكس"
-        AdvancedSearchResultType.DOCUMENT -> "مستند"
-    }
     Surface(
         shape = RoundedCornerShape(999.dp),
         color = MaterialTheme.colorScheme.tertiaryContainer,
     ) {
         Text(
-            text = text,
+            text = searchTypeLabel(type),
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onTertiaryContainer,

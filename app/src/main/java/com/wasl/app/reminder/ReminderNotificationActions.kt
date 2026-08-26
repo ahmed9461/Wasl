@@ -8,6 +8,12 @@ import com.wasl.app.MainActivity
 import com.wasl.app.R
 import com.wasl.domain.DebtId
 
+/**
+ * Builds explicit, immutable notification actions.
+ *
+ * Financial actions only carry the user's intent into the app; they never write to the Ledger from
+ * a notification callback. Any payment still has to pass through Wasl's in-app review/confirmation.
+ */
 internal object ReminderNotificationActions {
     const val ACTION_SNOOZE = "com.wasl.app.action.SNOOZE_REMINDER"
     const val EXTRA_SNOOZE_DEBT_ID = "com.wasl.app.extra.SNOOZE_DEBT_ID"

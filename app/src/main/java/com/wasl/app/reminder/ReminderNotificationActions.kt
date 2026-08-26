@@ -12,7 +12,8 @@ import com.wasl.domain.DebtId
  * Builds explicit, immutable notification actions.
  *
  * The notification body opens the account. Android displays up to three expanded notification
- * actions, so the action row is reserved for partial payment, full payment, and snooze.
+ * actions, so the action row is reserved for partial payment, full payment, and snooze; opening
+ * the account remains available through the notification body itself.
  * Financial actions only carry the user's intent into the app; they never write to the Ledger from
  * a notification callback. Any payment still has to pass through Wasl's in-app review/confirmation.
  */

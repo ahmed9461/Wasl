@@ -335,6 +335,7 @@ fun WaslApp(
                                 ),
                             )
                             val state by detailsViewModel.uiState.collectAsStateWithLifecycle()
+                            val openAccountDocuments = LocalOpenAccountDocuments.current
                             LaunchedEffect(
                                 requestedDebtId,
                                 requestedPaymentIntent,
@@ -360,75 +361,86 @@ fun WaslApp(
                                     }
                                 }
                             }
-                            AccountDetailsScreen(
-                                state = state,
-                                onBack = { backStack.removeLastOrNull() },
-                                onRetry = detailsViewModel::retryLoad,
-                                onOpenPayment = detailsViewModel::openPaymentDialog,
-                                onDismissPayment = detailsViewModel::dismissPaymentDialog,
-                                onPaymentAmountChange = detailsViewModel::updatePaymentAmount,
-                                onPaymentNoteChange = detailsViewModel::updatePaymentNote,
-                                onReviewPayment = detailsViewModel::reviewPayment,
-                                onEditPayment = detailsViewModel::editPayment,
-                                onConfirmPayment = detailsViewModel::confirmPayment,
-                                onOpenReversal = detailsViewModel::openReversalDialog,
-                                onDismissReversal = detailsViewModel::dismissReversalDialog,
-                                onReversalReasonChange = detailsViewModel::updateReversalReason,
-                                onConfirmReversal = detailsViewModel::confirmReversal,
-                                onOpenReceiptDialog = detailsViewModel::openReceiptDialog,
-                                onDismissReceiptDialog = detailsViewModel::dismissReceiptDialog,
-                                onReceiptIssuerNameChange = detailsViewModel::updateReceiptIssuerName,
-                                onReceiptActivityNameChange = detailsViewModel::updateReceiptActivityName,
-                                onReceiptPhoneChange = detailsViewModel::updateReceiptPhone,
-                                onReceiptFooterChange = detailsViewModel::updateReceiptFooter,
-                                onConfirmPaymentReceipt = detailsViewModel::confirmPaymentReceipt,
-                                onRetryPaymentReceipt = detailsViewModel::retryPaymentReceipt,
-                                onOpenReceipt = { document ->
-                                    runCatching { ReceiptFileAccess.open(context, document) }
-                                        .onFailure {
-                                            android.widget.Toast.makeText(
-                                                context,
-                                                "لا يوجد تطبيق متاح لفتح ملف PDF.",
-                                                android.widget.Toast.LENGTH_SHORT,
-                                            ).show()
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                AccountDetailsScreen(
+                                    state = state,
+                                    onBack = { backStack.removeLastOrNull() },
+                                    onRetry = detailsViewModel::retryLoad,
+                                    onOpenPayment = detailsViewModel::openPaymentDialog,
+                                    onDismissPayment = detailsViewModel::dismissPaymentDialog,
+                                    onPaymentAmountChange = detailsViewModel::updatePaymentAmount,
+                                    onPaymentNoteChange = detailsViewModel::updatePaymentNote,
+                                    onReviewPayment = detailsViewModel::reviewPayment,
+                                    onEditPayment = detailsViewModel::editPayment,
+                                    onConfirmPayment = detailsViewModel::confirmPayment,
+                                    onOpenReversal = detailsViewModel::openReversalDialog,
+                                    onDismissReversal = detailsViewModel::dismissReversalDialog,
+                                    onReversalReasonChange = detailsViewModel::updateReversalReason,
+                                    onConfirmReversal = detailsViewModel::confirmReversal,
+                                    onOpenReceiptDialog = detailsViewModel::openReceiptDialog,
+                                    onDismissReceiptDialog = detailsViewModel::dismissReceiptDialog,
+                                    onReceiptIssuerNameChange = detailsViewModel::updateReceiptIssuerName,
+                                    onReceiptActivityNameChange = detailsViewModel::updateReceiptActivityName,
+                                    onReceiptPhoneChange = detailsViewModel::updateReceiptPhone,
+                                    onReceiptFooterChange = detailsViewModel::updateReceiptFooter,
+                                    onConfirmPaymentReceipt = detailsViewModel::confirmPaymentReceipt,
+                                    onRetryPaymentReceipt = detailsViewModel::retryPaymentReceipt,
+                                    onOpenReceipt = { document ->
+                                        runCatching { ReceiptFileAccess.open(context, document) }
+                                            .onFailure {
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    "لا يوجد تطبيق متاح لفتح ملف PDF.",
+                                                    android.widget.Toast.LENGTH_SHORT,
+                                                ).show()
+                                            }
+                                    },
+                                    onShareReceipt = { document ->
+                                        runCatching { ReceiptFileAccess.share(context, document) }
+                                            .onFailure {
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    "تعذرت مشاركة ملف الإيصال.",
+                                                    android.widget.Toast.LENGTH_SHORT,
+                                                ).show()
+                                            }
+                                    },
+                                    onReceiptReadyHandled = detailsViewModel::receiptReadyHandled,
+                                    onOpenDueSchedule = detailsViewModel::openDueScheduleDialog,
+                                    onDismissDueSchedule = detailsViewModel::dismissDueScheduleDialog,
+                                    onDueScheduleDateChange = detailsViewModel::updateDueScheduleDate,
+                                    onDueScheduleReminderChange = { enabled ->
+                                        detailsViewModel.updateDueScheduleReminder(enabled)
+                                        if (enabled && !notificationsAvailable) {
+                                            requestNotificationAccess()
                                         }
-                                },
-                                onShareReceipt = { document ->
-                                    runCatching { ReceiptFileAccess.share(context, document) }
-                                        .onFailure {
-                                            android.widget.Toast.makeText(
-                                                context,
-                                                "تعذرت مشاركة ملف الإيصال.",
-                                                android.widget.Toast.LENGTH_SHORT,
-                                            ).show()
-                                        }
-                                },
-                                onReceiptReadyHandled = detailsViewModel::receiptReadyHandled,
-                                onOpenDueSchedule = detailsViewModel::openDueScheduleDialog,
-                                onDismissDueSchedule = detailsViewModel::dismissDueScheduleDialog,
-                                onDueScheduleDateChange = detailsViewModel::updateDueScheduleDate,
-                                onDueScheduleReminderChange = { enabled ->
-                                    detailsViewModel.updateDueScheduleReminder(enabled)
-                                    if (enabled && !notificationsAvailable) {
-                                        requestNotificationAccess()
-                                    }
-                                },
-                                onDueScheduleStrongAlarmChange = detailsViewModel::updateDueScheduleStrongAlarm,
-                                onRequestExactAlarmAccess = ::requestExactAlarmAccess,
-                                onConfirmDueSchedule = detailsViewModel::confirmDueSchedule,
-                                onOpenPaymentPromise = detailsViewModel::openPaymentPromiseDialog,
-                                onDismissPaymentPromise = detailsViewModel::dismissPaymentPromiseDialog,
-                                onPaymentPromiseDateChange = detailsViewModel::updatePaymentPromiseDate,
-                                onPaymentPromiseNoteChange = detailsViewModel::updatePaymentPromiseNote,
-                                onConfirmPaymentPromise = detailsViewModel::confirmPaymentPromise,
-                                onOpenPaymentPromiseResolution = detailsViewModel::openPaymentPromiseResolution,
-                                onDismissPaymentPromiseResolution = detailsViewModel::dismissPaymentPromiseResolution,
-                                onPaymentPromiseResolutionNoteChange = detailsViewModel::updatePaymentPromiseResolutionNote,
-                                onConfirmPaymentPromiseResolution = detailsViewModel::confirmPaymentPromiseResolution,
-                                notificationPermissionGranted = notificationsAvailable,
-                                exactAlarmAccessGranted = exactAlarmsAvailable,
-                                onNoticeShown = detailsViewModel::clearNotice,
-                            )
+                                    },
+                                    onDueScheduleStrongAlarmChange = detailsViewModel::updateDueScheduleStrongAlarm,
+                                    onRequestExactAlarmAccess = ::requestExactAlarmAccess,
+                                    onConfirmDueSchedule = detailsViewModel::confirmDueSchedule,
+                                    onOpenPaymentPromise = detailsViewModel::openPaymentPromiseDialog,
+                                    onDismissPaymentPromise = detailsViewModel::dismissPaymentPromiseDialog,
+                                    onPaymentPromiseDateChange = detailsViewModel::updatePaymentPromiseDate,
+                                    onPaymentPromiseNoteChange = detailsViewModel::updatePaymentPromiseNote,
+                                    onConfirmPaymentPromise = detailsViewModel::confirmPaymentPromise,
+                                    onOpenPaymentPromiseResolution = detailsViewModel::openPaymentPromiseResolution,
+                                    onDismissPaymentPromiseResolution = detailsViewModel::dismissPaymentPromiseResolution,
+                                    onPaymentPromiseResolutionNoteChange = detailsViewModel::updatePaymentPromiseResolutionNote,
+                                    onConfirmPaymentPromiseResolution = detailsViewModel::confirmPaymentPromiseResolution,
+                                    notificationPermissionGranted = notificationsAvailable,
+                                    exactAlarmAccessGranted = exactAlarmsAvailable,
+                                    onNoticeShown = detailsViewModel::clearNotice,
+                                )
+                                OutlinedButton(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
+                                        .padding(start = 20.dp, bottom = 24.dp)
+                                        .testTag("account-export-pdf"),
+                                    onClick = { openAccountDocuments(debtId) },
+                                ) {
+                                    Text("تصدير PDF")
+                                }
+                            }
                         }
                     },
                 )

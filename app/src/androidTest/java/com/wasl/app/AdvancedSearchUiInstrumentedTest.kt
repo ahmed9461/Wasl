@@ -120,8 +120,8 @@ class AdvancedSearchUiInstrumentedTest {
         composeRule.onNodeWithTag("search-input").performTextInput(documentNumber)
         waitForTag("search-advanced-document-document-advanced-ui")
 
-        composeRule.onNodeWithText(documentNumber).assertIsDisplayed()
         composeRule.onNodeWithTag("search-advanced-document-document-advanced-ui")
+            .assertIsDisplayed()
             .performScrollTo()
             .performClick()
 

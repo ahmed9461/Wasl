@@ -75,6 +75,13 @@ class ReminderNotificationPublisher(
                 ).apply {
                     description = "تنبيهات وعود السداد المحفوظة في وَصل"
                 },
+                NotificationChannel(
+                    SNOOZED_REMINDERS_CHANNEL_ID,
+                    "التذكيرات المؤجلة",
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    description = "متابعات اختار المستخدم تذكيره بها لاحقًا"
+                },
             ),
         )
     }
@@ -101,11 +108,10 @@ class ReminderNotificationPublisher(
         val channelId = occurrence.channelId()
         if (!isChannelEnabled(channelId)) return false
 
-        val openAccount = accountIntent(reminder)
         val contentIntent = PendingIntent.getActivity(
             context,
             reminder.id.hashCode(),
-            openAccount,
+            ReminderNotificationActions.openAccountIntent(context, reminder.debtId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val hideSensitive = privacyPreferences.hideSensitiveNotifications
@@ -127,7 +133,7 @@ class ReminderNotificationPublisher(
             .setContentTitle("تذكير من وَصل")
             .setContentText("افتح التطبيق لمراجعة حساب يحتاج إلى انتباهك.")
             .build()
-        val notification = NotificationCompat.Builder(context, channelId)
+        val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(title)
             .setContentText(body)
@@ -138,8 +144,14 @@ class ReminderNotificationPublisher(
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(publicNotification)
-            .build()
-        NotificationManagerCompat.from(context).notify(reminder.id, NOTIFICATION_ID, notification)
+        ReminderNotificationActions.addActions(
+            builder = builder,
+            context = context,
+            debtId = reminder.debtId,
+            notificationTag = reminder.id,
+            notificationId = NOTIFICATION_ID,
+        )
+        NotificationManagerCompat.from(context).notify(reminder.id, NOTIFICATION_ID, builder.build())
         return true
     }
 
@@ -155,7 +167,7 @@ class ReminderNotificationPublisher(
         val contentIntent = PendingIntent.getActivity(
             context,
             reminder.id.hashCode(),
-            accountIntent(reminder),
+            ReminderNotificationActions.openAccountIntent(context, reminder.debtId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val hideSensitive = privacyPreferences.hideSensitiveNotifications
@@ -170,7 +182,7 @@ class ReminderNotificationPublisher(
             .setContentTitle("منبه وَصل")
             .setContentText("افتح التطبيق لمراجعة حساب مهم.")
             .build()
-        val notification = NotificationCompat.Builder(context, ALARMS_CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, ALARMS_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(title)
             .setContentText(body)
@@ -182,21 +194,72 @@ class ReminderNotificationPublisher(
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(publicNotification)
-            .build()
+        ReminderNotificationActions.addActions(
+            builder = builder,
+            context = context,
+            debtId = reminder.debtId,
+            notificationTag = reminder.id,
+            notificationId = STRONG_ALARM_NOTIFICATION_ID,
+        )
         NotificationManagerCompat.from(context).notify(
             reminder.id,
             STRONG_ALARM_NOTIFICATION_ID,
-            notification,
+            builder.build(),
         )
         return true
     }
 
-    private fun accountIntent(reminder: ReminderRecord): Intent =
-        Intent(context, MainActivity::class.java).apply {
-            action = MainActivity.ACTION_OPEN_DEBT
-            putExtra(MainActivity.EXTRA_DEBT_ID, reminder.debtId.value)
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+    @SuppressLint("MissingPermission")
+    fun publishSnoozedAccount(account: AccountOverview): Boolean {
+        check(canNotify()) { "Notifications are disabled." }
+        ensureChannels()
+        if (!isChannelEnabled(SNOOZED_REMINDERS_CHANNEL_ID)) return false
+
+        val debtId = account.ledger.header.id
+        val notificationTag = snoozeNotificationTag(debtId.value)
+        val contentIntent = PendingIntent.getActivity(
+            context,
+            notificationTag.hashCode(),
+            ReminderNotificationActions.openAccountIntent(context, debtId),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val hideSensitive = privacyPreferences.hideSensitiveNotifications
+        val title = if (hideSensitive) "تذكير من وَصل" else "تذكير مؤجل"
+        val body = if (hideSensitive) {
+            "حان وقت مراجعة متابعة كنت قد أجلتها."
+        } else {
+            "حان وقت مراجعة حساب ${account.person.displayName}. المتبقي ${formatMoney(account)}."
         }
+        val publicNotification = NotificationCompat.Builder(context, SNOOZED_REMINDERS_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("تذكير من وَصل")
+            .setContentText("حان وقت مراجعة متابعة مؤجلة.")
+            .build()
+        val builder = NotificationCompat.Builder(context, SNOOZED_REMINDERS_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(contentIntent)
+            .setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(publicNotification)
+        ReminderNotificationActions.addActions(
+            builder = builder,
+            context = context,
+            debtId = debtId,
+            notificationTag = notificationTag,
+            notificationId = SNOOZED_NOTIFICATION_ID,
+        )
+        NotificationManagerCompat.from(context).notify(
+            notificationTag,
+            SNOOZED_NOTIFICATION_ID,
+            builder.build(),
+        )
+        return true
+    }
 
     private fun isChannelEnabled(channelId: String): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
@@ -252,7 +315,11 @@ class ReminderNotificationPublisher(
         const val ALARMS_CHANNEL_ID = "wasl_alarms"
         const val INSTALLMENTS_CHANNEL_ID = "wasl_installments"
         const val PROMISES_CHANNEL_ID = "wasl_payment_promises"
+        const val SNOOZED_REMINDERS_CHANNEL_ID = "wasl_snoozed_reminders"
         const val NOTIFICATION_ID = 1001
         const val STRONG_ALARM_NOTIFICATION_ID = 1002
+        const val SNOOZED_NOTIFICATION_ID = 1004
+
+        fun snoozeNotificationTag(debtId: String): String = "wasl-snooze:$debtId"
     }
 }

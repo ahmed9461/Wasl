@@ -8,6 +8,7 @@ import android.service.notification.StatusBarNotification
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
+import com.wasl.app.MainActivity
 import com.wasl.app.data.AccountOverview
 import com.wasl.app.data.DebtLifecycleState
 import com.wasl.app.data.PersonRecord
@@ -24,6 +25,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import org.junit.Rule
 import org.junit.runner.RunWith
@@ -39,9 +41,12 @@ class ReminderNotificationPublisherInstrumentedTest {
 
     @AfterTest
     fun tearDown() {
-        context.getSystemService(NotificationManager::class.java).cancel(
-            reminderId,
-            ReminderNotificationPublisher.NOTIFICATION_ID,
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.cancel(reminderId, ReminderNotificationPublisher.NOTIFICATION_ID)
+        manager.cancel(reminderId, ReminderNotificationPublisher.STRONG_ALARM_NOTIFICATION_ID)
+        manager.cancel(
+            ReminderNotificationPublisher.snoozeNotificationTag("debt-1"),
+            ReminderNotificationPublisher.SNOOZED_NOTIFICATION_ID,
         )
     }
 
@@ -69,10 +74,13 @@ class ReminderNotificationPublisherInstrumentedTest {
         assertNotNull(
             manager.getNotificationChannel(ReminderNotificationPublisher.PROMISES_CHANNEL_ID),
         )
+        assertNotNull(
+            manager.getNotificationChannel(ReminderNotificationPublisher.SNOOZED_REMINDERS_CHANNEL_ID),
+        )
     }
 
     @Test
-    fun dueReminderPublishesAVisibleNotificationWithStableTag() {
+    fun dueReminderPublishesAVisibleNotificationWithSafeActions() {
         val now = Instant.parse("2026-08-13T00:00:00Z")
         val reminder = reminder(now)
         val account = account(now, reminder)
@@ -82,9 +90,50 @@ class ReminderNotificationPublisherInstrumentedTest {
 
         val posted = awaitPostedNotification(
             context.getSystemService(NotificationManager::class.java),
+            reminderId,
         )
         assertNotNull(posted)
         assertNotNull(posted.notification.contentIntent)
+        assertEquals(
+            listOf("فتح الحساب", "دفع جزء", "تم السداد", "ذكرني لاحقًا"),
+            posted.notification.actions.orEmpty().map { it.title.toString() },
+        )
+    }
+
+    @Test
+    fun strongAlarmPublishesTheSameSafeActionSet() {
+        val now = Instant.parse("2026-08-13T00:00:00Z")
+        val reminder = reminder(now)
+        val account = account(now, reminder)
+        val publisher = ReminderNotificationPublisher(context)
+
+        publisher.publishStrongAlarm(reminder, account)
+
+        val posted = awaitPostedNotification(
+            context.getSystemService(NotificationManager::class.java),
+            reminderId,
+        )
+        assertNotNull(posted)
+        assertEquals(
+            listOf("فتح الحساب", "دفع جزء", "تم السداد", "ذكرني لاحقًا"),
+            posted.notification.actions.orEmpty().map { it.title.toString() },
+        )
+    }
+
+    @Test
+    fun financialActionIntentOnlyRoutesToAccountAndCarriesReviewIntent() {
+        val intent = ReminderNotificationActions.openAccountIntent(
+            context = context,
+            debtId = DebtId("debt-review"),
+            paymentIntent = ReminderNotificationActions.PAYMENT_INTENT_FULL,
+        )
+
+        assertEquals(MainActivity.ACTION_OPEN_DEBT, intent.action)
+        assertEquals("debt-review", intent.getStringExtra(MainActivity.EXTRA_DEBT_ID))
+        assertEquals(
+            ReminderNotificationActions.PAYMENT_INTENT_FULL,
+            intent.getStringExtra(ReminderNotificationActions.EXTRA_PAYMENT_INTENT),
+        )
     }
 
     @Test
@@ -98,6 +147,7 @@ class ReminderNotificationPublisherInstrumentedTest {
 
         val posted = awaitPostedNotification(
             context.getSystemService(NotificationManager::class.java),
+            reminderId,
         )
         assertNotNull(posted)
         assertNotNull(posted.notification.contentIntent)
@@ -135,10 +185,11 @@ class ReminderNotificationPublisherInstrumentedTest {
 
     private fun awaitPostedNotification(
         manager: NotificationManager,
+        tag: String,
     ): StatusBarNotification? {
         val deadline = SystemClock.elapsedRealtime() + 5_000L
         do {
-            manager.activeNotifications.firstOrNull { it.tag == reminderId }?.let { return it }
+            manager.activeNotifications.firstOrNull { it.tag == tag }?.let { return it }
             SystemClock.sleep(50L)
         } while (SystemClock.elapsedRealtime() < deadline)
         return null

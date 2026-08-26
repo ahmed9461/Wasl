@@ -6,13 +6,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.wasl.app.MainActivity
 import com.wasl.app.R
 import com.wasl.app.data.AccountOverview
 import com.wasl.app.data.GeneralReminderRecord
@@ -65,11 +63,7 @@ class GeneralReminderNotificationPublisher(
         val contentIntent = PendingIntent.getActivity(
             context,
             reminder.id.hashCode(),
-            Intent(context, MainActivity::class.java).apply {
-                action = MainActivity.ACTION_OPEN_DEBT
-                putExtra(MainActivity.EXTRA_DEBT_ID, reminder.debtId.value)
-                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            },
+            ReminderNotificationActions.openAccountIntent(context, reminder.debtId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val hideSensitive = privacyPreferences.hideSensitiveNotifications
@@ -88,7 +82,7 @@ class GeneralReminderNotificationPublisher(
             .setContentTitle("تذكير من وَصل")
             .setContentText("افتح التطبيق لمراجعة متابعة محفوظة.")
             .build()
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(title)
             .setContentText(body)
@@ -99,8 +93,14 @@ class GeneralReminderNotificationPublisher(
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(publicNotification)
-            .build()
-        NotificationManagerCompat.from(context).notify(reminder.id, NOTIFICATION_ID, notification)
+        ReminderNotificationActions.addActions(
+            builder = builder,
+            context = context,
+            debtId = reminder.debtId,
+            notificationTag = reminder.id,
+            notificationId = NOTIFICATION_ID,
+        )
+        NotificationManagerCompat.from(context).notify(reminder.id, NOTIFICATION_ID, builder.build())
     }
 
     private fun formatMoney(account: AccountOverview): String {

@@ -24,6 +24,7 @@ import com.wasl.domain.PersonId
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -57,6 +58,7 @@ data class CreateDebtForm(
     val dueDate: LocalDate? = null,
     val remindOnDueDate: Boolean = false,
     val strongAlarmEnabled: Boolean = false,
+    val strongAlarmTime: LocalTime = ReminderTime.defaultDueTime,
 )
 
 data class HomeUiState(
@@ -241,6 +243,10 @@ class HomeViewModel(
         )
     }
 
+    fun updateStrongAlarmTime(value: LocalTime) = updateForm {
+        copy(strongAlarmTime = value.withSecond(0).withNano(0))
+    }
+
     fun createDebt() {
         val state = _uiState.value
         if (state.isSaving) return
@@ -306,6 +312,7 @@ class HomeViewModel(
                         dueDate = requireNotNull(form.dueDate),
                         now = now,
                         zoneId = zoneId,
+                        time = form.strongAlarmTime,
                     ),
                     zoneId = zoneId,
                 )

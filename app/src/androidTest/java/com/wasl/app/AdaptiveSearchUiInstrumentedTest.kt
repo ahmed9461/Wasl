@@ -101,10 +101,14 @@ class AdaptiveSearchUiInstrumentedTest {
         }
 
         composeRule.onNodeWithTag("search-content").performScrollToIndex(3)
-        composeRule.onNodeWithTag("search-result-header-stacked-debt-accessible")
-            .assertExists()
-        composeRule.onNodeWithTag("search-result-balance-stacked-debt-accessible")
-            .assertExists()
+        composeRule.onNodeWithTag(
+            "search-result-header-stacked-debt-accessible",
+            useUnmergedTree = true,
+        ).assertExists()
+        composeRule.onNodeWithTag(
+            "search-result-balance-stacked-debt-accessible",
+            useUnmergedTree = true,
+        ).assertExists()
 
         val accountDescription =
             "نتيجة حساب عميل الإتاحة، لي عنده، المتبقي ${formatMoney(account.ledger.balance)}. افتح الحساب."
@@ -113,10 +117,14 @@ class AdaptiveSearchUiInstrumentedTest {
             .performClick()
 
         composeRule.onNodeWithTag("search-content").performScrollToIndex(5)
-        composeRule.onNodeWithTag("search-advanced-header-stacked-payment-accessible")
-            .assertExists()
-        composeRule.onNodeWithTag("search-advanced-metadata-stacked-payment-accessible")
-            .assertExists()
+        composeRule.onNodeWithTag(
+            "search-advanced-header-stacked-payment-accessible",
+            useUnmergedTree = true,
+        ).assertExists()
+        composeRule.onNodeWithTag(
+            "search-advanced-metadata-stacked-payment-accessible",
+            useUnmergedTree = true,
+        ).assertExists()
 
         val advancedDescription =
             "نتيجة دفعة مرتبطة بـعميل الإتاحة، المبلغ ${formatMoney(advanced.amount)}، التاريخ 20/08/2026. افتح الحساب المرتبط."

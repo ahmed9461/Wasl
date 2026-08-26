@@ -44,7 +44,7 @@ class GeneralReminderNotificationPublisherInstrumentedTest {
     }
 
     @Test
-    fun generalReminderPublishesTheSameSafeActionSet() {
+    fun generalReminderUsesBodyToOpenAccountAndSameThreeSafeButtons() {
         val now = Instant.parse("2026-08-26T12:00:00Z")
         val debtId = DebtId("general-action-debt")
         val reminder = GeneralReminderRecord(
@@ -85,8 +85,9 @@ class GeneralReminderNotificationPublisherInstrumentedTest {
             posted = manager.activeNotifications.firstOrNull { it.tag == reminderId }
         }
         assertNotNull(posted)
+        assertNotNull(posted.notification.contentIntent)
         assertEquals(
-            listOf("فتح الحساب", "دفع جزء", "تم السداد", "ذكرني لاحقًا"),
+            listOf("دفع جزء", "تم السداد", "ذكرني لاحقًا"),
             posted.notification.actions.orEmpty().map { it.title.toString() },
         )
     }

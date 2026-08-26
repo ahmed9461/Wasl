@@ -221,45 +221,49 @@ fun WaslApp(
                                 factory = HomeViewModel.Factory(repository, reminderScheduler),
                             )
                             val state by homeViewModel.uiState.collectAsStateWithLifecycle()
-                            WaslHomeScreen(
-                                state = state,
-                                onOpenHome = {},
-                                onOpenToday = {
-                                    if (backStack.lastOrNull() != TodayRoute) {
-                                        backStack.add(TodayRoute)
-                                    }
-                                },
-                                onOpenSearch = {
-                                    if (backStack.lastOrNull() != SearchRoute) {
-                                        backStack.add(SearchRoute)
-                                    }
-                                },
-                                onOpenCreate = homeViewModel::openCreateDialog,
-                                onOpenAccount = { debtId ->
-                                    backStack.add(AccountDetailsRoute(debtId.value))
-                                },
-                                onDismissCreate = homeViewModel::dismissCreateDialog,
-                                onPersonModeChange = homeViewModel::updatePersonMode,
-                                onPersonNameChange = homeViewModel::updatePersonName,
-                                onPeopleQueryChange = homeViewModel::updatePeopleQuery,
-                                onSelectPerson = homeViewModel::selectExistingPerson,
-                                onRetryPeople = homeViewModel::retryPeople,
-                                onAmountChange = homeViewModel::updateAmount,
-                                onCurrencyChange = homeViewModel::updateCurrency,
-                                onDirectionChange = homeViewModel::updateDirection,
-                                onDescriptionChange = homeViewModel::updateDescription,
-                                onDueDateChange = homeViewModel::updateDueDate,
-                                onReminderChange = { enabled ->
-                                    homeViewModel.updateRemindOnDueDate(enabled)
-                                    if (enabled && !notificationsAvailable) requestNotificationAccess()
-                                },
-                                onStrongAlarmChange = homeViewModel::updateStrongAlarm,
-                                onRequestExactAlarmAccess = ::requestExactAlarmAccess,
-                                notificationPermissionGranted = notificationsAvailable,
-                                exactAlarmAccessGranted = exactAlarmsAvailable,
-                                onSave = homeViewModel::createDebt,
-                                onSuccessShown = homeViewModel::clearSuccessMessage,
-                            )
+                            CompositionLocalProvider(
+                                LocalStrongAlarmTimeChange provides homeViewModel::updateStrongAlarmTime,
+                            ) {
+                                WaslHomeScreen(
+                                    state = state,
+                                    onOpenHome = {},
+                                    onOpenToday = {
+                                        if (backStack.lastOrNull() != TodayRoute) {
+                                            backStack.add(TodayRoute)
+                                        }
+                                    },
+                                    onOpenSearch = {
+                                        if (backStack.lastOrNull() != SearchRoute) {
+                                            backStack.add(SearchRoute)
+                                        }
+                                    },
+                                    onOpenCreate = homeViewModel::openCreateDialog,
+                                    onOpenAccount = { debtId ->
+                                        backStack.add(AccountDetailsRoute(debtId.value))
+                                    },
+                                    onDismissCreate = homeViewModel::dismissCreateDialog,
+                                    onPersonModeChange = homeViewModel::updatePersonMode,
+                                    onPersonNameChange = homeViewModel::updatePersonName,
+                                    onPeopleQueryChange = homeViewModel::updatePeopleQuery,
+                                    onSelectPerson = homeViewModel::selectExistingPerson,
+                                    onRetryPeople = homeViewModel::retryPeople,
+                                    onAmountChange = homeViewModel::updateAmount,
+                                    onCurrencyChange = homeViewModel::updateCurrency,
+                                    onDirectionChange = homeViewModel::updateDirection,
+                                    onDescriptionChange = homeViewModel::updateDescription,
+                                    onDueDateChange = homeViewModel::updateDueDate,
+                                    onReminderChange = { enabled ->
+                                        homeViewModel.updateRemindOnDueDate(enabled)
+                                        if (enabled && !notificationsAvailable) requestNotificationAccess()
+                                    },
+                                    onStrongAlarmChange = homeViewModel::updateStrongAlarm,
+                                    onRequestExactAlarmAccess = ::requestExactAlarmAccess,
+                                    notificationPermissionGranted = notificationsAvailable,
+                                    exactAlarmAccessGranted = exactAlarmsAvailable,
+                                    onSave = homeViewModel::createDebt,
+                                    onSuccessShown = homeViewModel::clearSuccessMessage,
+                                )
+                            }
                         }
                         entry<TodayRoute> {
                             val todayViewModel: TodayViewModel = viewModel(
@@ -689,6 +693,7 @@ private fun CreateDebtDialog(
     onSave: () -> Unit,
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
+    val onStrongAlarmTimeChange = LocalStrongAlarmTimeChange.current
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -889,7 +894,7 @@ private fun CreateDebtDialog(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("منبه قوي إضافي", fontWeight = FontWeight.SemiBold)
                         Text(
-                            "منبه دقيق قرابة 09:00 يوم الاستحقاق مع إبقاء المتابعة الذكية كبديل.",
+                            "منبه دقيق يوم الاستحقاق في الوقت الذي تختاره، مع إبقاء المتابعة الذكية كبديل.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -899,6 +904,15 @@ private fun CreateDebtDialog(
                         onCheckedChange = onStrongAlarmChange,
                         enabled = !isSaving && form.dueDate != null,
                         modifier = Modifier.testTag("create-strong-alarm"),
+                    )
+                }
+                if (form.strongAlarmEnabled) {
+                    StrongAlarmTimeSelector(
+                        time = form.strongAlarmTime,
+                        enabled = !isSaving,
+                        onTimeChange = onStrongAlarmTimeChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        testTag = "create-strong-alarm-time",
                     )
                 }
                 if (form.strongAlarmEnabled && !exactAlarmAccessGranted) {

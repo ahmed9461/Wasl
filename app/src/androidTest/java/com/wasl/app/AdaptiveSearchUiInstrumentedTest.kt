@@ -18,6 +18,7 @@ import com.wasl.app.data.AdvancedSearchResult
 import com.wasl.app.data.AdvancedSearchResultType
 import com.wasl.app.data.DebtLifecycleState
 import com.wasl.app.data.PersonRecord
+import com.wasl.app.ui.theme.WaslTheme
 import com.wasl.domain.CurrencyCode
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtHeader
@@ -58,6 +59,8 @@ class AdaptiveSearchUiInstrumentedTest {
                     density = baseDensity.density,
                     fontScale = 2f,
                 ),
+                LocalOpenInstallmentsHub provides {},
+                LocalOpenSettingsHub provides {},
             ) {
                 WaslTheme {
                     SearchScreen(
@@ -86,14 +89,16 @@ class AdaptiveSearchUiInstrumentedTest {
                     "محددة",
                 ),
             )
-        composeRule.onNodeWithContentDescription("الرئيسية")
-            .assertHasClickAction()
-            .assert(
-                SemanticsMatcher.expectValue(
-                    SemanticsProperties.StateDescription,
-                    "غير محددة",
-                ),
-            )
+        listOf("الرئيسية", "اليوم", "الأقساط", "الإعدادات").forEach { label ->
+            composeRule.onNodeWithContentDescription(label)
+                .assertHasClickAction()
+                .assert(
+                    SemanticsMatcher.expectValue(
+                        SemanticsProperties.StateDescription,
+                        "غير محددة",
+                    ),
+                )
+        }
 
         composeRule.onNodeWithTag("search-result-header-stacked-debt-accessible")
             .assertIsDisplayed()

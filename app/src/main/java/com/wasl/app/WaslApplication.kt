@@ -10,6 +10,7 @@ import com.wasl.app.data.PaymentPromiseStore
 import com.wasl.app.data.ReminderStore
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.data.local.RoomAccountDocumentStore
+import com.wasl.app.data.local.RoomAdvancedSearchStore
 import com.wasl.app.data.local.RoomGeneralReminderStore
 import com.wasl.app.data.local.RoomInstallmentPlanStore
 import com.wasl.app.data.local.RoomPaymentPromiseStore
@@ -37,6 +38,12 @@ class WaslApplication : Application() {
         RoomWaslRepository(database)
     }
 
+    private val roomAdvancedSearchStore: RoomAdvancedSearchStore by lazy(
+        LazyThreadSafetyMode.SYNCHRONIZED,
+    ) {
+        RoomAdvancedSearchStore(database)
+    }
+
     private val roomInstallmentPlanStore: RoomInstallmentPlanStore by lazy(
         LazyThreadSafetyMode.SYNCHRONIZED,
     ) {
@@ -49,6 +56,7 @@ class WaslApplication : Application() {
         InstallmentAwareWaslRepository(
             waslRepository = roomRepository,
             installmentPlanStore = roomInstallmentPlanStore,
+            advancedSearchStore = roomAdvancedSearchStore,
         )
     }
 

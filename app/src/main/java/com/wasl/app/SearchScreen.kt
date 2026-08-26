@@ -35,8 +35,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.wasl.app.data.AccountOverview
+import com.wasl.app.data.AdvancedSearchResult
+import com.wasl.app.data.AdvancedSearchResultType
+import com.wasl.app.data.DocumentStatus
+import com.wasl.app.data.DocumentType
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtState
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+private val searchResultDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern(
+    "dd/MM/uuuu",
+    Locale.US,
+)
 
 @Composable
 internal fun SearchScreen(
@@ -92,7 +103,7 @@ internal fun SearchScreen(
                         color = MaterialTheme.colorScheme.onBackground,
                     )
                     Text(
-                        text = "ابحث باسم الشخص أو بيان الدين داخل بياناتك المحلية.",
+                        text = "ابحث بالاسم أو البيان أو ملاحظة عملية أو رقم مستند أو مبلغ أو تاريخ.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -114,7 +125,7 @@ internal fun SearchScreen(
                             .fillMaxWidth()
                             .padding(12.dp)
                             .testTag("search-input"),
-                        label = { Text("اسم الشخص أو البيان") },
+                        label = { Text("اسم، بيان، رقم مستند، مبلغ أو تاريخ") },
                         singleLine = true,
                         shape = RoundedCornerShape(18.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -136,7 +147,7 @@ internal fun SearchScreen(
                             null
                         },
                         supportingText = {
-                            Text("يعرض البحث أول $SEARCH_RESULT_LIMIT نتيجة كحد أقصى.")
+                            Text("يعرض حتى $SEARCH_RESULT_LIMIT نتيجة في كل قسم.")
                         },
                     )
                 }
@@ -146,7 +157,7 @@ internal fun SearchScreen(
                 state.isQueryBlank -> item("search-start") {
                     SearchMessageCard(
                         title = "ابحث بسرعة",
-                        message = "ابدأ بكتابة اسم شخص أو كلمة من بيان الدين.",
+                        message = "اكتب اسمًا أو وصفًا أو رقم مستند، أو أدخل مبلغًا أو تاريخًا مثل 13/08/2026.",
                         testTag = "search-start",
                     )
                 }
@@ -169,7 +180,7 @@ internal fun SearchScreen(
                     )
                 }
 
-                state.results.isEmpty() -> item("search-empty") {
+                !state.hasAnyResults -> item("search-empty") {
                     SearchMessageCard(
                         title = "لا توجد نتائج",
                         message = "لا توجد نتائج مطابقة لهذا البحث.",
@@ -178,57 +189,100 @@ internal fun SearchScreen(
                 }
 
                 else -> {
-                    item("search-results-heading") {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(
-                                    text = "النتائج",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                                Text(
-                                    text = "الحسابات الأقرب لعبارة البحث",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                            ) {
-                                Text(
-                                    text = state.results.size.toString(),
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    if (state.results.isNotEmpty()) {
+                        item("search-results-heading") {
+                            SearchSectionHeading(
+                                title = "الحسابات والديون",
+                                subtitle = "مطابقات الاسم وبيان الدين",
+                                count = state.results.size,
+                            )
+                        }
+                        if (state.hasMoreResults) {
+                            item("search-limit-notice") {
+                                SearchMessageCard(
+                                    title = "نتائج حسابات إضافية",
+                                    message = "توجد نتائج إضافية. ضيّق عبارة البحث لعرض نتيجة أدق.",
+                                    testTag = "search-limit-notice",
                                 )
                             }
                         }
-                    }
-                    if (state.hasMoreResults) {
-                        item("search-limit-notice") {
-                            SearchMessageCard(
-                                title = "نتائج إضافية",
-                                message = "توجد نتائج إضافية. ضيّق عبارة البحث لعرض نتيجة أدق.",
-                                testTag = "search-limit-notice",
+                        items(
+                            items = state.results,
+                            key = { "account-${it.ledger.header.id.value}" },
+                        ) { account ->
+                            SearchResultCard(
+                                account = account,
+                                onOpen = { onOpenAccount(account.ledger.header.id) },
                             )
                         }
                     }
-                    items(
-                        items = state.results,
-                        key = { it.ledger.header.id.value },
-                    ) { account ->
-                        SearchResultCard(
-                            account = account,
-                            onOpen = { onOpenAccount(account.ledger.header.id) },
-                        )
+
+                    if (state.advancedResults.isNotEmpty()) {
+                        item("advanced-search-results-heading") {
+                            SearchSectionHeading(
+                                title = "العمليات والمستندات",
+                                subtitle = "مطابقات المبالغ والتواريخ والملاحظات وأرقام المستندات",
+                                count = state.advancedResults.size,
+                            )
+                        }
+                        if (state.hasMoreAdvancedResults) {
+                            item("advanced-search-limit-notice") {
+                                SearchMessageCard(
+                                    title = "نتائج إضافية",
+                                    message = "توجد عمليات أو مستندات إضافية. استخدم مبلغًا أو تاريخًا أو رقمًا أدق.",
+                                    testTag = "advanced-search-limit-notice",
+                                )
+                            }
+                        }
+                        items(
+                            items = state.advancedResults,
+                            key = { "advanced-${it.type}-${it.id}" },
+                        ) { result ->
+                            AdvancedSearchResultCard(
+                                result = result,
+                                onOpen = { onOpenAccount(result.debtId) },
+                            )
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SearchSectionHeading(
+    title: String,
+    subtitle: String,
+    count: Int,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.secondaryContainer,
+        ) {
+            Text(
+                text = count.toString(),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
         }
     }
 }
@@ -314,6 +368,155 @@ private fun SearchResultCard(
             )
         }
     }
+}
+
+@Composable
+private fun AdvancedSearchResultCard(
+    result: AdvancedSearchResult,
+    onOpen: () -> Unit,
+) {
+    Card(
+        onClick = onOpen,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(
+                "search-advanced-${result.type.name.lowercase(Locale.ROOT)}-${result.id}",
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PersonAvatar(name = result.personName)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(
+                        text = result.personName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = advancedSearchTitle(result),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    result.description?.takeIf { it.isNotBlank() }?.let { description ->
+                        Text(
+                            text = description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                        )
+                    }
+                }
+                SearchTypePill(result.type)
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "المبلغ",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = formatMoney(result.amount),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                }
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = "التاريخ",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = result.date.format(searchResultDateFormatter),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+
+            if (result.type == AdvancedSearchResultType.DOCUMENT) {
+                Text(
+                    text = "${documentTypeLabel(requireNotNull(result.documentType))} • ${documentStatusLabel(requireNotNull(result.documentStatus))}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Text(
+                text = "فتح الحساب المرتبط",
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.End,
+            )
+        }
+    }
+}
+
+private fun advancedSearchTitle(result: AdvancedSearchResult): String = when (result.type) {
+    AdvancedSearchResultType.DEBT -> result.description ?: "دين مطابق"
+    AdvancedSearchResultType.PAYMENT -> "دفعة"
+    AdvancedSearchResultType.PAYMENT_REVERSAL -> "عكس دفعة"
+    AdvancedSearchResultType.DOCUMENT -> requireNotNull(result.documentNumber)
+}
+
+@Composable
+private fun SearchTypePill(type: AdvancedSearchResultType) {
+    val text = when (type) {
+        AdvancedSearchResultType.DEBT -> "دين"
+        AdvancedSearchResultType.PAYMENT -> "دفعة"
+        AdvancedSearchResultType.PAYMENT_REVERSAL -> "عكس"
+        AdvancedSearchResultType.DOCUMENT -> "مستند"
+    }
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+    }
+}
+
+private fun documentTypeLabel(type: DocumentType): String = when (type) {
+    DocumentType.DEBT_RECEIPT -> "إيصال دين"
+    DocumentType.PAYMENT_RECEIPT -> "إيصال سداد"
+    DocumentType.ACCOUNT_STATEMENT -> "كشف حساب"
+}
+
+private fun documentStatusLabel(status: DocumentStatus): String = when (status) {
+    DocumentStatus.PENDING_PDF -> "قيد التجهيز"
+    DocumentStatus.READY -> "جاهز"
+    DocumentStatus.FAILED -> "تعذر التجهيز"
 }
 
 @Composable

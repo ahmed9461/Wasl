@@ -2,13 +2,16 @@ package com.wasl.app.data
 
 /**
  * Production-facing local data source that keeps the existing Wasl repository API
- * while also exposing installment-plan capabilities through the same dependency.
+ * while also exposing installment-plan and advanced-search capabilities through
+ * the same dependency.
  *
- * Both delegates share the same Room database, so financial Ledger writes remain
- * the single source of truth and installment progress stays a derived projection.
+ * All delegates share the same Room database, so financial Ledger writes remain
+ * the single source of truth while search stays a read-only derived projection.
  */
 class InstallmentAwareWaslRepository(
     waslRepository: WaslRepository,
     installmentPlanStore: InstallmentPlanStore,
+    advancedSearchStore: AdvancedSearchStore = UnavailableAdvancedSearchStore,
 ) : WaslRepository by waslRepository,
-    InstallmentPlanStore by installmentPlanStore
+    InstallmentPlanStore by installmentPlanStore,
+    AdvancedSearchStore by advancedSearchStore

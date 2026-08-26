@@ -2,6 +2,9 @@ package com.wasl.app
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -74,6 +77,23 @@ class AdaptiveSearchUiInstrumentedTest {
                 }
             }
         }
+
+        composeRule.onNodeWithContentDescription("البحث")
+            .assertHasClickAction()
+            .assert(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.StateDescription,
+                    "محددة",
+                ),
+            )
+        composeRule.onNodeWithContentDescription("الرئيسية")
+            .assertHasClickAction()
+            .assert(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.StateDescription,
+                    "غير محددة",
+                ),
+            )
 
         composeRule.onNodeWithTag("search-result-header-stacked-debt-accessible")
             .assertIsDisplayed()

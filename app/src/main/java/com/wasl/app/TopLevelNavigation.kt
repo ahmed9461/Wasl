@@ -20,7 +20,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -106,10 +110,16 @@ private fun RowScope.WaslNavigationItem(
     testTag: String,
     onClick: () -> Unit,
 ) {
+    val largeFontScale = LocalDensity.current.fontScale >= 1.3f
     NavigationBarItem(
         selected = selected,
         onClick = onClick,
-        modifier = Modifier.testTag(testTag),
+        modifier = Modifier
+            .semantics {
+                contentDescription = label
+                stateDescription = if (selected) "محددة" else "غير محددة"
+            }
+            .testTag(testTag),
         icon = {
             WaslDestinationIcon(
                 destination = destination,
@@ -122,6 +132,7 @@ private fun RowScope.WaslNavigationItem(
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             )
         },
+        alwaysShowLabel = !largeFontScale || selected,
         colors = NavigationBarItemDefaults.colors(
             selectedIconColor = MaterialTheme.colorScheme.primary,
             selectedTextColor = MaterialTheme.colorScheme.onSurface,

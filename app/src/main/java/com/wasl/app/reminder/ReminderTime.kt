@@ -12,11 +12,12 @@ object ReminderTime {
         dueDate: LocalDate,
         now: Instant,
         zoneId: ZoneId,
+        time: LocalTime = defaultDueTime,
     ): Instant {
         require(!dueDate.isBefore(now.atZone(zoneId).toLocalDate())) {
             "Due date cannot be in the past."
         }
-        val intended = dueDate.atTime(defaultDueTime).atZone(zoneId).toInstant()
+        val intended = dueDate.atTime(time).atZone(zoneId).toInstant()
         return if (intended.isAfter(now)) intended else now.plusSeconds(60)
     }
 

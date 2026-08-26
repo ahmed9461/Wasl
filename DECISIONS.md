@@ -62,7 +62,7 @@
 
 - الحالة: معتمد ومطبق.
 - القرار: Single-activity + Jetpack Compose + Material 3 + Navigation 3 stable 1.1.6 بمفاتيح صغيرة Serializable وBack stack صريح.
-- الوجهات الحالية تشمل Home / Today / Search / Account Details / Installments / Documents / Settings / Security.
+- الوجهات الحالية تشمل Home / Today / Search / Account Details / Installments / Documents / Settings / Security، ويُفتح مركز التذكيرات العامة من Settings كواجهة مستقلة محمية.
 - مرفوض: Router خاص بلا حاجة أو حمل كيانات كاملة داخل مفاتيح التنقل.
 - المصادر: https://developer.android.com/topic/architecture/recommendations وhttps://developer.android.com/guide/navigation/navigation-3
 
@@ -168,5 +168,34 @@
   - Unit tests لمنطق session/timeout.
   - Compose instrumentation للشاشة وRecovery.
   - Dark Mode + Font Scale 2.0 regression.
-  - CI #382: Android instrumentation 63/63 دون فشل.
+  - CI #458: بقيت اختبارات App Lock ضمن Android instrumentation الكامل 65/65 دون فشل.
 - المصدر: https://developer.android.com/identity/sign-in/biometric-auth
+
+## ADR-016 — تذكير متابعة عام مستقل عن تاريخ الاستحقاق
+
+- الحالة: **معتمد ومطبق**.
+- المشكلة: المستخدم قد يريد متابعة حساب في موعد يختاره حتى لو لم يكن للدين `due_date`، أو يريد تكرار متابعة لا يغيّر معنى الاستحقاق المدني ولا السجل المالي.
+- القرار:
+  - التذكير العام نموذج جدولة مستقل عن `due_date` وعن Ledger، مرتبط بحساب/دين محدد.
+  - يعاد استخدام جدول `reminders` الحالي ونوع `GENERAL`؛ لم تُنشأ حقيقة مالية موازية ولم تحتج الميزة Schema v8.
+  - الأنماط الحالية: مرة واحدة، يومي، أسبوعي، شهري.
+  - موعد التنفيذ يحفظ كـInstant مع ZoneId وقاعدة تكرار صريحة كي يبقى معنى الجدولة واضحًا بعد Restart أو تغير المنطقة الزمنية.
+  - التعديل يعيد استخدام هوية التذكير الخاصة بالحساب ويستبدل جدولة المنصة بدل إنشاء تذكيرات مكررة.
+  - الإلغاء يحفظ `CANCELLED` ولا يحذف سجل التذكير، ثم يحاول إلغاء جدولة Android.
+  - Room هي الحقيقة المحلية أولًا؛ إذا فشلت مزامنة WorkManager بعد Commit يبقى التغيير محفوظًا ويطلب Recovery بدل التراجع عن بيانات المستخدم.
+  - Recovery وUnique Work يبقيان Idempotent، والـWorker يتحقق من الحالة الحالية قبل نشر إشعار حتى لا يرسل تذكيرًا أُلغي بعد جدولة قديمة.
+  - رفض Notification permission لا يمنع حفظ التذكير، ويظهر مسارًا صريحًا لإعداد الإشعارات.
+  - مركز التذكيرات من Settings يسمح بإضافة/تعديل/إلغاء التذكير لكل حساب، مع RTL صريح وحماية الشاشة، وهو Component غير مصدّر و`noHistory` لمنع تجاوز App Lock عبر سجل Activity جانبي.
+  - Backup/Restore المنطقي المشفر يحفظ ويستعيد نوع `GENERAL` وقاعدة التكرار والحالة وZoneId.
+- ثوابت:
+  - لا يغير التذكير العام أصل الدين أو رصيده أو حالته المالية.
+  - لا يغير `due_date` ولا ينشئ Audit ماليًا أو Ledger entry.
+  - لا يحول إجراء إشعار إلى Payment تلقائيًا.
+- مؤجل عمدًا:
+  - REM-006: «تم السداد»، «دفع جزء»، «ذكرني لاحقًا» وأي إجراء مالي من الإشعار تبقى Slice مستقلة؛ أي فعل مالي يجب أن يمر بمراجعة وتأكيد آمنين.
+- التحقق:
+  - Store tests للهوية الواحدة والتعديل والإلغاء والحالات.
+  - UI instrumentation ينشئ تذكيرًا أسبوعيًا من Hub ثم يلغي ويؤكد `CANCELLED` في Room.
+  - Backup/Restore instrumentation يعيد Snapshot التذكير العام بعد تغيير الحالة الحية.
+  - CI #458 — Run `32912759608`: Android instrumentation **65/65**، صفر failures/skips، مع بقاء Room Schema v7 وPDF regressions خضراء.
+- المصدر: https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started

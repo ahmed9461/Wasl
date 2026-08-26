@@ -14,7 +14,7 @@
 - إنشاء شخص ودين، وإنشاء ديون مستقلة لشخص محفوظ دون تكرار Person.
 - استحقاق قابل للتعديل/الإلغاء مع Audit، متابعة ذكية عبر WorkManager، ومنبه قوي اختياري عبر Exact Alarm مع fallback.
 - **تذكير متابعة عام مستقل عن `due_date`** لكل حساب، بأنماط مرة واحدة / يومي / أسبوعي / شهري، دون أي أثر على Ledger أو الرصيد.
-- `GeneralReminderService` وStore/Recovery قابلان لإعادة المحاولة Idempotently؛ الإلغاء يحفظ `CANCELLED` بدل حذف السجل.
+- `GeneralReminderService` وStore/Recovery قابلان لإعادة المحاولة بصورة Idempotent؛ الإلغاء يحفظ `CANCELLED` بدل حذف السجل.
 - مركز **«التذكيرات»** من Settings لإضافة/تعديل/إلغاء تذكير المتابعة لكل حساب، مع RTL صريح وحماية الشاشة وComponent غير مصدّر.
 - Backup/Restore يحفظ ويستعيد تذكيرات `GENERAL` مع `repeat_rule` والحالة وZoneId.
 - شاشة Today للاستحقاقات والوعود والأقساط، وبحث Room Reactive وفتح الحساب من النتائج.

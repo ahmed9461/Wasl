@@ -11,6 +11,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.wasl.app.data.AccountOverview
@@ -100,24 +101,28 @@ class AdaptiveSearchUiInstrumentedTest {
                 )
         }
 
-        composeRule.onNodeWithTag("search-result-header-stacked-debt-accessible")
-            .assertIsDisplayed()
-        composeRule.onNodeWithTag("search-result-balance-stacked-debt-accessible")
-            .assertIsDisplayed()
-        composeRule.onNodeWithTag("search-advanced-header-stacked-payment-accessible")
-            .assertIsDisplayed()
-        composeRule.onNodeWithTag("search-advanced-metadata-stacked-payment-accessible")
-            .assertIsDisplayed()
+        listOf(
+            "search-result-header-stacked-debt-accessible",
+            "search-result-balance-stacked-debt-accessible",
+            "search-advanced-header-stacked-payment-accessible",
+            "search-advanced-metadata-stacked-payment-accessible",
+        ).forEach { tag ->
+            composeRule.onNodeWithTag(tag)
+                .performScrollTo()
+                .assertIsDisplayed()
+        }
 
         val accountDescription =
             "نتيجة حساب عميل الإتاحة، لي عنده، المتبقي ${formatMoney(account.ledger.balance)}. افتح الحساب."
         composeRule.onNodeWithContentDescription(accountDescription)
+            .performScrollTo()
             .assertHasClickAction()
             .performClick()
 
         val advancedDescription =
             "نتيجة دفعة مرتبطة بـعميل الإتاحة، المبلغ ${formatMoney(advanced.amount)}، التاريخ 20/08/2026. افتح الحساب المرتبط."
         composeRule.onNodeWithContentDescription(advancedDescription)
+            .performScrollTo()
             .assertHasClickAction()
             .performClick()
 

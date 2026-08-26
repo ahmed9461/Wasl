@@ -11,6 +11,8 @@ import com.wasl.domain.DebtId
 /**
  * Builds explicit, immutable notification actions.
  *
+ * The notification body opens the account. Android displays up to three expanded notification
+ * actions, so the action row is reserved for partial payment, full payment, and snooze.
  * Financial actions only carry the user's intent into the app; they never write to the Ledger from
  * a notification callback. Any payment still has to pass through Wasl's in-app review/confirmation.
  */
@@ -30,17 +32,6 @@ internal object ReminderNotificationActions {
         notificationTag: String,
         notificationId: Int,
     ): NotificationCompat.Builder = builder
-        .addAction(
-            R.drawable.ic_launcher_foreground,
-            "فتح الحساب",
-            activityPendingIntent(
-                context = context,
-                debtId = debtId,
-                requestCode = requestCode(notificationTag, ACTION_OPEN_OFFSET),
-                notificationTag = notificationTag,
-                notificationId = notificationId,
-            ),
-        )
         .addAction(
             R.drawable.ic_launcher_foreground,
             "دفع جزء",
@@ -119,7 +110,6 @@ internal object ReminderNotificationActions {
     private fun requestCode(notificationTag: String, offset: Int): Int =
         31 * notificationTag.hashCode() + offset
 
-    private const val ACTION_OPEN_OFFSET = 11
     private const val ACTION_PARTIAL_PAYMENT_OFFSET = 12
     private const val ACTION_FULL_PAYMENT_OFFSET = 13
     private const val ACTION_SNOOZE_OFFSET = 14

@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -43,6 +44,7 @@ import com.wasl.app.data.PrepareDebtReceiptCommand
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.document.PaymentReceiptService
 import com.wasl.app.document.ReceiptFileAccess
+import com.wasl.domain.DebtId
 import com.wasl.domain.Money
 import com.wasl.domain.MoneyInputParser
 import java.math.BigDecimal
@@ -55,11 +57,14 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
+internal val LocalOpenAccountDocuments = staticCompositionLocalOf<(DebtId) -> Unit> { { } }
+
 @Composable
 internal fun DocumentsHubRoute(
     repository: WaslRepository,
     documentService: PaymentReceiptService,
     onBack: () -> Unit,
+    initialDebtId: DebtId? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -159,6 +164,11 @@ internal fun DocumentsHubRoute(
         }
     }
 
+    val visibleAccounts = remember(accounts, initialDebtId) {
+        if (initialDebtId == null) accounts
+        else accounts.filter { it.ledger.header.id == initialDebtId }
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.safeDrawing,
@@ -180,12 +190,16 @@ internal fun DocumentsHubRoute(
                     OutlinedButton(onClick = onBack) { Text("رجوع") }
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(
-                            "تصدير وتقارير PDF",
+                            if (initialDebtId == null) "تصدير وتقارير PDF" else "مستندات الحساب",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.ExtraBold,
                         )
                         Text(
-                            "صدّر إيصال الدين أو كشف حساب كامل يتضمن أصل الدين والرصيد وجميع الدفعات وعمليات العكس حتى لحظة الإصدار.",
+                            if (initialDebtId == null) {
+                                "اختر حسابًا ثم صدّر مستنداته."
+                            } else {
+                                "أصدر إيصال الدين أو كشفًا كاملًا لهذا الحساب فقط."
+                            },
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -274,16 +288,20 @@ internal fun DocumentsHubRoute(
                 }
             }
 
-            if (accounts.isEmpty() && loadError == null) {
+            if (visibleAccounts.isEmpty() && loadError == null) {
                 item("empty") {
                     Text(
-                        "لا توجد حسابات لإصدار مستندات لها بعد.",
+                        if (initialDebtId == null) {
+                            "لا توجد حسابات لإصدار مستندات لها بعد."
+                        } else {
+                            "تعذر العثور على الحساب المحدد."
+                        },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
 
-            items(accounts, key = { it.ledger.header.id.value }) { account ->
+            items(visibleAccounts, key = { it.ledger.header.id.value }) { account ->
                 val debtKey = "${DocumentType.DEBT_RECEIPT.name}:${account.ledger.header.id.value}"
                 val statementKey = "${DocumentType.ACCOUNT_STATEMENT.name}:${account.ledger.header.id.value}"
                 Card(modifier = Modifier.fillMaxWidth()) {

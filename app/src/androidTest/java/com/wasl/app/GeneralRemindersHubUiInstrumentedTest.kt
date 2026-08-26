@@ -27,6 +27,7 @@ import com.wasl.domain.Money
 import com.wasl.domain.PersonId
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -104,6 +105,15 @@ class GeneralRemindersHubUiInstrumentedTest {
         composeRule.onNodeWithTag("save-general-reminder").performClick()
 
         waitForText("أسبوعي")
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            runBlocking {
+                store.getReminderForDebt(debtId)?.let { reminder ->
+                    reminder.status == ReminderStatus.SCHEDULED &&
+                        reminder.repeatRule?.frequency == GeneralReminderFrequency.WEEKLY &&
+                        scheduler.replaced.any { scheduled -> scheduled.id == reminder.id }
+                } == true
+            }
+        }
         val stored = runBlocking { assertNotNull(store.getReminderForDebt(debtId)) }
         assertEquals(GeneralReminderFrequency.WEEKLY, stored.repeatRule?.frequency)
         assertEquals(ReminderStatus.SCHEDULED, stored.status)
@@ -117,7 +127,8 @@ class GeneralRemindersHubUiInstrumentedTest {
 
         composeRule.waitUntil(timeoutMillis = 10_000) {
             runBlocking {
-                store.getReminderForDebt(debtId)?.status == ReminderStatus.CANCELLED
+                store.getReminderForDebt(debtId)?.status == ReminderStatus.CANCELLED &&
+                    scheduler.cancelled.contains(stored.id)
             }
         }
         assertEquals(stored.id, scheduler.cancelled.single())
@@ -140,8 +151,8 @@ class GeneralRemindersHubUiInstrumentedTest {
     }
 
     private class RecordingGeneralReminderScheduler : GeneralReminderScheduler {
-        val replaced = mutableListOf<GeneralReminderRecord>()
-        val cancelled = mutableListOf<String>()
+        val replaced = CopyOnWriteArrayList<GeneralReminderRecord>()
+        val cancelled = CopyOnWriteArrayList<String>()
 
         override fun replace(reminder: GeneralReminderRecord) {
             replaced += reminder

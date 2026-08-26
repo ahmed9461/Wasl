@@ -137,8 +137,8 @@ class RoomAdvancedSearchStore(
 
         val ledgerConditions = mutableListOf<String>()
         ledgerConditions += """(
-            COALESCE(l.note, '') LIKE ? ESCAPE '\' COLLATE NOCASE
-            OR COALESCE(l.reason, '') LIKE ? ESCAPE '\' COLLATE NOCASE
+            COALESCE(l.note, '') LIKE ? ESCAPE char(92) COLLATE NOCASE
+            OR COALESCE(l.reason, '') LIKE ? ESCAPE char(92) COLLATE NOCASE
         )""".trimIndent()
         args += criteria.queryPattern
         args += criteria.queryPattern
@@ -177,7 +177,7 @@ class RoomAdvancedSearchStore(
         """.trimIndent()
 
         val documentConditions = mutableListOf<String>()
-        documentConditions += "doc.document_number LIKE ? ESCAPE '\' COLLATE NOCASE"
+        documentConditions += "doc.document_number LIKE ? ESCAPE char(92) COLLATE NOCASE"
         args += criteria.queryPattern
         addAmountConditions(
             conditions = documentConditions,

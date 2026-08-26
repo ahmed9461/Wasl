@@ -23,12 +23,15 @@ import com.wasl.app.data.local.RoomWaslRepository
 import com.wasl.app.data.local.WaslDatabase
 import com.wasl.app.document.AndroidPaymentReceiptService
 import com.wasl.app.document.PaymentReceiptService
+import com.wasl.app.reminder.ReminderNotificationActions
+import com.wasl.domain.DebtId
 import com.wasl.domain.PaymentRecorded
 import java.io.File
 import java.util.UUID
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertTrue
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -104,7 +107,7 @@ class PaymentFlowUiInstrumentedTest {
 
         val paymentId = runBlocking {
             withTimeout(10_000) {
-                repositoryState.value.observeAccount(com.wasl.domain.DebtId(debtId))
+                repositoryState.value.observeAccount(DebtId(debtId))
                     .first { it?.ledger?.entries?.filterIsInstance<PaymentRecorded>()?.isNotEmpty() == true }
                     ?.ledger
                     ?.entries
@@ -128,7 +131,7 @@ class PaymentFlowUiInstrumentedTest {
         composeRule.onNodeWithTag("receipt-confirm").performClick()
         val document = runBlocking {
             withTimeout(10_000) {
-                repositoryState.value.observeAccount(com.wasl.domain.DebtId(debtId))
+                repositoryState.value.observeAccount(DebtId(debtId))
                     .first { account -> account?.issuedDocuments?.singleOrNull()?.pdfSha256 != null }
                     ?.issuedDocuments
                     ?.single()
@@ -158,6 +161,55 @@ class PaymentFlowUiInstrumentedTest {
         composeRule.onNodeWithTag("open-receipt-${document.id}").assertIsDisplayed()
         scrollToText(document.documentNumber)
         composeRule.onNodeWithText(document.documentNumber).assertIsDisplayed()
+    }
+
+    @Test
+    fun fullPaymentNotificationIntentOpensPrefilledFormWithoutWritingLedger() {
+        val repository = RoomWaslRepository(database!!)
+        val requestedDebtIdState = mutableStateOf<String?>(null)
+        val requestedPaymentIntentState = mutableStateOf<String?>(null)
+        composeRule.setContent {
+            WaslApp(
+                repository = repository,
+                instanceKey = "notification-payment-ui-test",
+                requestedDebtId = requestedDebtIdState.value,
+                requestedPaymentIntent = requestedPaymentIntentState.value,
+                onRequestedDebtHandled = {
+                    requestedDebtIdState.value = null
+                    requestedPaymentIntentState.value = null
+                },
+            )
+        }
+
+        composeRule.onNodeWithText("إضافة حساب").performClick()
+        composeRule.onNodeWithTag("create-person-name").performTextInput("عميل الإشعار")
+        composeRule.onNodeWithTag("create-debt-amount").performTextInput("100000")
+        composeRule.onNodeWithTag("create-debt-save").performClick()
+        val debtId = runBlocking {
+            withTimeout(10_000) {
+                repository.observeAccounts()
+                    .first { it.isNotEmpty() }
+                    .single()
+                    .ledger.header.id.value
+            }
+        }
+        waitForTagToDisappear("create-debt-save")
+
+        composeRule.runOnIdle {
+            requestedDebtIdState.value = debtId
+            requestedPaymentIntentState.value = ReminderNotificationActions.PAYMENT_INTENT_FULL
+        }
+
+        waitForTag("payment-amount")
+        composeRule.onNodeWithTag("payment-amount")
+            .assertTextContains("100000", substring = true)
+
+        val account = runBlocking {
+            withTimeout(10_000) {
+                repository.observeAccount(DebtId(debtId)).first { it != null }
+            }
+        } ?: error("Account was not found after notification navigation.")
+        assertTrue(account.ledger.entries.isEmpty())
     }
 
     private fun openDatabase() {

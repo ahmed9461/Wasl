@@ -86,6 +86,7 @@ import com.wasl.app.data.UnavailablePaymentPromiseStore
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.reminder.ExactAlarmAccess
 import com.wasl.app.reminder.NoOpReminderScheduler
+import com.wasl.app.reminder.ReminderNotificationActions
 import com.wasl.app.reminder.ReminderNotificationPublisher
 import com.wasl.app.reminder.ReminderScheduler
 import com.wasl.app.document.PaymentReceiptService
@@ -145,6 +146,7 @@ fun WaslApp(
     todayZoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
     exactAlarmAccessOverride: Boolean? = null,
     requestedDebtId: String? = null,
+    requestedPaymentIntent: String? = null,
     onRequestedDebtHandled: () -> Unit = {},
 ) {
     val backStack = rememberNavBackStack(HomeRoute)
@@ -195,12 +197,14 @@ fun WaslApp(
         if (exactAlarmAccessOverride != null) return
         ExactAlarmAccess.requestIntent(context)?.let(context::startActivity)
     }
-    LaunchedEffect(requestedDebtId) {
+    LaunchedEffect(requestedDebtId, requestedPaymentIntent) {
         val debtId = requestedDebtId ?: return@LaunchedEffect
         if (backStack.lastOrNull() != AccountDetailsRoute(debtId)) {
             backStack.add(AccountDetailsRoute(debtId))
         }
-        onRequestedDebtHandled()
+        if (requestedPaymentIntent == null) {
+            onRequestedDebtHandled()
+        }
     }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         WaslTheme {
@@ -327,6 +331,31 @@ fun WaslApp(
                                 ),
                             )
                             val state by detailsViewModel.uiState.collectAsStateWithLifecycle()
+                            LaunchedEffect(
+                                requestedDebtId,
+                                requestedPaymentIntent,
+                                state.account?.ledger?.header?.id?.value,
+                            ) {
+                                if (requestedDebtId != route.debtId) return@LaunchedEffect
+                                val account = state.account ?: return@LaunchedEffect
+                                if (account.ledger.balance.isZero) {
+                                    onRequestedDebtHandled()
+                                    return@LaunchedEffect
+                                }
+                                when (requestedPaymentIntent) {
+                                    ReminderNotificationActions.PAYMENT_INTENT_PARTIAL -> {
+                                        detailsViewModel.openPaymentDialog()
+                                        onRequestedDebtHandled()
+                                    }
+                                    ReminderNotificationActions.PAYMENT_INTENT_FULL -> {
+                                        detailsViewModel.openPaymentDialog()
+                                        detailsViewModel.updatePaymentAmount(
+                                            paymentInputValue(account.ledger.balance),
+                                        )
+                                        onRequestedDebtHandled()
+                                    }
+                                }
+                            }
                             AccountDetailsScreen(
                                 state = state,
                                 onBack = { backStack.removeLastOrNull() },
@@ -1332,6 +1361,11 @@ private fun openNotificationSettings(context: Context) {
             putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
         },
     )
+}
+
+internal fun paymentInputValue(money: Money): String {
+    val fractionDigits = MoneyInputParser.fractionDigits(money.currency)
+    return BigDecimal.valueOf(money.minorUnits, fractionDigits).toPlainString()
 }
 
 internal fun formatMoney(money: Money): String {

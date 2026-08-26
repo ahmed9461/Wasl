@@ -27,9 +27,11 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProvider
 import com.wasl.app.privacy.AppLockAuthPurpose
 import com.wasl.app.privacy.AppLockViewModel
+import com.wasl.app.reminder.ReminderNotificationActions
 
 class MainActivity : FragmentActivity() {
     private val requestedDebtId = mutableStateOf<String?>(null)
+    private val requestedPaymentIntent = mutableStateOf<String?>(null)
     private lateinit var appLockViewModel: AppLockViewModel
     private lateinit var biometricPrompt: BiometricPrompt
 
@@ -64,7 +66,7 @@ class MainActivity : FragmentActivity() {
             },
         )
 
-        requestedDebtId.value = intent.getStringExtra(EXTRA_DEBT_ID)
+        readNavigationIntent(intent)
         enableEdgeToEdge()
         applySecureScreenPreference()
 
@@ -121,7 +123,11 @@ class MainActivity : FragmentActivity() {
                             paymentReceiptService = waslApplication.paymentReceiptService,
                             paymentPromiseStore = waslApplication.paymentPromiseStore,
                             requestedDebtId = requestedDebtId.value,
-                            onRequestedDebtHandled = { requestedDebtId.value = null },
+                            requestedPaymentIntent = requestedPaymentIntent.value,
+                            onRequestedDebtHandled = {
+                                requestedDebtId.value = null
+                                requestedPaymentIntent.value = null
+                            },
                         )
                     }
 
@@ -133,6 +139,7 @@ class MainActivity : FragmentActivity() {
                             onOpenAccount = { debtId ->
                                 installmentsOpen = false
                                 requestedDebtId.value = debtId.value
+                                requestedPaymentIntent.value = null
                             },
                         )
                     }
@@ -222,7 +229,7 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        requestedDebtId.value = intent.getStringExtra(EXTRA_DEBT_ID)
+        readNavigationIntent(intent)
     }
 
     override fun onResume() {
@@ -255,6 +262,16 @@ class MainActivity : FragmentActivity() {
             appLockViewModel.onBackground(SystemClock.elapsedRealtime())
         }
         super.onStop()
+    }
+
+    private fun readNavigationIntent(intent: Intent) {
+        requestedDebtId.value = intent.getStringExtra(EXTRA_DEBT_ID)
+        requestedPaymentIntent.value = intent
+            .getStringExtra(ReminderNotificationActions.EXTRA_PAYMENT_INTENT)
+            ?.takeIf { value ->
+                value == ReminderNotificationActions.PAYMENT_INTENT_PARTIAL ||
+                    value == ReminderNotificationActions.PAYMENT_INTENT_FULL
+            }
     }
 
     private fun requestAppLockAuthentication(purpose: AppLockAuthPurpose) {

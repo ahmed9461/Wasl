@@ -1,21 +1,27 @@
 package com.wasl.app
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,6 +30,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProvider
 import com.wasl.app.privacy.AppLockAuthPurpose
@@ -35,6 +42,15 @@ class MainActivity : FragmentActivity() {
     private val requestedPaymentIntent = mutableStateOf<String?>(null)
     private lateinit var appLockViewModel: AppLockViewModel
     private lateinit var biometricPrompt: BiometricPrompt
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (!granted) return@registerForActivityResult
+        val waslApplication = application as? WaslApplication ?: return@registerForActivityResult
+        runCatching { waslApplication.reminderScheduler.requestRecovery() }
+        runCatching { waslApplication.generalReminderService.requestRecovery() }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -211,6 +227,23 @@ class MainActivity : FragmentActivity() {
                             },
                         )
                     }
+
+                    if (
+                        !appLocked &&
+                        !installmentsOpen &&
+                        !settingsOpen &&
+                        !documentsOpen &&
+                        !securityOpen
+                    ) {
+                        Button(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 88.dp),
+                            onClick = { documentsOpen = true },
+                        ) {
+                            Text("تصدير PDF")
+                        }
+                    }
                 }
 
                 if (appLocked) {
@@ -224,6 +257,10 @@ class MainActivity : FragmentActivity() {
                     )
                 }
             }
+        }
+
+        window.decorView.post {
+            requestInitialNotificationPermissionIfNeeded()
         }
     }
 
@@ -251,10 +288,10 @@ class MainActivity : FragmentActivity() {
             requestAppLockAuthentication(AppLockAuthPurpose.UNLOCK)
         }
         if (waslApplication.reminderNotificationPublisher.canNotify()) {
-            waslApplication.reminderScheduler.requestRecovery()
+            runCatching { waslApplication.reminderScheduler.requestRecovery() }
         }
         if (waslApplication.generalReminderNotificationPublisher.canNotify()) {
-            waslApplication.generalReminderService.requestRecovery()
+            runCatching { waslApplication.generalReminderService.requestRecovery() }
         }
     }
 
@@ -263,6 +300,25 @@ class MainActivity : FragmentActivity() {
             appLockViewModel.onBackground(SystemClock.elapsedRealtime())
         }
         super.onStop()
+    }
+
+    private fun requestInitialNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+
+        val preferences = getSharedPreferences(PERMISSION_PREFERENCES, MODE_PRIVATE)
+        if (preferences.getBoolean(KEY_NOTIFICATION_PERMISSION_PROMPTED, false)) return
+        preferences.edit().putBoolean(KEY_NOTIFICATION_PERMISSION_PROMPTED, true).apply()
+        runCatching {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }.onFailure {
+            preferences.edit().putBoolean(KEY_NOTIFICATION_PERMISSION_PROMPTED, false).apply()
+        }
     }
 
     private fun readNavigationIntent(intent: Intent) {
@@ -364,6 +420,9 @@ class MainActivity : FragmentActivity() {
         private val APP_LOCK_AUTHENTICATORS =
             BiometricManager.Authenticators.BIOMETRIC_WEAK or
                 BiometricManager.Authenticators.DEVICE_CREDENTIAL
+
+        private const val PERMISSION_PREFERENCES = "wasl-runtime-permissions"
+        private const val KEY_NOTIFICATION_PERMISSION_PROMPTED = "notification-permission-prompted"
 
         const val ACTION_OPEN_DEBT = "com.wasl.app.action.OPEN_DEBT"
         const val EXTRA_DEBT_ID = "com.wasl.app.extra.DEBT_ID"

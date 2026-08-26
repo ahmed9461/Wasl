@@ -110,13 +110,13 @@ class AdaptiveSearchUiInstrumentedTest {
             .assertIsDisplayed()
 
         val accountDescription =
-            "نتيجة حساب عميل الإتاحة، لي عنده، المتبقي 100,000 YER. افتح الحساب."
+            "نتيجة حساب عميل الإتاحة، لي عنده، المتبقي ${formatMoney(account.ledger.balance)}. افتح الحساب."
         composeRule.onNodeWithContentDescription(accountDescription)
             .assertHasClickAction()
             .performClick()
 
         val advancedDescription =
-            "نتيجة دفعة مرتبطة بـعميل الإتاحة، المبلغ 20,000 YER، التاريخ 20/08/2026. افتح الحساب المرتبط."
+            "نتيجة دفعة مرتبطة بـعميل الإتاحة، المبلغ ${formatMoney(advanced.amount)}، التاريخ 20/08/2026. افتح الحساب المرتبط."
         composeRule.onNodeWithContentDescription(advancedDescription)
             .assertHasClickAction()
             .performClick()

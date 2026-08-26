@@ -37,6 +37,8 @@ internal object ReminderNotificationActions {
                 context = context,
                 debtId = debtId,
                 requestCode = requestCode(notificationTag, ACTION_OPEN_OFFSET),
+                notificationTag = notificationTag,
+                notificationId = notificationId,
             ),
         )
         .addAction(
@@ -47,6 +49,8 @@ internal object ReminderNotificationActions {
                 debtId = debtId,
                 requestCode = requestCode(notificationTag, ACTION_PARTIAL_PAYMENT_OFFSET),
                 paymentIntent = PAYMENT_INTENT_PARTIAL,
+                notificationTag = notificationTag,
+                notificationId = notificationId,
             ),
         )
         .addAction(
@@ -57,6 +61,8 @@ internal object ReminderNotificationActions {
                 debtId = debtId,
                 requestCode = requestCode(notificationTag, ACTION_FULL_PAYMENT_OFFSET),
                 paymentIntent = PAYMENT_INTENT_FULL,
+                notificationTag = notificationTag,
+                notificationId = notificationId,
             ),
         )
         .addAction(
@@ -79,10 +85,14 @@ internal object ReminderNotificationActions {
         context: Context,
         debtId: DebtId,
         paymentIntent: String? = null,
+        notificationTag: String? = null,
+        notificationId: Int? = null,
     ): Intent = Intent(context, MainActivity::class.java).apply {
         action = MainActivity.ACTION_OPEN_DEBT
         putExtra(MainActivity.EXTRA_DEBT_ID, debtId.value)
         paymentIntent?.let { putExtra(EXTRA_PAYMENT_INTENT, it) }
+        notificationTag?.let { putExtra(EXTRA_NOTIFICATION_TAG, it) }
+        notificationId?.let { putExtra(EXTRA_NOTIFICATION_ID, it) }
         flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
     }
 
@@ -91,10 +101,18 @@ internal object ReminderNotificationActions {
         debtId: DebtId,
         requestCode: Int,
         paymentIntent: String? = null,
+        notificationTag: String,
+        notificationId: Int,
     ): PendingIntent = PendingIntent.getActivity(
         context,
         requestCode,
-        openAccountIntent(context, debtId, paymentIntent),
+        openAccountIntent(
+            context = context,
+            debtId = debtId,
+            paymentIntent = paymentIntent,
+            notificationTag = notificationTag,
+            notificationId = notificationId,
+        ),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 

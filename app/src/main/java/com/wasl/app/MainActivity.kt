@@ -15,8 +15,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -217,23 +215,6 @@ class MainActivity : FragmentActivity() {
                                 applySecureScreenPreference()
                             },
                         )
-                    }
-
-                    if (
-                        !appLocked &&
-                        !installmentsOpen &&
-                        !settingsOpen &&
-                        !documentsOpen &&
-                        !securityOpen
-                    ) {
-                        Button(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 88.dp),
-                            onClick = { documentsOpen = true },
-                        ) {
-                            Text("تصدير PDF")
-                        }
                     }
                 }
 

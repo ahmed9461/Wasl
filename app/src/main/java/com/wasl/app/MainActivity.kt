@@ -9,7 +9,6 @@ import android.os.SystemClock
 import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -29,6 +28,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
@@ -42,15 +42,6 @@ class MainActivity : FragmentActivity() {
     private val requestedPaymentIntent = mutableStateOf<String?>(null)
     private lateinit var appLockViewModel: AppLockViewModel
     private lateinit var biometricPrompt: BiometricPrompt
-
-    private val notificationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        if (!granted) return@registerForActivityResult
-        val waslApplication = application as? WaslApplication ?: return@registerForActivityResult
-        runCatching { waslApplication.reminderScheduler.requestRecovery() }
-        runCatching { waslApplication.generalReminderService.requestRecovery() }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -172,8 +163,8 @@ class MainActivity : FragmentActivity() {
                                     documentsOpen = true
                                 },
                                 onRestored = {
-                                    waslApplication.reminderScheduler.requestRecovery()
-                                    waslApplication.generalReminderService.requestRecovery()
+                                    runCatching { waslApplication.reminderScheduler.requestRecovery() }
+                                    runCatching { waslApplication.generalReminderService.requestRecovery() }
                                 },
                                 onSecureScreenChanged = ::applySecureScreenPreference,
                             )
@@ -302,6 +293,19 @@ class MainActivity : FragmentActivity() {
         super.onStop()
     }
 
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_NOTIFICATION_PERMISSION) return
+        if (grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED) return
+        val waslApplication = application as? WaslApplication ?: return
+        runCatching { waslApplication.reminderScheduler.requestRecovery() }
+        runCatching { waslApplication.generalReminderService.requestRecovery() }
+    }
+
     private fun requestInitialNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         if (
@@ -315,7 +319,11 @@ class MainActivity : FragmentActivity() {
         if (preferences.getBoolean(KEY_NOTIFICATION_PERMISSION_PROMPTED, false)) return
         preferences.edit().putBoolean(KEY_NOTIFICATION_PERMISSION_PROMPTED, true).apply()
         runCatching {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                REQUEST_NOTIFICATION_PERMISSION,
+            )
         }.onFailure {
             preferences.edit().putBoolean(KEY_NOTIFICATION_PERMISSION_PROMPTED, false).apply()
         }
@@ -423,6 +431,7 @@ class MainActivity : FragmentActivity() {
 
         private const val PERMISSION_PREFERENCES = "wasl-runtime-permissions"
         private const val KEY_NOTIFICATION_PERMISSION_PROMPTED = "notification-permission-prompted"
+        private const val REQUEST_NOTIFICATION_PERMISSION = 4001
 
         const val ACTION_OPEN_DEBT = "com.wasl.app.action.OPEN_DEBT"
         const val EXTRA_DEBT_ID = "com.wasl.app.extra.DEBT_ID"

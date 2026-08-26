@@ -80,7 +80,7 @@ class ReminderNotificationPublisherInstrumentedTest {
     }
 
     @Test
-    fun dueReminderPublishesAVisibleNotificationWithSafeActions() {
+    fun dueReminderUsesBodyToOpenAccountAndThreeSafeActionButtons() {
         val now = Instant.parse("2026-08-13T00:00:00Z")
         val reminder = reminder(now)
         val account = account(now, reminder)
@@ -95,13 +95,13 @@ class ReminderNotificationPublisherInstrumentedTest {
         assertNotNull(posted)
         assertNotNull(posted.notification.contentIntent)
         assertEquals(
-            listOf("فتح الحساب", "دفع جزء", "تم السداد", "ذكرني لاحقًا"),
+            listOf("دفع جزء", "تم السداد", "ذكرني لاحقًا"),
             posted.notification.actions.orEmpty().map { it.title.toString() },
         )
     }
 
     @Test
-    fun strongAlarmPublishesTheSameSafeActionSet() {
+    fun strongAlarmPublishesTheSameThreeSafeActionButtons() {
         val now = Instant.parse("2026-08-13T00:00:00Z")
         val reminder = reminder(now)
         val account = account(now, reminder)
@@ -114,8 +114,9 @@ class ReminderNotificationPublisherInstrumentedTest {
             reminderId,
         )
         assertNotNull(posted)
+        assertNotNull(posted.notification.contentIntent)
         assertEquals(
-            listOf("فتح الحساب", "دفع جزء", "تم السداد", "ذكرني لاحقًا"),
+            listOf("دفع جزء", "تم السداد", "ذكرني لاحقًا"),
             posted.notification.actions.orEmpty().map { it.title.toString() },
         )
     }

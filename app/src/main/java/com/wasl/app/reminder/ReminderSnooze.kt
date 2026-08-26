@@ -14,6 +14,7 @@ import com.wasl.app.WaslApplication
 import com.wasl.domain.DebtId
 import java.time.Duration
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
 
 class ReminderNotificationActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -87,12 +88,14 @@ class ReminderSnoozeWorker(
         if (account.ledger.balance.isZero) return Result.success()
         if (!application.reminderNotificationPublisher.canNotify()) return Result.success()
 
-        return runCatching {
+        return try {
             application.reminderNotificationPublisher.publishSnoozedAccount(account)
-        }.fold(
-            onSuccess = { Result.success() },
-            onFailure = { Result.retry() },
-        )
+            Result.success()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            Result.retry()
+        }
     }
 
     companion object {

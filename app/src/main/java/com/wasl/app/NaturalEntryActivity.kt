@@ -1,5 +1,6 @@
 package com.wasl.app
 
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognizerIntent
@@ -132,7 +133,7 @@ internal fun NaturalEntryScreen(
     val voiceLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
     ) { result ->
-        if (result.resultCode != RESULT_OK) return@rememberLauncherForActivityResult
+        if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
         val recognized = result.data
             ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
             ?.firstOrNull()
@@ -194,19 +195,23 @@ internal fun NaturalEntryScreen(
                 )
             }
             item {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Button(
-                        modifier = Modifier.weight(1f).testTag("natural-entry-analyze"),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("natural-entry-analyze"),
                         enabled = text.isNotBlank(),
                         onClick = { analyze() },
                     ) {
                         Text("تحليل ومعاينة")
                     }
                     OutlinedButton(
-                        modifier = Modifier.weight(1f).testTag("natural-entry-voice"),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("natural-entry-voice"),
                         onClick = {
                             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                                 putExtra(
@@ -226,9 +231,7 @@ internal fun NaturalEntryScreen(
             }
 
             draft?.let { current ->
-                item {
-                    NaturalDraftPreview(current)
-                }
+                item { NaturalDraftPreview(current) }
                 if (current.canPreviewAsDebt) {
                     item {
                         Button(
@@ -296,7 +299,11 @@ private fun NaturalDraftPreview(draft: NaturalEntryDraft) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(9.dp),
         ) {
-            Text("معاينة قبل الحفظ", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "معاينة قبل الحفظ",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
             HorizontalDivider()
             PreviewRow("الشخص", draft.personName ?: "غير معروف")
             PreviewRow("الاتجاه", directionLabel(draft.direction))
@@ -323,7 +330,10 @@ private fun NaturalDraftPreview(draft: NaturalEntryDraft) {
 
 @Composable
 private fun PreviewRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
         Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, fontWeight = FontWeight.SemiBold)
     }

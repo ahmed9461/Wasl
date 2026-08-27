@@ -56,14 +56,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Wasl-room-schema
-          path: app/schemas/com.wasl.app.data.local.WaslDatabase/7.json
+          path: app/schemas/com.wasl.app.data.local.WaslDatabase/8.json
           if-no-files-found: error
 
       - name: Verify committed Room schema is current
         run: |
-          git show HEAD:app/schemas/com.wasl.app.data.local.WaslDatabase/7.json \
+          git show HEAD:app/schemas/com.wasl.app.data.local.WaslDatabase/8.json \
             | jq -S . > "$RUNNER_TEMP/room-schema-committed.json"
-          jq -S . app/schemas/com.wasl.app.data.local.WaslDatabase/7.json \
+          jq -S . app/schemas/com.wasl.app.data.local.WaslDatabase/8.json \
             > "$RUNNER_TEMP/room-schema-generated.json"
           diff -u "$RUNNER_TEMP/room-schema-committed.json" \
             "$RUNNER_TEMP/room-schema-generated.json"

@@ -2,7 +2,7 @@ package com.wasl.app
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.test.assertExists
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -64,11 +64,11 @@ class PersonTimelineUiInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithTag("person-profile-header").assertExists()
-        composeRule.onNodeWithTag("person-multi-currency-note").assertExists()
+        composeRule.onNodeWithTag("person-profile-header").assertIsDisplayed()
+        composeRule.onNodeWithTag("person-multi-currency-note").assertIsDisplayed()
         composeRule.onNodeWithTag("person-account-debt-sar")
             .performScrollTo()
-            .assertExists()
+            .assertIsDisplayed()
         composeRule.onAllNodesWithText("فتح الحساب")[1]
             .performScrollTo()
             .performClick()
@@ -114,13 +114,13 @@ class PersonTimelineUiInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithTag("person-profile-header").assertExists()
+        composeRule.onNodeWithTag("person-profile-header").assertIsDisplayed()
         composeRule.onNodeWithTag("person-account-large-font-debt")
             .performScrollTo()
-            .assertExists()
+            .assertIsDisplayed()
         composeRule.onNodeWithTag("person-timeline-opened:large-font-debt")
             .performScrollTo()
-            .assertExists()
+            .assertIsDisplayed()
     }
 
     private fun account(

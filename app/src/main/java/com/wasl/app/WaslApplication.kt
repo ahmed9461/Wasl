@@ -10,6 +10,7 @@ import com.wasl.app.data.InstallmentPlanStore
 import com.wasl.app.data.PaymentClaimStore
 import com.wasl.app.data.PaymentPromiseStore
 import com.wasl.app.data.ReminderStore
+import com.wasl.app.data.UnavailableAttachmentStore
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.data.local.RoomAccountDocumentStore
 import com.wasl.app.data.local.RoomAdvancedSearchStore
@@ -163,6 +164,7 @@ class WaslApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        UnavailableAttachmentStore.install(attachmentStore)
         reminderNotificationPublisher.ensureChannels()
         generalReminderNotificationPublisher.ensureChannel()
         reminderScheduler.requestRecovery()

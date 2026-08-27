@@ -1077,7 +1077,7 @@ private fun PaymentReceiptDialog(
                 )
                 OutlinedTextField(
                     value = form.phone,
-                    onValueChange = onReceiptPhoneChange,
+                    onValueChange = onPhoneChange,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("الهاتف — اختياري") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),

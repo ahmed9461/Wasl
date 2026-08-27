@@ -3,10 +3,14 @@ package com.wasl.app
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.wasl.app.ui.theme.WaslTheme
@@ -37,7 +41,8 @@ class StatisticsScreenUiInstrumentedTest {
         composeRule.onNodeWithTag("objective-statistics-screen").assertIsDisplayed()
         composeRule.onNodeWithText("المسددة").assertIsDisplayed()
         composeRule.onNodeWithText("تم الوفاء بها").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithTag("statistics-method-note").performScrollTo().assertIsDisplayed()
+        scrollToTag("statistics-method-note")
+        composeRule.onNodeWithTag("statistics-method-note").assertIsDisplayed()
         composeRule.onNodeWithText("بدون تقييم الأشخاص", substring = true).assertIsDisplayed()
     }
 
@@ -62,7 +67,12 @@ class StatisticsScreenUiInstrumentedTest {
         }
 
         composeRule.onNodeWithTag("objective-statistics-screen").assertIsDisplayed()
-        composeRule.onNodeWithTag("statistics-method-note").performScrollTo().assertIsDisplayed()
+        scrollToTag("statistics-method-note")
+        composeRule.onNodeWithTag("statistics-method-note").assertIsDisplayed()
+    }
+
+    private fun scrollToTag(tag: String) {
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(tag))
     }
 
     private fun sampleStatistics() = ObjectiveStatistics(

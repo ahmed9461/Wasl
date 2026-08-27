@@ -5,6 +5,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.room.Room
@@ -37,9 +39,7 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class TodayPaymentClaimUiInstrumentedTest {
-    @get:Rule
-    val composeRule = createComposeRule()
-
+    @get:Rule val composeRule = createComposeRule()
     private val context: Context = ApplicationProvider.getApplicationContext()
     private lateinit var databaseName: String
     private lateinit var database: WaslDatabase
@@ -47,33 +47,14 @@ class TodayPaymentClaimUiInstrumentedTest {
     private lateinit var claimStore: RoomPaymentClaimStore
     private lateinit var repository: InstallmentAwareWaslRepository
 
-    @BeforeTest
-    fun setUp() {
+    @BeforeTest fun setUp() {
         databaseName = "wasl-today-claims-${UUID.randomUUID()}.db"
-        database = Room.databaseBuilder(context, WaslDatabase::class.java, databaseName)
-            .addMigrations(*WaslDatabase.ALL_MIGRATIONS)
-            .build()
+        database = Room.databaseBuilder(context, WaslDatabase::class.java, databaseName).addMigrations(*WaslDatabase.ALL_MIGRATIONS).build()
         roomRepository = RoomWaslRepository(database)
         claimStore = RoomPaymentClaimStore(database)
-        repository = InstallmentAwareWaslRepository(
-            waslRepository = roomRepository,
-            installmentPlanStore = RoomInstallmentPlanStore(database, roomRepository),
-            paymentClaimStore = claimStore,
-        )
-
+        repository = InstallmentAwareWaslRepository(roomRepository, RoomInstallmentPlanStore(database, roomRepository), paymentClaimStore = claimStore)
         runBlocking {
-            roomRepository.createPersonWithDebt(
-                CreatePersonWithDebtCommand(
-                    personId = PersonId("person-claim-today"),
-                    debtId = DebtId("debt-claim-today"),
-                    personName = "ناصر",
-                    direction = DebtDirection.PAYABLE,
-                    originalAmount = Money(90_000L, CurrencyCode.YER),
-                    openedAt = Instant.parse("2026-08-20T08:00:00Z"),
-                    createdAt = Instant.parse("2026-08-20T08:00:00Z"),
-                    description = "حساب طالبني",
-                ),
-            )
+            roomRepository.createPersonWithDebt(CreatePersonWithDebtCommand(personId = PersonId("person-claim-today"), debtId = DebtId("debt-claim-today"), personName = "ناصر", direction = DebtDirection.PAYABLE, originalAmount = Money(90_000L, CurrencyCode.YER), openedAt = Instant.parse("2026-08-20T08:00:00Z"), createdAt = Instant.parse("2026-08-20T08:00:00Z"), description = "حساب طالبني"))
             createClaim("claim-overdue", PaymentClaimFollowUpKind.CUSTOM, LocalDate.parse("2026-08-22"))
             createClaim("claim-today", PaymentClaimFollowUpKind.TODAY, LocalDate.parse("2026-08-24"))
             createClaim("claim-future", PaymentClaimFollowUpKind.CUSTOM, LocalDate.parse("2026-08-25"))
@@ -81,37 +62,20 @@ class TodayPaymentClaimUiInstrumentedTest {
         }
     }
 
-    @AfterTest
-    fun tearDown() {
-        database.close()
-        context.deleteDatabase(databaseName)
-    }
+    @AfterTest fun tearDown() { database.close(); context.deleteDatabase(databaseName) }
 
-    @Test
-    fun todayShowsOnlyClaimsWhoseFollowUpDateIsDue() {
-        composeRule.setContent {
-            WaslApp(
-                repository = repository,
-                instanceKey = "today-payment-claim-ui-test",
-                todayClock = Clock.fixed(Instant.parse("2026-08-24T10:00:00Z"), ZoneOffset.UTC),
-                todayZoneIdProvider = { ZoneOffset.UTC },
-            )
-        }
-
+    @Test fun todayShowsOnlyClaimsWhoseFollowUpDateIsDue() {
+        composeRule.setContent { WaslApp(repository = repository, instanceKey = "today-payment-claim-ui-test", todayClock = Clock.fixed(Instant.parse("2026-08-24T10:00:00Z"), ZoneOffset.UTC), todayZoneIdProvider = { ZoneOffset.UTC }) }
         waitForTag("nav-today")
         composeRule.onNodeWithTag("nav-today").performClick()
-
         scrollToTag("today-claim-claim-overdue")
         composeRule.onNodeWithTag("today-claim-claim-overdue").assertIsDisplayed()
         composeRule.onNodeWithText("مطالبات متأخرة").assertIsDisplayed()
-
         scrollToTag("today-claim-claim-today")
         composeRule.onNodeWithTag("today-claim-claim-today").assertIsDisplayed()
         composeRule.onNodeWithText("مطالبات اليوم").assertIsDisplayed()
-
         check(composeRule.onAllNodes(hasTestTag("today-claim-claim-future")).fetchSemanticsNodes().isEmpty())
         check(composeRule.onAllNodes(hasTestTag("today-claim-claim-salary")).fetchSemanticsNodes().isEmpty())
-
         scrollToTag("today-open-claim-claim-today")
         composeRule.onNodeWithTag("today-open-claim-claim-today").performClick()
         waitForTag("account-remaining")
@@ -119,30 +83,14 @@ class TodayPaymentClaimUiInstrumentedTest {
     }
 
     private suspend fun createClaim(id: String, kind: PaymentClaimFollowUpKind, followUpDate: LocalDate?) {
-        claimStore.createClaim(
-            CreatePaymentClaimCommand(
-                commandId = "command-$id",
-                claimId = id,
-                debtId = DebtId("debt-claim-today"),
-                claimedAt = Instant.parse("2026-08-23T08:00:00Z"),
-                followUpKind = kind,
-                followUpDate = followUpDate,
-                note = "متابعة $id",
-                createdAt = Instant.parse("2026-08-23T08:00:00Z"),
-            ),
-        )
+        claimStore.createClaim(CreatePaymentClaimCommand(commandId = "command-$id", claimId = id, debtId = DebtId("debt-claim-today"), claimedAt = Instant.parse("2026-08-23T08:00:00Z"), followUpKind = kind, followUpDate = followUpDate, note = "متابعة $id", createdAt = Instant.parse("2026-08-23T08:00:00Z")))
     }
 
     private fun scrollToTag(tag: String) {
-        composeRule.waitUntil(timeoutMillis = 10_000) {
-            runCatching { composeRule.onNode(hasScrollAction()).fetchSemanticsNode() }.isSuccess
-        }
+        composeRule.waitUntil(timeoutMillis = 10_000) { runCatching { composeRule.onNode(hasScrollAction()).fetchSemanticsNode() }.isSuccess }
         composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(tag))
     }
-
     private fun waitForTag(tag: String) {
-        composeRule.waitUntil(timeoutMillis = 10_000) {
-            runCatching { composeRule.onNodeWithTag(tag).fetchSemanticsNode() }.isSuccess
-        }
+        composeRule.waitUntil(timeoutMillis = 10_000) { runCatching { composeRule.onNodeWithTag(tag).fetchSemanticsNode() }.isSuccess }
     }
 }

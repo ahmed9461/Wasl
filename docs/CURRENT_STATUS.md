@@ -15,7 +15,7 @@
 
 ## آخر بوابة كاملة مثبتة
 
-**Android CI #889 — Run `33124840705` — head `33db16e871db65ad752ba4c7712cdacb8a957953`.**
+**Android CI #896 — Run `33126013233` — head `feb9c2cda0a15172b946044d516686ffbde29e39`.**
 
 نجح بالكامل:
 
@@ -24,22 +24,23 @@
 - Debug APK ✅
 - Room Schema v9 generated/current verification ✅
 - Claims/Attachments schema checks ✅
-- Android instrumentation: **101/101**، 0 failed، 0 errors، 0 skipped ✅
+- Android instrumentation: **102/102**، 0 failed، 0 errors، 0 skipped ✅
+- `DocumentsAdaptiveUiInstrumentedTest.largeFontStacksHeaderAndDualActionsWithoutLosingClicks` ✅
 - Security large-font tests الأربعة ✅
 - Settings 200% Font Scale test ✅
 - Payment Receipt PDF evidence ✅
 - Debt Receipt PDF evidence ✅
 - Account Statement PDF evidence ✅
 
-Artifacts المرجعية من #889:
+Artifacts المرجعية من #896:
 
-- `Wasl-debug`: `9668052229`
-- `Wasl-room-schema`: `9668052495`
-- `Wasl-payment-receipt-evidence`: `9668266234`
-- `Wasl-account-document-evidence`: `9668266728`
-- `Wasl-room-instrumentation-results`: `9668267316`
+- `Wasl-debug`: `9668500937`
+- `Wasl-room-schema`: `9668501233`
+- `Wasl-payment-receipt-evidence`: `9668689925`
+- `Wasl-account-document-evidence`: `9668690532`
+- `Wasl-room-instrumentation-results`: `9668691150`
 
-وبذلك أصبحت دفعات RTL/Bidi وSecurity/Settings Adaptive مثبتة ببوابة كاملة، إضافة إلى Statistics وPerson Timeline وToday وClaims وAttachments وSchema v9.
+وبذلك أصبحت دفعات RTL/Bidi وSecurity/Settings وDocuments Hub Adaptive مثبتة ببوابة كاملة، إضافة إلى Statistics وPerson Timeline وToday وClaims وAttachments وSchema v9.
 
 ## ما يعمل الآن
 
@@ -108,7 +109,7 @@ Artifacts المرجعية من #889:
 
 ## Accessibility / Adaptive UI
 
-**الحالة: قيد التنفيذ الفعلي، والدفعات حتى Security/Settings Verified بالكامل. Documents تحت البوابة الحالية.**
+**الحالة: قيد التنفيذ الفعلي، والدفعات حتى Documents Hub Verified بالكامل. Home تحت البوابة الحالية.**
 
 الأساس الموجود:
 
@@ -121,10 +122,10 @@ Artifacts المرجعية من #889:
 
 - Statistics + Person Timeline تستخدم تكديسًا فعليًا للصفوف المزدحمة وتختبره عند 200% Font Scale.
 - Today يكدس بطاقات الملخص، عناوين الأقسام، المبلغ/الحالة، Header الشخص، وأزرار الإذن/إعادة المحاولة عند النص الكبير.
-- اختبار Today الصريح عند 200% Font Scale نجح ضمن CI #873 ثم بقي أخضر في #889.
+- اختبار Today الصريح عند 200% Font Scale نجح ضمن CI #873 ثم بقي أخضر في البوابات اللاحقة.
 - فشل CI #866 السابق كان Assertion هشًا مرتبطًا بالـviewport في Statistics؛ أصلح في `ee23079f...` دون حذف تغطية.
 
-### RTL/Bidi — Verified عبر CI #889
+### RTL/Bidi — Verified عبر CI #889 وما بعده
 
 commit `36c5297a92f2ee700a41c34fc2d16ca7680b8d3a`:
 
@@ -134,7 +135,7 @@ commit `36c5297a92f2ee700a41c34fc2d16ca7680b8d3a`:
 - عزل العملات والتواريخ/الأوقات وأرقام المستندات والهاتف والبريد والحالات التقنية وmetadata اللاتينية للمرفقات داخل RTL.
 - Unit tests لـLTR isolation نجحت.
 
-### Security / Settings — Verified عبر CI #889
+### Security / Settings — Verified عبر CI #889 وما بعده
 
 commit `c035bc56fb526e2ae8e891a526b970f717f8d39f`:
 
@@ -147,7 +148,7 @@ commit `c035bc56fb526e2ae8e891a526b970f717f8d39f`:
 - `SecurityUiInstrumentedTest`: **4/4** نجحت ضمن #889.
 - `SettingsUiInstrumentedTest.largeFontStacksSettingsHeaderAndPrivacyControls`: نجح ضمن #889.
 
-### Documents Hub — تحت البوابة الحالية
+### Documents Hub — Verified عبر CI #896
 
 commit `526dfcd79a6d587a884953a36e9d1d831465c619`:
 
@@ -155,10 +156,22 @@ commit `526dfcd79a6d587a884953a36e9d1d831465c619`:
 - فتح/مشاركة PDF الجاهز تستخدم مكوّن Adaptive مشترك.
 - فتح/مشاركة المرفقات تستخدم المكوّن نفسه، مع الحفاظ على disabled state عند فشل سلامة الملف.
 - في الوضع المكدس تصبح الأزرار full-width؛ وفي الوضع الطبيعي تبقى بجانب بعضها.
-- أضيف `DocumentsAdaptiveUiInstrumentedTest` عند 200% Font Scale ويختبر التكديس والنقر على الإجراءين مباشرة، بدون إدخال Room/FileProvider في اختبار layout.
+- `DocumentsAdaptiveUiInstrumentedTest` عند 200% Font Scale يثبت التكديس والنقر على الإجراءين مباشرة، ونجح ضمن **102/102** في #896.
 - لا تغيير في منطق إصدار PDF أو immutable snapshots أو فحوص SHA-256.
 
-التغيير الحالي يحتاج Android CI كاملة قبل وسم Documents Adaptive كـVerified.
+### Home — تحت البوابة الحالية
+
+commit `09b79974d43269b153095a861935ead8df4efb16`:
+
+- رأس بطاقة الحساب يكدس شارة الاتجاه تحت هوية الشخص عند النص الكبير/العرض الضيق.
+- المتبقي وشارة حالة الحساب يتكدسان بدل الضغط داخل Row واحد.
+- أصل الدين والمبلغ يتحولان إلى تخطيط رأسي عند النص الكبير.
+- صفوف العملة/القيمة في بطاقات الملخص المالي تتكدس لكل YER/SAR/USD عند النص الكبير.
+- `Card(onClick)` للحساب بقي بنفس السلوك ولم يتغير منطق فتح الحساب.
+- أضيف `HomeAdaptiveUiInstrumentedTest` باختبارين عند 200% Font Scale: بطاقة حساب جزئي السداد حقيقية من `DebtLedger` + صفوف العملات الثلاثة في الملخص.
+- لا تغيير في Create Debt dialog أو منطق Ledger/الرصيد/العملات.
+
+هذه الدفعة لا توسم Verified قبل نجاح Android CI كاملة على الرأس الحالي.
 
 ## ملاحظة استقرار CI
 
@@ -170,14 +183,13 @@ commit `526dfcd79a6d587a884953a36e9d1d831465c619`:
 
 ## ترتيب العمل التالي
 
-1. إغلاق بوابة CI الكاملة لدفعة Documents Adaptive الحالية.
-2. إذا أخضر: Home — Account cards وSummary rows عند 200% Font Scale.
-3. ثم Account Details — hero badges/metrics وtimeline heading، مع اختبار before broader dialog changes.
-4. مراجعة touch targets والـsemantics للعناصر المخصصة وأي identifiers/dates متبقية داخل RTL.
-5. تنفيذ المصاريف/الديون الجماعية حسب المواصفة دون إنشاء Ledger موازٍ.
-6. جولة UI/PDF polishing النهائية المؤجلة عمدًا حتى اكتمال الوظائف.
-7. Full offline acceptance + migrations/backup regression.
-8. Release signing والتوزيع.
+1. إغلاق بوابة CI الكاملة لدفعة Home الحالية.
+2. إذا أخضر: Account Details — hero badges/metrics وtimeline heading، مع اختبار قبل أي تغييرات أوسع للـdialogs.
+3. مراجعة touch targets والـsemantics للعناصر المخصصة وأي identifiers/dates متبقية داخل RTL.
+4. تنفيذ المصاريف/الديون الجماعية حسب المواصفة دون إنشاء Ledger موازٍ.
+5. جولة UI/PDF polishing النهائية المؤجلة عمدًا حتى اكتمال الوظائف.
+6. Full offline acceptance + migrations/backup regression.
+7. Release signing والتوزيع.
 
 ## سياسة الجودة
 

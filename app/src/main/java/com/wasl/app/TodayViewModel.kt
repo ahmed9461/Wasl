@@ -148,7 +148,8 @@ class TodayViewModel(
     private val zoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
     private val reminderScheduler: ReminderScheduler = NoOpReminderScheduler,
     private val paymentPromiseStore: PaymentPromiseStore = UnavailablePaymentPromiseStore,
-    private val paymentClaimStore: PaymentClaimStore = UnavailablePaymentClaimStore,
+    private val paymentClaimStore: PaymentClaimStore =
+        (repository as? PaymentClaimStore) ?: UnavailablePaymentClaimStore,
     private val installmentPlanStore: InstallmentPlanStore =
         (repository as? InstallmentPlanStore) ?: UnavailableInstallmentPlanStore,
 ) : ViewModel() {
@@ -351,7 +352,8 @@ class TodayViewModel(
         private val clock: Clock = Clock.systemUTC(),
         private val zoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
         private val paymentPromiseStore: PaymentPromiseStore = UnavailablePaymentPromiseStore,
-        private val paymentClaimStore: PaymentClaimStore = UnavailablePaymentClaimStore,
+        private val paymentClaimStore: PaymentClaimStore =
+            (repository as? PaymentClaimStore) ?: UnavailablePaymentClaimStore,
         private val installmentPlanStore: InstallmentPlanStore =
             (repository as? InstallmentPlanStore) ?: UnavailableInstallmentPlanStore,
     ) : ViewModelProvider.Factory {

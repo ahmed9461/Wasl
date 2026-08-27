@@ -120,7 +120,7 @@ internal fun TodayScreen(
                         color = MaterialTheme.colorScheme.tertiaryContainer,
                     ) {
                         Text(
-                            text = "متابعة الاستحقاقات والوعود والأقساط",
+                            text = "متابعة الاستحقاقات والوعود والأقساط والمطالبات",
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -229,6 +229,26 @@ internal fun TodayScreen(
                         }
                     }
 
+                    if (state.overdueClaimItems.isNotEmpty()) {
+                        item("overdue-claims-heading") {
+                            TodaySectionHeading(
+                                title = "مطالبات متأخرة",
+                                subtitle = "مطالبات «طالبني» حان موعد متابعتها ولم تُحسم",
+                                count = state.overdueClaimItems.size,
+                                overdue = true,
+                            )
+                        }
+                        items(
+                            items = state.overdueClaimItems,
+                            key = { "overdue-claim:${it.claim.id}" },
+                        ) { item ->
+                            TodayClaimCard(
+                                item = item,
+                                onOpenAccount = { onOpenAccount(item.account.ledger.header.id) },
+                            )
+                        }
+                    }
+
                     if (state.dueTodayItems.isNotEmpty()) {
                         item("due-today-heading") {
                             TodaySectionHeading(
@@ -292,6 +312,26 @@ internal fun TodayScreen(
                             )
                         }
                     }
+
+                    if (state.dueTodayClaimItems.isNotEmpty()) {
+                        item("due-today-claims-heading") {
+                            TodaySectionHeading(
+                                title = "مطالبات اليوم",
+                                subtitle = "مطالبات «طالبني» موعد متابعتها اليوم",
+                                count = state.dueTodayClaimItems.size,
+                                overdue = false,
+                            )
+                        }
+                        items(
+                            items = state.dueTodayClaimItems,
+                            key = { "today-claim:${it.claim.id}" },
+                        ) { item ->
+                            TodayClaimCard(
+                                item = item,
+                                onOpenAccount = { onOpenAccount(item.account.ledger.header.id) },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -302,10 +342,12 @@ internal fun TodayScreen(
 private fun TodaySummaryCard(state: TodayUiState) {
     val overdueCount = state.overdueItems.size +
         state.overduePromiseItems.size +
-        state.overdueInstallmentItems.size
+        state.overdueInstallmentItems.size +
+        state.overdueClaimItems.size
     val todayCount = state.dueTodayItems.size +
         state.dueTodayPromiseItems.size +
-        state.dueTodayInstallmentItems.size
+        state.dueTodayInstallmentItems.size +
+        state.dueTodayClaimItems.size
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -327,7 +369,7 @@ private fun TodaySummaryCard(state: TodayUiState) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
                 Text(
-                    text = "ركّز على المتأخر أولًا، ثم استحقاقات وأقساط ووعود اليوم.",
+                    text = "ركّز على المتأخر أولًا، ثم استحقاقات وأقساط ووعود ومطالبات اليوم.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -364,6 +406,13 @@ private fun TodaySummaryCard(state: TodayUiState) {
             if (state.promiseItems.isNotEmpty()) {
                 Text(
                     text = "ومنها ${state.promiseItems.size} وعود سداد تحتاج متابعة.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            if (state.claimItems.isNotEmpty()) {
+                Text(
+                    text = "ومنها ${state.claimItems.size} مطالبات «طالبني» تحتاج متابعة.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -433,7 +482,7 @@ private fun TodayEmptyCard() {
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = "ستظهر هنا الاستحقاقات والأقساط ووعود السداد التي حان موعدها أو تأخرت.",
+                text = "ستظهر هنا الاستحقاقات والأقساط ووعود السداد ومطالبات «طالبني» التي حان موعدها أو تأخرت.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -762,6 +811,84 @@ private fun TodayPromiseCard(
                     .testTag("today-open-promise-${promise.id}"),
             ) {
                 Text("فتح الحساب وحسم الوعد")
+            }
+        }
+    }
+}
+
+@Composable
+private fun TodayClaimCard(
+    item: TodayClaimItem,
+    onOpenAccount: () -> Unit,
+) {
+    val account = item.account
+    val claim = item.claim
+    val followUpDate = requireNotNull(claim.followUpDate)
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("today-claim-${claim.id}"),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            TodayAccountHeader(
+                personName = account.person.displayName,
+                direction = account.ledger.header.direction,
+                subtitle = "طالبني · متابعة \u2066${followUpDate.format(todayDateFormatter)}\u2069",
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        text = "المتبقي في الحساب",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = formatMoney(account.ledger.balance),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Start,
+                    )
+                }
+                TodayStatusPill(
+                    text = if (item.isOverdue) {
+                        "المطالبة ${overdueLabel(item.daysOverdue)}"
+                    } else {
+                        "متابعة اليوم"
+                    },
+                    overdue = item.isOverdue,
+                )
+            }
+            claim.note?.let { note ->
+                Text(
+                    text = note,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text(
+                text = "«طالبني» سجل متابعة غير مالي؛ لا يغيّر الرصيد ولا ينشئ دفعة. افتح الحساب لحسم المطالبة أو إلغائها.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(
+                onClick = onOpenAccount,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("today-open-claim-${claim.id}"),
+            ) {
+                Text("فتح الحساب وحسم المطالبة")
             }
         }
     }

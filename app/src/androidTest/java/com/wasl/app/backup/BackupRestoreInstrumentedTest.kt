@@ -142,7 +142,7 @@ class BackupRestoreInstrumentedTest {
         } finally {
             password.fill('\u0000')
         }
-        assertEquals(8, backup.schemaVersion)
+        assertEquals(9, backup.schemaVersion)
         assertEquals(0, backup.documentCount)
 
         reminderStore.cancelReminder(
@@ -192,7 +192,7 @@ class BackupRestoreInstrumentedTest {
         } finally {
             restorePassword.fill('\u0000')
         }
-        assertEquals(8, restored.schemaVersion)
+        assertEquals(9, restored.schemaVersion)
 
         val afterRestore = assertNotNull(repository.getAccount(primaryDebtId))
         assertEquals(beforeBackup.person.displayName, afterRestore.person.displayName)

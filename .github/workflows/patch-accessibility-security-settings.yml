@@ -24,626 +24,488 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           from textwrap import dedent
+          import re
 
-          def replace_once(text: str, old: str, new: str, label: str) -> str:
+          def one(text, old, new, label):
               count = text.count(old)
               if count != 1:
-                  raise SystemExit(f"{label}: expected exactly one match, got {count}")
+                  raise SystemExit(f"{label}: expected one match, got {count}")
               return text.replace(old, new, 1)
 
-          def replace_section(text: str, start: str, end: str, replacement: str, label: str) -> str:
-              start_index = text.find(start)
-              if start_index < 0:
-                  raise SystemExit(f"{label}: start marker missing")
-              end_index = text.find(end, start_index)
-              if end_index < 0:
-                  raise SystemExit(f"{label}: end marker missing")
-              return text[:start_index] + replacement.rstrip() + "\n\n" + text[end_index:]
+          def regex_one(text, pattern, replacement, label):
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected one regex match, got {count}")
+              return updated
 
           security_path = Path("app/src/main/java/com/wasl/app/SecurityHubScreen.kt")
           security = security_path.read_text()
-          security = replace_once(
+          security = one(
               security,
               "import androidx.compose.foundation.layout.Box\n",
               "import androidx.compose.foundation.layout.Box\nimport androidx.compose.foundation.layout.BoxWithConstraints\n",
-              "security BoxWithConstraints import",
+              "security import",
           )
 
           security_entry = dedent('''
-              @Composable
-              internal fun SecuritySettingsEntryButton(
-                  modifier: Modifier = Modifier,
-                  onClick: () -> Unit,
-              ) {
-                  val context = LocalContext.current
-                  BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-                      if (shouldStackDenseRows(maxWidth)) {
-                          Column(
+          @Composable
+          internal fun SecuritySettingsEntryButton(
+              modifier: Modifier = Modifier,
+              onClick: () -> Unit,
+          ) {
+              val context = LocalContext.current
+              BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+                  if (shouldStackDenseRows(maxWidth)) {
+                      Column(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("security-entry-actions-stacked"),
+                          verticalArrangement = Arrangement.spacedBy(8.dp),
+                      ) {
+                          FilledTonalButton(
                               modifier = Modifier
                                   .fillMaxWidth()
-                                  .testTag("security-entry-actions-stacked"),
-                              verticalArrangement = Arrangement.spacedBy(8.dp),
-                          ) {
-                              FilledTonalButton(
-                                  modifier = Modifier
-                                      .fillMaxWidth()
-                                      .testTag("open-security-hub"),
-                                  onClick = onClick,
-                              ) {
-                                  Text("الأمان")
-                              }
-                              OutlinedButton(
-                                  modifier = Modifier
-                                      .fillMaxWidth()
-                                      .testTag("open-general-reminders-hub"),
-                                  onClick = {
-                                      context.startActivity(Intent(context, GeneralRemindersHubActivity::class.java))
-                                  },
-                              ) {
-                                  Text("التذكيرات")
-                              }
-                          }
-                      } else {
-                          Row(
-                              modifier = Modifier.testTag("security-entry-actions-inline"),
-                              horizontalArrangement = Arrangement.spacedBy(8.dp),
-                              verticalAlignment = Alignment.CenterVertically,
-                          ) {
-                              FilledTonalButton(
-                                  modifier = Modifier.testTag("open-security-hub"),
-                                  onClick = onClick,
-                              ) {
-                                  Text("الأمان")
-                              }
-                              OutlinedButton(
-                                  modifier = Modifier.testTag("open-general-reminders-hub"),
-                                  onClick = {
-                                      context.startActivity(Intent(context, GeneralRemindersHubActivity::class.java))
-                                  },
-                              ) {
-                                  Text("التذكيرات")
-                              }
-                          }
+                                  .testTag("open-security-hub"),
+                              onClick = onClick,
+                          ) { Text("الأمان") }
+                          OutlinedButton(
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .testTag("open-general-reminders-hub"),
+                              onClick = {
+                                  context.startActivity(Intent(context, GeneralRemindersHubActivity::class.java))
+                              },
+                          ) { Text("التذكيرات") }
+                      }
+                  } else {
+                      Row(
+                          modifier = Modifier.testTag("security-entry-actions-inline"),
+                          horizontalArrangement = Arrangement.spacedBy(8.dp),
+                          verticalAlignment = Alignment.CenterVertically,
+                      ) {
+                          FilledTonalButton(
+                              modifier = Modifier.testTag("open-security-hub"),
+                              onClick = onClick,
+                          ) { Text("الأمان") }
+                          OutlinedButton(
+                              modifier = Modifier.testTag("open-general-reminders-hub"),
+                              onClick = {
+                                  context.startActivity(Intent(context, GeneralRemindersHubActivity::class.java))
+                              },
+                          ) { Text("التذكيرات") }
                       }
                   }
               }
+          }
           ''').strip()
-          security = replace_section(
+          security = regex_one(
               security,
-              "@Composable\ninternal fun SecuritySettingsEntryButton",
-              "@Composable\ninternal fun SecurityHubRoute",
-              security_entry,
-              "security entry actions",
+              r'@Composable\ninternal fun SecuritySettingsEntryButton\(.*?\n\}\n\n@Composable\ninternal fun SecurityHubRoute',
+              security_entry + "\n\n@Composable\ninternal fun SecurityHubRoute",
+              "security entry",
           )
 
-          old_header = dedent('''
-                              Row(
-                                  modifier = Modifier.fillMaxWidth(),
-                                  verticalAlignment = Alignment.CenterVertically,
-                                  horizontalArrangement = Arrangement.spacedBy(12.dp),
-                              ) {
-                                  OutlinedButton(onClick = onBack) {
-                                      Text("رجوع")
-                                  }
-                                  Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                      Text(
-                                          modifier = Modifier.semantics { heading() },
-                                          text = "الأمان وقفل وَصل",
-                                          style = MaterialTheme.typography.headlineSmall,
-                                          fontWeight = FontWeight.ExtraBold,
-                                      )
-                                      Text(
-                                          text = "حماية محلية تعتمد على مصادقة Android النظامية.",
-                                          style = MaterialTheme.typography.bodyMedium,
-                                          color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                      )
-                                  }
-                              }
-          ''').strip()
-          security = replace_once(
-              security,
-              old_header,
-              "SecurityHubHeader(onBack = onBack)",
-              "security header",
-          )
+          route_index = security.index("internal fun SecurityHubRoute")
+          header_start = security.index("                Row(", route_index)
+          header_end = security.index("\n\n                Card(", header_start)
+          security = security[:header_start] + "                SecurityHubHeader(onBack = onBack)" + security[header_end:]
 
-          old_toggle = dedent('''
-                                      Row(
-                                          modifier = Modifier.fillMaxWidth(),
-                                          verticalAlignment = Alignment.CenterVertically,
-                                          horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                      ) {
-                                          Column(
-                                              modifier = Modifier.weight(1f),
-                                              verticalArrangement = Arrangement.spacedBy(2.dp),
-                                          ) {
-                                              Text(
-                                                  text = if (appLockEnabled) "قفل وَصل مفعّل" else "تفعيل قفل وَصل",
-                                                  fontWeight = FontWeight.SemiBold,
-                                              )
-                                              Text(
-                                                  text = if (authenticationAvailable) {
-                                                      "المصادقة النظامية متاحة على هذا الجهاز."
-                                                  } else {
-                                                      "لا توجد وسيلة مصادقة نظامية متاحة حاليًا."
-                                                  },
-                                                  style = MaterialTheme.typography.bodySmall,
-                                                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                              )
-                                          }
-                                          Switch(
-                                              modifier = Modifier.testTag("app-lock-enabled"),
-                                              checked = appLockEnabled,
-                                              enabled = appLockEnabled || authenticationAvailable,
-                                              onCheckedChange = onAppLockEnabledChange,
-                                          )
-                                      }
+          description_index = security.index("لا يخزن وَصل PIN خاصًا به.")
+          toggle_start = security.index("                        Row(", description_index)
+          toggle_end = security.index("\n\n                        if (!authenticationAvailable)", toggle_start)
+          toggle_call = dedent('''
+          AppLockToggleRow(
+              appLockEnabled = appLockEnabled,
+              authenticationAvailable = authenticationAvailable,
+              onAppLockEnabledChange = onAppLockEnabledChange,
+          )
           ''').strip()
-          security = replace_once(
-              security,
-              old_toggle,
-              dedent('''
-                  AppLockToggleRow(
-                      appLockEnabled = appLockEnabled,
-                      authenticationAvailable = authenticationAvailable,
-                      onAppLockEnabledChange = onAppLockEnabledChange,
+          security = security[:toggle_start] + "                        " + toggle_call.replace("\n", "\n                        ") + security[toggle_end:]
+
+          helpers = dedent('''
+          @Composable
+          private fun SecurityHubHeader(onBack: () -> Unit) {
+              BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                  if (shouldStackDenseRows(maxWidth)) {
+                      Column(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("security-header-stacked"),
+                          verticalArrangement = Arrangement.spacedBy(8.dp),
+                      ) {
+                          OutlinedButton(onClick = onBack) { Text("رجوع") }
+                          SecurityHubHeaderText()
+                      }
+                  } else {
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("security-header-inline"),
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.spacedBy(12.dp),
+                      ) {
+                          OutlinedButton(onClick = onBack) { Text("رجوع") }
+                          SecurityHubHeaderText()
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          private fun SecurityHubHeaderText() {
+              Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                  Text(
+                      modifier = Modifier.semantics { heading() },
+                      text = "الأمان وقفل وَصل",
+                      style = MaterialTheme.typography.headlineSmall,
+                      fontWeight = FontWeight.ExtraBold,
                   )
-              ''').strip(),
-              "app lock toggle row",
-          )
+                  Text(
+                      text = "حماية محلية تعتمد على مصادقة Android النظامية.",
+                      style = MaterialTheme.typography.bodyMedium,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+              }
+          }
 
-          security_helpers = dedent('''
-              @Composable
-              private fun SecurityHubHeader(onBack: () -> Unit) {
-                  BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                      if (shouldStackDenseRows(maxWidth)) {
-                          Column(
-                              modifier = Modifier
-                                  .fillMaxWidth()
-                                  .testTag("security-header-stacked"),
-                              verticalArrangement = Arrangement.spacedBy(8.dp),
-                          ) {
-                              OutlinedButton(onClick = onBack) { Text("رجوع") }
-                              SecurityHubHeaderText()
-                          }
-                      } else {
-                          Row(
-                              modifier = Modifier
-                                  .fillMaxWidth()
-                                  .testTag("security-header-inline"),
-                              verticalAlignment = Alignment.CenterVertically,
-                              horizontalArrangement = Arrangement.spacedBy(12.dp),
-                          ) {
-                              OutlinedButton(onClick = onBack) { Text("رجوع") }
-                              SecurityHubHeaderText()
-                          }
+          @Composable
+          private fun AppLockToggleRow(
+              appLockEnabled: Boolean,
+              authenticationAvailable: Boolean,
+              onAppLockEnabledChange: (Boolean) -> Unit,
+          ) {
+              BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                  if (shouldStackDenseRows(maxWidth)) {
+                      Column(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("app-lock-toggle-stacked"),
+                          verticalArrangement = Arrangement.spacedBy(8.dp),
+                      ) {
+                          AppLockToggleText(appLockEnabled, authenticationAvailable)
+                          Switch(
+                              modifier = Modifier.testTag("app-lock-enabled"),
+                              checked = appLockEnabled,
+                              enabled = appLockEnabled || authenticationAvailable,
+                              onCheckedChange = onAppLockEnabledChange,
+                          )
+                      }
+                  } else {
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("app-lock-toggle-inline"),
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.spacedBy(12.dp),
+                      ) {
+                          AppLockToggleText(
+                              appLockEnabled,
+                              authenticationAvailable,
+                              modifier = Modifier.weight(1f),
+                          )
+                          Switch(
+                              modifier = Modifier.testTag("app-lock-enabled"),
+                              checked = appLockEnabled,
+                              enabled = appLockEnabled || authenticationAvailable,
+                              onCheckedChange = onAppLockEnabledChange,
+                          )
                       }
                   }
               }
+          }
 
-              @Composable
-              private fun SecurityHubHeaderText() {
-                  Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                      Text(
-                          modifier = Modifier.semantics { heading() },
-                          text = "الأمان وقفل وَصل",
-                          style = MaterialTheme.typography.headlineSmall,
-                          fontWeight = FontWeight.ExtraBold,
-                      )
-                      Text(
-                          text = "حماية محلية تعتمد على مصادقة Android النظامية.",
-                          style = MaterialTheme.typography.bodyMedium,
-                          color = MaterialTheme.colorScheme.onSurfaceVariant,
-                      )
-                  }
-              }
-
-              @Composable
-              private fun AppLockToggleRow(
-                  appLockEnabled: Boolean,
-                  authenticationAvailable: Boolean,
-                  onAppLockEnabledChange: (Boolean) -> Unit,
-              ) {
-                  BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                      if (shouldStackDenseRows(maxWidth)) {
-                          Column(
-                              modifier = Modifier
-                                  .fillMaxWidth()
-                                  .testTag("app-lock-toggle-stacked"),
-                              verticalArrangement = Arrangement.spacedBy(8.dp),
-                          ) {
-                              AppLockToggleText(
-                                  appLockEnabled = appLockEnabled,
-                                  authenticationAvailable = authenticationAvailable,
-                              )
-                              Switch(
-                                  modifier = Modifier.testTag("app-lock-enabled"),
-                                  checked = appLockEnabled,
-                                  enabled = appLockEnabled || authenticationAvailable,
-                                  onCheckedChange = onAppLockEnabledChange,
-                              )
-                          }
+          @Composable
+          private fun AppLockToggleText(
+              appLockEnabled: Boolean,
+              authenticationAvailable: Boolean,
+              modifier: Modifier = Modifier,
+          ) {
+              Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                  Text(
+                      text = if (appLockEnabled) "قفل وَصل مفعّل" else "تفعيل قفل وَصل",
+                      fontWeight = FontWeight.SemiBold,
+                  )
+                  Text(
+                      text = if (authenticationAvailable) {
+                          "المصادقة النظامية متاحة على هذا الجهاز."
                       } else {
-                          Row(
-                              modifier = Modifier
-                                  .fillMaxWidth()
-                                  .testTag("app-lock-toggle-inline"),
-                              verticalAlignment = Alignment.CenterVertically,
-                              horizontalArrangement = Arrangement.spacedBy(12.dp),
-                          ) {
-                              AppLockToggleText(
-                                  appLockEnabled = appLockEnabled,
-                                  authenticationAvailable = authenticationAvailable,
-                                  modifier = Modifier.weight(1f),
-                              )
-                              Switch(
-                                  modifier = Modifier.testTag("app-lock-enabled"),
-                                  checked = appLockEnabled,
-                                  enabled = appLockEnabled || authenticationAvailable,
-                                  onCheckedChange = onAppLockEnabledChange,
-                              )
-                          }
-                      }
-                  }
+                          "لا توجد وسيلة مصادقة نظامية متاحة حاليًا."
+                      },
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
               }
-
-              @Composable
-              private fun AppLockToggleText(
-                  appLockEnabled: Boolean,
-                  authenticationAvailable: Boolean,
-                  modifier: Modifier = Modifier,
-              ) {
-                  Column(
-                      modifier = modifier,
-                      verticalArrangement = Arrangement.spacedBy(2.dp),
-                  ) {
-                      Text(
-                          text = if (appLockEnabled) "قفل وَصل مفعّل" else "تفعيل قفل وَصل",
-                          fontWeight = FontWeight.SemiBold,
-                      )
-                      Text(
-                          text = if (authenticationAvailable) {
-                              "المصادقة النظامية متاحة على هذا الجهاز."
-                          } else {
-                              "لا توجد وسيلة مصادقة نظامية متاحة حاليًا."
-                          },
-                          style = MaterialTheme.typography.bodySmall,
-                          color = MaterialTheme.colorScheme.onSurfaceVariant,
-                      )
-                  }
-              }
+          }
           ''').strip()
-          security = replace_once(
+          security = one(
               security,
               "@Composable\ninternal fun AppLockScreen(",
-              security_helpers + "\n\n@Composable\ninternal fun AppLockScreen(",
-              "security helper insertion",
+              helpers + "\n\n@Composable\ninternal fun AppLockScreen(",
+              "security helpers",
           )
-          security = replace_once(
-              security,
-              ".widthIn(max = 720.dp)",
-              ".widthIn(max = WaslMaxContentWidth)",
-              "security max width",
-          )
+          security = one(security, ".widthIn(max = 720.dp)", ".widthIn(max = WaslMaxContentWidth)", "security width")
           security_path.write_text(security)
 
           settings_path = Path("app/src/main/java/com/wasl/app/SettingsHubScreen.kt")
           settings = settings_path.read_text()
-          settings = replace_once(
+          settings = one(
               settings,
               "import androidx.compose.foundation.layout.Column\n",
               "import androidx.compose.foundation.layout.BoxWithConstraints\nimport androidx.compose.foundation.layout.Column\n",
-              "settings BoxWithConstraints import",
+              "settings import",
           )
-          old_settings_header = dedent('''
-                          Row(
-                              modifier = Modifier.fillMaxWidth(),
-                              verticalAlignment = Alignment.CenterVertically,
-                              horizontalArrangement = Arrangement.spacedBy(12.dp),
-                          ) {
-                              OutlinedButton(onClick = onBack) {
-                                  Text("رجوع")
-                              }
-                              Column {
-                                  Text(
-                                      text = "الإعدادات والخصوصية",
-                                      style = MaterialTheme.typography.headlineSmall,
-                                      fontWeight = FontWeight.ExtraBold,
-                                  )
-                                  Text(
-                                      text = "حماية بيانات وَصل والنسخ الاحتياطي المحلي",
-                                      style = MaterialTheme.typography.bodyMedium,
-                                      color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                  )
-                              }
-                          }
-          ''').strip()
-          settings = replace_once(
-              settings,
-              old_settings_header,
-              "SettingsHubHeader(onBack = onBack)",
-              "settings header",
-          )
+          settings_route = settings.index("internal fun SettingsHubRoute")
+          settings_header_start = settings.index("            Row(", settings_route)
+          settings_header_end = settings.index("\n\n            busyMessage?.let", settings_header_start)
+          settings = settings[:settings_header_start] + "            SettingsHubHeader(onBack = onBack)" + settings[settings_header_end:]
 
-          settings_header = dedent('''
-              @Composable
-              private fun SettingsHubHeader(onBack: () -> Unit) {
-                  BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                      if (shouldStackDenseRows(maxWidth)) {
-                          Column(
-                              modifier = Modifier
-                                  .fillMaxWidth()
-                                  .testTag("settings-header-stacked"),
-                              verticalArrangement = Arrangement.spacedBy(8.dp),
-                          ) {
-                              OutlinedButton(onClick = onBack) { Text("رجوع") }
-                              SettingsHubHeaderText()
-                          }
-                      } else {
-                          Row(
-                              modifier = Modifier
-                                  .fillMaxWidth()
-                                  .testTag("settings-header-inline"),
-                              verticalAlignment = Alignment.CenterVertically,
-                              horizontalArrangement = Arrangement.spacedBy(12.dp),
-                          ) {
-                              OutlinedButton(onClick = onBack) { Text("رجوع") }
-                              SettingsHubHeaderText()
-                          }
+          settings_helpers = dedent('''
+          @Composable
+          private fun SettingsHubHeader(onBack: () -> Unit) {
+              BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                  if (shouldStackDenseRows(maxWidth)) {
+                      Column(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("settings-header-stacked"),
+                          verticalArrangement = Arrangement.spacedBy(8.dp),
+                      ) {
+                          OutlinedButton(onClick = onBack) { Text("رجوع") }
+                          SettingsHubHeaderText()
+                      }
+                  } else {
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("settings-header-inline"),
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.spacedBy(12.dp),
+                      ) {
+                          OutlinedButton(onClick = onBack) { Text("رجوع") }
+                          SettingsHubHeaderText()
                       }
                   }
               }
+          }
 
-              @Composable
-              private fun SettingsHubHeaderText() {
-                  Column {
-                      Text(
-                          text = "الإعدادات والخصوصية",
-                          style = MaterialTheme.typography.headlineSmall,
-                          fontWeight = FontWeight.ExtraBold,
-                      )
-                      Text(
-                          text = "حماية بيانات وَصل والنسخ الاحتياطي المحلي",
-                          style = MaterialTheme.typography.bodyMedium,
-                          color = MaterialTheme.colorScheme.onSurfaceVariant,
-                      )
-                  }
+          @Composable
+          private fun SettingsHubHeaderText() {
+              Column {
+                  Text(
+                      text = "الإعدادات والخصوصية",
+                      style = MaterialTheme.typography.headlineSmall,
+                      fontWeight = FontWeight.ExtraBold,
+                  )
+                  Text(
+                      text = "حماية بيانات وَصل والنسخ الاحتياطي المحلي",
+                      style = MaterialTheme.typography.bodyMedium,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
               }
+          }
           ''').strip()
-          settings = replace_once(
+          settings = one(
               settings,
               "@Composable\nprivate fun SettingsSectionCard(",
-              settings_header + "\n\n@Composable\nprivate fun SettingsSectionCard(",
-              "settings header helper insertion",
+              settings_helpers + "\n\n@Composable\nprivate fun SettingsSectionCard(",
+              "settings helpers",
           )
 
-          old_privacy = dedent('''
-              @Composable
-              private fun PrivacySwitchRow(
-                  title: String,
-                  description: String,
-                  checked: Boolean,
-                  testTag: String,
-                  onCheckedChange: (Boolean) -> Unit,
-              ) {
-                  Row(
-                      modifier = Modifier.fillMaxWidth(),
-                      verticalAlignment = Alignment.CenterVertically,
-                      horizontalArrangement = Arrangement.spacedBy(12.dp),
-                  ) {
-                      Column(modifier = Modifier.weight(1f)) {
-                          Text(title, fontWeight = FontWeight.SemiBold)
-                          Text(
-                              description,
-                              style = MaterialTheme.typography.bodySmall,
-                              color = MaterialTheme.colorScheme.onSurfaceVariant,
+          privacy_replacement = dedent('''
+          @Composable
+          private fun PrivacySwitchRow(
+              title: String,
+              description: String,
+              checked: Boolean,
+              testTag: String,
+              onCheckedChange: (Boolean) -> Unit,
+          ) {
+              BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                  if (shouldStackDenseRows(maxWidth)) {
+                      Column(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("$testTag-row-stacked"),
+                          verticalArrangement = Arrangement.spacedBy(8.dp),
+                      ) {
+                          PrivacySwitchText(title, description)
+                          Switch(
+                              modifier = Modifier.testTag(testTag),
+                              checked = checked,
+                              onCheckedChange = onCheckedChange,
                           )
                       }
-                      Switch(
-                          modifier = Modifier.testTag(testTag),
-                          checked = checked,
-                          onCheckedChange = onCheckedChange,
-                      )
-                  }
-              }
-          ''').strip()
-          new_privacy = dedent('''
-              @Composable
-              private fun PrivacySwitchRow(
-                  title: String,
-                  description: String,
-                  checked: Boolean,
-                  testTag: String,
-                  onCheckedChange: (Boolean) -> Unit,
-              ) {
-                  BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                      if (shouldStackDenseRows(maxWidth)) {
-                          Column(
-                              modifier = Modifier
-                                  .fillMaxWidth()
-                                  .testTag("$testTag-row-stacked"),
-                              verticalArrangement = Arrangement.spacedBy(8.dp),
-                          ) {
-                              PrivacySwitchText(title = title, description = description)
-                              Switch(
-                                  modifier = Modifier.testTag(testTag),
-                                  checked = checked,
-                                  onCheckedChange = onCheckedChange,
-                              )
-                          }
-                      } else {
-                          Row(
-                              modifier = Modifier
-                                  .fillMaxWidth()
-                                  .testTag("$testTag-row-inline"),
-                              verticalAlignment = Alignment.CenterVertically,
-                              horizontalArrangement = Arrangement.spacedBy(12.dp),
-                          ) {
-                              PrivacySwitchText(
-                                  title = title,
-                                  description = description,
-                                  modifier = Modifier.weight(1f),
-                              )
-                              Switch(
-                                  modifier = Modifier.testTag(testTag),
-                                  checked = checked,
-                                  onCheckedChange = onCheckedChange,
-                              )
-                          }
+                  } else {
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("$testTag-row-inline"),
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.spacedBy(12.dp),
+                      ) {
+                          PrivacySwitchText(title, description, Modifier.weight(1f))
+                          Switch(
+                              modifier = Modifier.testTag(testTag),
+                              checked = checked,
+                              onCheckedChange = onCheckedChange,
+                          )
                       }
                   }
               }
+          }
 
-              @Composable
-              private fun PrivacySwitchText(
-                  title: String,
-                  description: String,
-                  modifier: Modifier = Modifier,
-              ) {
-                  Column(modifier = modifier) {
-                      Text(title, fontWeight = FontWeight.SemiBold)
-                      Text(
-                          description,
-                          style = MaterialTheme.typography.bodySmall,
-                          color = MaterialTheme.colorScheme.onSurfaceVariant,
-                      )
-                  }
+          @Composable
+          private fun PrivacySwitchText(
+              title: String,
+              description: String,
+              modifier: Modifier = Modifier,
+          ) {
+              Column(modifier = modifier) {
+                  Text(title, fontWeight = FontWeight.SemiBold)
+                  Text(
+                      description,
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
               }
+          }
           ''').strip()
-          settings = replace_once(settings, old_privacy, new_privacy, "privacy switch row")
+          settings = regex_one(
+              settings,
+              r'@Composable\nprivate fun PrivacySwitchRow\(.*?\n\}\n\n@Composable\nprivate fun BackupPasswordDialog',
+              privacy_replacement + "\n\n@Composable\nprivate fun BackupPasswordDialog",
+              "privacy row",
+          )
           settings_path.write_text(settings)
 
           security_test_path = Path("app/src/androidTest/java/com/wasl/app/SecurityUiInstrumentedTest.kt")
           security_test = security_test_path.read_text()
-          security_test = replace_once(
+          security_test = one(
               security_test,
-              "        composeRule.onNodeWithText(\"الأمان وقفل وَصل\").assertIsDisplayed()\n",
-              "        composeRule.onNodeWithTag(\"security-header-stacked\").assertIsDisplayed()\n        composeRule.onNodeWithText(\"الأمان وقفل وَصل\").assertIsDisplayed()\n        scrollToTag(\"app-lock-toggle-stacked\")\n        composeRule.onNodeWithTag(\"app-lock-toggle-stacked\").assertIsDisplayed()\n",
-              "security large-font assertions",
+              '        composeRule.onNodeWithText("الأمان وقفل وَصل").assertIsDisplayed()\n',
+              '        composeRule.onNodeWithTag("security-header-stacked").assertIsDisplayed()\n        composeRule.onNodeWithText("الأمان وقفل وَصل").assertIsDisplayed()\n        scrollToTag("app-lock-toggle-stacked")\n        composeRule.onNodeWithTag("app-lock-toggle-stacked").assertIsDisplayed()\n',
+              "security assertions",
           )
-          insert_test = dedent('''
-                  @Test
-                  fun largeFontStacksSecurityEntryActions() {
-                      composeRule.setContent {
-                          val baseDensity = LocalDensity.current
-                          CompositionLocalProvider(
-                              LocalDensity provides Density(
-                                  density = baseDensity.density,
-                                  fontScale = 2f,
-                              ),
-                          ) {
-                              WaslTheme {
-                                  SecuritySettingsEntryButton(onClick = {})
-                              }
+          new_security_test = dedent('''
+              @Test
+              fun largeFontStacksSecurityEntryActions() {
+                  composeRule.setContent {
+                      val baseDensity = LocalDensity.current
+                      CompositionLocalProvider(
+                          LocalDensity provides Density(baseDensity.density, fontScale = 2f),
+                      ) {
+                          WaslTheme {
+                              SecuritySettingsEntryButton(onClick = {})
                           }
                       }
-
-                      composeRule.onNodeWithTag("security-entry-actions-stacked").assertIsDisplayed()
-                      composeRule.onNodeWithTag("open-security-hub").assertIsDisplayed()
-                      composeRule.onNodeWithTag("open-general-reminders-hub").assertIsDisplayed()
                   }
+
+                  composeRule.onNodeWithTag("security-entry-actions-stacked").assertIsDisplayed()
+                  composeRule.onNodeWithTag("open-security-hub").assertIsDisplayed()
+                  composeRule.onNodeWithTag("open-general-reminders-hub").assertIsDisplayed()
+              }
           ''').strip()
-          security_test = replace_once(
+          security_test = one(
               security_test,
               "    @Test\n    fun securityEntryButtonExposesAVisibleArabicAction()",
-              insert_test + "\n\n    @Test\n    fun securityEntryButtonExposesAVisibleArabicAction()",
-              "security entry large font test",
+              "    " + new_security_test.replace("\n", "\n    ") + "\n\n    @Test\n    fun securityEntryButtonExposesAVisibleArabicAction()",
+              "security entry test",
           )
           security_test_path.write_text(security_test)
 
           settings_test = dedent('''
-              package com.wasl.app
+          package com.wasl.app
 
-              import android.content.Context
-              import androidx.compose.runtime.CompositionLocalProvider
-              import androidx.compose.ui.platform.LocalDensity
-              import androidx.compose.ui.test.assertIsDisplayed
-              import androidx.compose.ui.test.junit4.createComposeRule
-              import androidx.compose.ui.test.onNodeWithTag
-              import androidx.compose.ui.test.performClick
-              import androidx.compose.ui.test.performScrollTo
-              import androidx.compose.ui.unit.Density
-              import androidx.test.core.app.ApplicationProvider
-              import androidx.test.ext.junit.runners.AndroidJUnit4
-              import com.wasl.app.backup.BackupCreated
-              import com.wasl.app.backup.BackupRestored
-              import com.wasl.app.backup.BackupService
-              import com.wasl.app.privacy.PrivacyPreferences
-              import com.wasl.app.ui.theme.WaslTheme
-              import kotlin.test.AfterTest
-              import kotlin.test.BeforeTest
-              import kotlin.test.Test
-              import kotlin.test.assertTrue
-              import org.junit.Rule
-              import org.junit.runner.RunWith
+          import android.content.Context
+          import androidx.compose.runtime.CompositionLocalProvider
+          import androidx.compose.ui.platform.LocalDensity
+          import androidx.compose.ui.test.assertIsDisplayed
+          import androidx.compose.ui.test.junit4.createComposeRule
+          import androidx.compose.ui.test.onNodeWithTag
+          import androidx.compose.ui.test.performClick
+          import androidx.compose.ui.test.performScrollTo
+          import androidx.compose.ui.unit.Density
+          import androidx.test.core.app.ApplicationProvider
+          import androidx.test.ext.junit.runners.AndroidJUnit4
+          import com.wasl.app.backup.BackupCreated
+          import com.wasl.app.backup.BackupRestored
+          import com.wasl.app.backup.BackupService
+          import com.wasl.app.privacy.PrivacyPreferences
+          import com.wasl.app.ui.theme.WaslTheme
+          import kotlin.test.AfterTest
+          import kotlin.test.BeforeTest
+          import kotlin.test.Test
+          import kotlin.test.assertTrue
+          import org.junit.Rule
+          import org.junit.runner.RunWith
 
-              @RunWith(AndroidJUnit4::class)
-              class SettingsUiInstrumentedTest {
-                  @get:Rule
-                  val composeRule = createComposeRule()
+          @RunWith(AndroidJUnit4::class)
+          class SettingsUiInstrumentedTest {
+              @get:Rule
+              val composeRule = createComposeRule()
 
-                  private val context: Context = ApplicationProvider.getApplicationContext()
-                  private lateinit var privacyPreferences: PrivacyPreferences
+              private val context: Context = ApplicationProvider.getApplicationContext()
+              private lateinit var privacyPreferences: PrivacyPreferences
 
-                  @BeforeTest
-                  fun setUp() {
-                      privacyPreferences = PrivacyPreferences(context)
-                      privacyPreferences.hideSensitiveNotifications = false
-                      privacyPreferences.secureScreen = false
-                  }
+              @BeforeTest
+              fun setUp() {
+                  privacyPreferences = PrivacyPreferences(context)
+                  privacyPreferences.hideSensitiveNotifications = false
+                  privacyPreferences.secureScreen = false
+              }
 
-                  @AfterTest
-                  fun tearDown() {
-                      privacyPreferences.hideSensitiveNotifications = false
-                      privacyPreferences.secureScreen = false
-                  }
+              @AfterTest
+              fun tearDown() {
+                  privacyPreferences.hideSensitiveNotifications = false
+                  privacyPreferences.secureScreen = false
+              }
 
-                  @Test
-                  fun largeFontStacksSettingsHeaderAndPrivacyControls() {
-                      composeRule.setContent {
-                          val density = LocalDensity.current
-                          CompositionLocalProvider(
-                              LocalDensity provides Density(density.density, fontScale = 2f),
-                          ) {
-                              WaslTheme {
-                                  SettingsHubRoute(
-                                      backupService = unusedBackupService,
-                                      privacyPreferences = privacyPreferences,
-                                      onBack = {},
-                                      onOpenDocuments = {},
-                                      onOpenStatistics = {},
-                                      onRestored = {},
-                                      onSecureScreenChanged = {},
-                                  )
-                              }
+              @Test
+              fun largeFontStacksSettingsHeaderAndPrivacyControls() {
+                  composeRule.setContent {
+                      val density = LocalDensity.current
+                      CompositionLocalProvider(
+                          LocalDensity provides Density(density.density, fontScale = 2f),
+                      ) {
+                          WaslTheme {
+                              SettingsHubRoute(
+                                  backupService = unusedBackupService,
+                                  privacyPreferences = privacyPreferences,
+                                  onBack = {},
+                                  onOpenDocuments = {},
+                                  onOpenStatistics = {},
+                                  onRestored = {},
+                                  onSecureScreenChanged = {},
+                              )
                           }
                       }
-
-                      composeRule.onNodeWithTag("settings-header-stacked").assertIsDisplayed()
-                      composeRule.onNodeWithTag("privacy-hide-notification-details-row-stacked")
-                          .performScrollTo()
-                          .assertIsDisplayed()
-                      composeRule.onNodeWithTag("privacy-hide-notification-details")
-                          .assertIsDisplayed()
-                          .performClick()
-                      composeRule.runOnIdle {
-                          assertTrue(privacyPreferences.hideSensitiveNotifications)
-                      }
-                      composeRule.onNodeWithTag("privacy-secure-screen-row-stacked")
-                          .performScrollTo()
-                          .assertIsDisplayed()
-                      composeRule.onNodeWithTag("privacy-secure-screen").assertIsDisplayed()
                   }
 
-                  private val unusedBackupService = object : BackupService {
-                      override suspend fun create(password: CharArray): BackupCreated = error("Not used")
-
-                      override suspend fun restore(
-                          backupBytes: ByteArray,
-                          password: CharArray,
-                      ): BackupRestored = error("Not used")
+                  composeRule.onNodeWithTag("settings-header-stacked").assertIsDisplayed()
+                  composeRule.onNodeWithTag("privacy-hide-notification-details-row-stacked")
+                      .performScrollTo()
+                      .assertIsDisplayed()
+                  composeRule.onNodeWithTag("privacy-hide-notification-details")
+                      .assertIsDisplayed()
+                      .performClick()
+                  composeRule.runOnIdle {
+                      assertTrue(privacyPreferences.hideSensitiveNotifications)
                   }
+                  composeRule.onNodeWithTag("privacy-secure-screen-row-stacked")
+                      .performScrollTo()
+                      .assertIsDisplayed()
+                  composeRule.onNodeWithTag("privacy-secure-screen").assertIsDisplayed()
               }
+
+              private val unusedBackupService = object : BackupService {
+                  override suspend fun create(password: CharArray): BackupCreated = error("Not used")
+
+                  override suspend fun restore(
+                      backupBytes: ByteArray,
+                      password: CharArray,
+                  ): BackupRestored = error("Not used")
+              }
+          }
           ''').strip() + "\n"
           Path("app/src/androidTest/java/com/wasl/app/SettingsUiInstrumentedTest.kt").write_text(settings_test)
           PY
@@ -651,6 +513,7 @@ jobs:
           git diff --check
           grep -F 'security-header-stacked' app/src/main/java/com/wasl/app/SecurityHubScreen.kt
           grep -F 'app-lock-toggle-stacked' app/src/main/java/com/wasl/app/SecurityHubScreen.kt
+          grep -F 'settings-header-stacked' app/src/main/java/com/wasl/app/SettingsHubScreen.kt
           grep -F 'privacy-hide-notification-details-row-stacked' app/src/androidTest/java/com/wasl/app/SettingsUiInstrumentedTest.kt
 
       - name: Commit patch and remove temporary workflow

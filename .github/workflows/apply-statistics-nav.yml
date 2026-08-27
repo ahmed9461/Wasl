@@ -1,0 +1,29 @@
+name: Apply statistics navigation
+
+on:
+  push:
+    branches:
+      - agent/bootstrap-wasl-foundation
+    paths:
+      - .github/statistics-nav-trigger.txt
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/bootstrap-wasl-foundation
+      - name: Apply statistics navigation
+        run: python3 .github/scripts/patch_statistics_nav.py
+      - name: Commit navigation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/wasl/app/MainActivity.kt app/src/main/java/com/wasl/app/SettingsHubScreen.kt
+          git diff --cached --check
+          git commit -m "feat: open objective statistics from settings"
+          git push origin HEAD:agent/bootstrap-wasl-foundation

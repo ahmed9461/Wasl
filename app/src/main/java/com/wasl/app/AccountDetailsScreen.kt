@@ -396,6 +396,12 @@ private fun AccountDetailsContent(
             }
         }
 
+        if (account.ledger.header.direction == DebtDirection.RECEIVABLE && !account.ledger.balance.isZero) {
+            item("payment-message") {
+                PaymentMessageSection(account)
+            }
+        }
+
         item("payment-promises") {
             PaymentPromisesSection(
                 promises = paymentPromises,

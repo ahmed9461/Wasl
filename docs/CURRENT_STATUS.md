@@ -15,7 +15,7 @@
 
 ## آخر بوابة كاملة مثبتة
 
-**Android CI #873 — Run `33123137824` — head `8bb69e733c2158c43913be0d2160069721d179ad`.**
+**Android CI #889 — Run `33124840705` — head `33db16e871db65ad752ba4c7712cdacb8a957953`.**
 
 نجح بالكامل:
 
@@ -24,21 +24,22 @@
 - Debug APK ✅
 - Room Schema v9 generated/current verification ✅
 - Claims/Attachments schema checks ✅
-- Android instrumentation: **99/99**، 0 failed، 0 errors، 0 skipped ✅
-- اختبار Today الجديد عند **200% Font Scale** نجح ✅
+- Android instrumentation: **101/101**، 0 failed، 0 errors، 0 skipped ✅
+- Security large-font tests الأربعة ✅
+- Settings 200% Font Scale test ✅
 - Payment Receipt PDF evidence ✅
 - Debt Receipt PDF evidence ✅
 - Account Statement PDF evidence ✅
 
-Artifacts المرجعية من #873:
+Artifacts المرجعية من #889:
 
-- `Wasl-debug`: `9667408679`
-- `Wasl-room-schema`: `9667409178`
-- `Wasl-payment-receipt-evidence`: `9667592361`
-- `Wasl-account-document-evidence`: `9667592640`
-- `Wasl-room-instrumentation-results`: `9667592982`
+- `Wasl-debug`: `9668052229`
+- `Wasl-room-schema`: `9668052495`
+- `Wasl-payment-receipt-evidence`: `9668266234`
+- `Wasl-account-document-evidence`: `9668266728`
+- `Wasl-room-instrumentation-results`: `9668267316`
 
-وبذلك أصبحت دفعة Adaptive الخاصة بـStatistics وPerson Timeline وToday مثبتة ببوابة كاملة، كما تبقى Claims وAttachments وSchema v9 مثبتة.
+وبذلك أصبحت دفعات RTL/Bidi وSecurity/Settings Adaptive مثبتة ببوابة كاملة، إضافة إلى Statistics وPerson Timeline وToday وClaims وAttachments وSchema v9.
 
 ## ما يعمل الآن
 
@@ -107,7 +108,7 @@ Artifacts المرجعية من #873:
 
 ## Accessibility / Adaptive UI
 
-**الحالة: قيد التنفيذ الفعلي، مع دفعة أولى Verified ودفعة ثانية تحت بوابة التحقق الكاملة.**
+**الحالة: قيد التنفيذ الفعلي، والدفعات حتى Security/Settings Verified بالكامل. Documents تحت البوابة الحالية.**
 
 الأساس الموجود:
 
@@ -116,14 +117,14 @@ Artifacts المرجعية من #873:
 - `shouldStackDenseRows()` يكدس الصفوف عند العرض الضيق أو `fontScale >= 1.3`.
 - Search/Top-level navigation لديها اختبارات large-font وsemantics.
 
-الدفعة المثبتة عبر CI #873:
+### Statistics / Person Timeline / Today — Verified
 
 - Statistics + Person Timeline تستخدم تكديسًا فعليًا للصفوف المزدحمة وتختبره عند 200% Font Scale.
 - Today يكدس بطاقات الملخص، عناوين الأقسام، المبلغ/الحالة، Header الشخص، وأزرار الإذن/إعادة المحاولة عند النص الكبير.
-- اختبار Today الصريح عند 200% Font Scale نجح ضمن **99/99** instrumentation.
-- فشل CI #866 السابق كان Assertion هشًا مرتبطًا بالـviewport في Statistics؛ أصلح في `ee23079f...` دون حذف تغطية، ثم أثبت #873 الإصلاح.
+- اختبار Today الصريح عند 200% Font Scale نجح ضمن CI #873 ثم بقي أخضر في #889.
+- فشل CI #866 السابق كان Assertion هشًا مرتبطًا بالـviewport في Statistics؛ أصلح في `ee23079f...` دون حذف تغطية.
 
-### RTL/Bidi — تحت التحقق النهائي
+### RTL/Bidi — Verified عبر CI #889
 
 commit `36c5297a92f2ee700a41c34fc2d16ca7680b8d3a`:
 
@@ -131,9 +132,9 @@ commit `36c5297a92f2ee700a41c34fc2d16ca7680b8d3a`:
 - `formatMoney()` يستخدم helper المركزي بدل literal مكرر.
 - Person Timeline وDocuments Hub يعيدان استخدام `formatMoney()` بدل formatter مالي مكرر.
 - عزل العملات والتواريخ/الأوقات وأرقام المستندات والهاتف والبريد والحالات التقنية وmetadata اللاتينية للمرفقات داخل RTL.
-- Unit tests جديدة لـLTR isolation.
+- Unit tests لـLTR isolation نجحت.
 
-### Security / Settings — تحت التحقق النهائي
+### Security / Settings — Verified عبر CI #889
 
 commit `c035bc56fb526e2ae8e891a526b970f717f8d39f`:
 
@@ -143,10 +144,21 @@ commit `c035bc56fb526e2ae8e891a526b970f717f8d39f`:
 - Security Hub يستخدم `WaslMaxContentWidth` المركزي.
 - Settings header يتكدس عند النص الكبير.
 - Privacy switches في Settings تتكدس عند النص الكبير.
-- اختبار Security عند 200% Font Scale أصبح يثبت التكديس نفسه، لا مجرد قابلية التمرير.
-- أضيف `SettingsUiInstrumentedTest` عند 200% Font Scale ويثبت التكديس ووصول/تغيير إعداد الخصوصية.
+- `SecurityUiInstrumentedTest`: **4/4** نجحت ضمن #889.
+- `SettingsUiInstrumentedTest.largeFontStacksSettingsHeaderAndPrivacyControls`: نجح ضمن #889.
 
-الـPR run الذي ظهر مباشرة من commit المنشأ داخل GitHub Actions كان `action_required` بلا Jobs، لذلك لا يعتبر بوابة تحقق. commit التوثيق الحالي موجود عمدًا لتشغيل Android CI طبيعية على نفس الكود؛ لا توسم دفعة RTL/Bidi + Security/Settings Verified قبل نجاحها بالكامل.
+### Documents Hub — تحت البوابة الحالية
+
+commit `526dfcd79a6d587a884953a36e9d1d831465c619`:
+
+- Header المستندات يتكدس عند النص الكبير بدل Row ثابت.
+- فتح/مشاركة PDF الجاهز تستخدم مكوّن Adaptive مشترك.
+- فتح/مشاركة المرفقات تستخدم المكوّن نفسه، مع الحفاظ على disabled state عند فشل سلامة الملف.
+- في الوضع المكدس تصبح الأزرار full-width؛ وفي الوضع الطبيعي تبقى بجانب بعضها.
+- أضيف `DocumentsAdaptiveUiInstrumentedTest` عند 200% Font Scale ويختبر التكديس والنقر على الإجراءين مباشرة، بدون إدخال Room/FileProvider في اختبار layout.
+- لا تغيير في منطق إصدار PDF أو immutable snapshots أو فحوص SHA-256.
+
+التغيير الحالي يحتاج Android CI كاملة قبل وسم Documents Adaptive كـVerified.
 
 ## ملاحظة استقرار CI
 
@@ -158,13 +170,14 @@ commit `c035bc56fb526e2ae8e891a526b970f717f8d39f`:
 
 ## ترتيب العمل التالي
 
-1. إغلاق بوابة CI الكاملة للرأس الحالي الذي يشمل RTL/Bidi + Security/Settings large-font.
-2. إذا أخضر: متابعة Documents Hub ثم Home ثم Account Details بحسب فجوات text scaling وtouch targets وfocus/TalkBack semantics الفعلية.
-3. تثبيت أي فجوات وصول باختبارات Instrumentation حقيقية، لا بمجرد تعديلات شكلية.
-4. تنفيذ المصاريف/الديون الجماعية حسب المواصفة دون إنشاء Ledger موازٍ.
-5. جولة UI/PDF polishing النهائية المؤجلة عمدًا حتى اكتمال الوظائف.
-6. Full offline acceptance + migrations/backup regression.
-7. Release signing والتوزيع.
+1. إغلاق بوابة CI الكاملة لدفعة Documents Adaptive الحالية.
+2. إذا أخضر: Home — Account cards وSummary rows عند 200% Font Scale.
+3. ثم Account Details — hero badges/metrics وtimeline heading، مع اختبار before broader dialog changes.
+4. مراجعة touch targets والـsemantics للعناصر المخصصة وأي identifiers/dates متبقية داخل RTL.
+5. تنفيذ المصاريف/الديون الجماعية حسب المواصفة دون إنشاء Ledger موازٍ.
+6. جولة UI/PDF polishing النهائية المؤجلة عمدًا حتى اكتمال الوظائف.
+7. Full offline acceptance + migrations/backup regression.
+8. Release signing والتوزيع.
 
 ## سياسة الجودة
 

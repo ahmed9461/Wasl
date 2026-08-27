@@ -1,0 +1,39 @@
+name: Apply payment message section
+
+on:
+  push:
+    branches:
+      - agent/bootstrap-wasl-foundation
+    paths:
+      - .github/message-section-apply.txt
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/bootstrap-wasl-foundation
+      - name: Integrate payment message section
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/wasl/app/AccountDetailsScreen.kt')
+          t = p.read_text()
+          old = '        if (account.ledger.header.direction == DebtDirection.PAYABLE) {\n            item("payment-claims") {\n                PaymentClaimsSectionHost(\n                    debtId = account.ledger.header.id,\n                    canAddClaim = !account.ledger.balance.isZero,\n                )\n            }\n        }\n\n        item("payment-promises") {'
+          new = '        if (account.ledger.header.direction == DebtDirection.PAYABLE) {\n            item("payment-claims") {\n                PaymentClaimsSectionHost(\n                    debtId = account.ledger.header.id,\n                    canAddClaim = !account.ledger.balance.isZero,\n                )\n            }\n        }\n\n        if (account.ledger.header.direction == DebtDirection.RECEIVABLE && !account.ledger.balance.isZero) {\n            item("payment-message") {\n                PaymentMessageSection(account)\n            }\n        }\n\n        item("payment-promises") {'
+          if old not in t:
+              raise SystemExit('account sections marker not found')
+          p.write_text(t.replace(old, new, 1))
+          PY
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/wasl/app/AccountDetailsScreen.kt
+          git diff --cached --check
+          git commit -m "feat: expose payment message drafts in receivable accounts"
+          git push origin HEAD:agent/bootstrap-wasl-foundation

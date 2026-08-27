@@ -1,0 +1,365 @@
+name: Patch adaptive documents
+
+on:
+  push:
+    branches:
+      - agent/bootstrap-wasl-foundation
+    paths:
+      - .github/workflows/patch-documents-adaptive.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/bootstrap-wasl-foundation
+
+      - name: Apply deterministic Documents patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+
+          def one(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected one match, got {count}")
+              return text.replace(old, new, 1)
+
+          path = Path('app/src/main/java/com/wasl/app/DocumentsHubScreen.kt')
+          text = path.read_text()
+          text = one(
+              text,
+              'import androidx.compose.foundation.layout.Arrangement\n',
+              'import androidx.compose.foundation.layout.Arrangement\nimport androidx.compose.foundation.layout.BoxWithConstraints\n',
+              'BoxWithConstraints import',
+          )
+
+          old_header = dedent('''
+                      item("header") {
+                          Row(
+                              modifier = Modifier.fillMaxWidth(),
+                              verticalAlignment = Alignment.CenterVertically,
+                              horizontalArrangement = Arrangement.spacedBy(12.dp),
+                          ) {
+                              OutlinedButton(onClick = onBack) { Text("رجوع") }
+                              Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                  Text(
+                                      if (initialDebtId == null) "تصدير وتقارير PDF" else "مستندات وإثباتات الحساب",
+                                      style = MaterialTheme.typography.headlineSmall,
+                                      fontWeight = FontWeight.ExtraBold,
+                                  )
+                                  Text(
+                                      if (initialDebtId == null) {
+                                          "اختر حسابًا ثم صدّر مستنداته."
+                                      } else {
+                                          "مستندات PDF ومرفقات هذا الحساب فقط."
+                                      },
+                                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                  )
+                              }
+                          }
+                      }
+          ''').strip()
+          new_header = dedent('''
+                      item("header") {
+                          DocumentsHubHeader(
+                              isAccountScoped = initialDebtId != null,
+                              onBack = onBack,
+                          )
+                      }
+          ''').strip()
+          text = one(text, old_header, new_header, 'Documents header')
+
+          old_ready = dedent('''
+                                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                      Button(onClick = {
+                                          runCatching { ReceiptFileAccess.open(context, document) }
+                                              .onFailure { showMessage("تعذر فتح ملف PDF.") }
+                                      }) { Text("فتح PDF") }
+                                      OutlinedButton(onClick = {
+                                          runCatching { ReceiptFileAccess.share(context, document) }
+                                              .onFailure { showMessage("تعذرت مشاركة ملف PDF.") }
+                                      }) { Text("مشاركة") }
+                                  }
+          ''').strip()
+          new_ready = dedent('''
+                                  DocumentDualActionButtons(
+                                      testTagPrefix = "ready-document",
+                                      primaryLabel = "فتح PDF",
+                                      secondaryLabel = "مشاركة",
+                                      primaryFilled = true,
+                                      onPrimary = {
+                                          runCatching { ReceiptFileAccess.open(context, document) }
+                                              .onFailure { showMessage("تعذر فتح ملف PDF.") }
+                                      },
+                                      onSecondary = {
+                                          runCatching { ReceiptFileAccess.share(context, document) }
+                                              .onFailure { showMessage("تعذرت مشاركة ملف PDF.") }
+                                      },
+                                  )
+          ''').strip()
+          text = one(text, old_ready, new_ready, 'ready document actions')
+
+          old_attachment = dedent('''
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      OutlinedButton(
+                          enabled = attachment.integrity == AttachmentIntegrity.OK,
+                          onClick = onOpen,
+                      ) { Text("فتح") }
+                      OutlinedButton(
+                          enabled = attachment.integrity == AttachmentIntegrity.OK,
+                          onClick = onShare,
+                      ) { Text("مشاركة") }
+                  }
+          ''').strip()
+          new_attachment = dedent('''
+                  DocumentDualActionButtons(
+                      testTagPrefix = "attachment-${attachment.id}",
+                      primaryLabel = "فتح",
+                      secondaryLabel = "مشاركة",
+                      enabled = attachment.integrity == AttachmentIntegrity.OK,
+                      onPrimary = onOpen,
+                      onSecondary = onShare,
+                  )
+          ''').strip()
+          text = one(text, old_attachment, new_attachment, 'attachment actions')
+
+          helpers = dedent('''
+              @Composable
+              internal fun DocumentsHubHeader(
+                  isAccountScoped: Boolean,
+                  onBack: () -> Unit,
+              ) {
+                  BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                      if (shouldStackDenseRows(maxWidth)) {
+                          Column(
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .testTag("documents-header-stacked"),
+                              verticalArrangement = Arrangement.spacedBy(8.dp),
+                          ) {
+                              OutlinedButton(onClick = onBack) { Text("رجوع") }
+                              DocumentsHubHeaderText(isAccountScoped = isAccountScoped)
+                          }
+                      } else {
+                          Row(
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .testTag("documents-header-inline"),
+                              verticalAlignment = Alignment.CenterVertically,
+                              horizontalArrangement = Arrangement.spacedBy(12.dp),
+                          ) {
+                              OutlinedButton(onClick = onBack) { Text("رجوع") }
+                              DocumentsHubHeaderText(isAccountScoped = isAccountScoped)
+                          }
+                      }
+                  }
+              }
+
+              @Composable
+              private fun DocumentsHubHeaderText(isAccountScoped: Boolean) {
+                  Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                      Text(
+                          if (isAccountScoped) "مستندات وإثباتات الحساب" else "تصدير وتقارير PDF",
+                          style = MaterialTheme.typography.headlineSmall,
+                          fontWeight = FontWeight.ExtraBold,
+                      )
+                      Text(
+                          if (isAccountScoped) {
+                              "مستندات PDF ومرفقات هذا الحساب فقط."
+                          } else {
+                              "اختر حسابًا ثم صدّر مستنداته."
+                          },
+                          color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      )
+                  }
+              }
+
+              @Composable
+              internal fun DocumentDualActionButtons(
+                  testTagPrefix: String,
+                  primaryLabel: String,
+                  secondaryLabel: String,
+                  enabled: Boolean = true,
+                  primaryFilled: Boolean = false,
+                  onPrimary: () -> Unit,
+                  onSecondary: () -> Unit,
+              ) {
+                  BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                      if (shouldStackDenseRows(maxWidth)) {
+                          Column(
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .testTag("$testTagPrefix-actions-stacked"),
+                              verticalArrangement = Arrangement.spacedBy(8.dp),
+                          ) {
+                              DocumentPrimaryAction(
+                                  modifier = Modifier.fillMaxWidth(),
+                                  label = primaryLabel,
+                                  enabled = enabled,
+                                  filled = primaryFilled,
+                                  testTag = "$testTagPrefix-primary",
+                                  onClick = onPrimary,
+                              )
+                              OutlinedButton(
+                                  modifier = Modifier
+                                      .fillMaxWidth()
+                                      .testTag("$testTagPrefix-secondary"),
+                                  enabled = enabled,
+                                  onClick = onSecondary,
+                              ) { Text(secondaryLabel) }
+                          }
+                      } else {
+                          Row(
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .testTag("$testTagPrefix-actions-inline"),
+                              horizontalArrangement = Arrangement.spacedBy(8.dp),
+                          ) {
+                              DocumentPrimaryAction(
+                                  modifier = Modifier.weight(1f),
+                                  label = primaryLabel,
+                                  enabled = enabled,
+                                  filled = primaryFilled,
+                                  testTag = "$testTagPrefix-primary",
+                                  onClick = onPrimary,
+                              )
+                              OutlinedButton(
+                                  modifier = Modifier
+                                      .weight(1f)
+                                      .testTag("$testTagPrefix-secondary"),
+                                  enabled = enabled,
+                                  onClick = onSecondary,
+                              ) { Text(secondaryLabel) }
+                          }
+                      }
+                  }
+              }
+
+              @Composable
+              private fun DocumentPrimaryAction(
+                  modifier: Modifier,
+                  label: String,
+                  enabled: Boolean,
+                  filled: Boolean,
+                  testTag: String,
+                  onClick: () -> Unit,
+              ) {
+                  if (filled) {
+                      Button(
+                          modifier = modifier.testTag(testTag),
+                          enabled = enabled,
+                          onClick = onClick,
+                      ) { Text(label) }
+                  } else {
+                      OutlinedButton(
+                          modifier = modifier.testTag(testTag),
+                          enabled = enabled,
+                          onClick = onClick,
+                      ) { Text(label) }
+                  }
+              }
+          ''').strip()
+          text = one(
+              text,
+              '@Composable\nprivate fun AttachmentRow(',
+              helpers + '\n\n@Composable\nprivate fun AttachmentRow(',
+              'helper insertion',
+          )
+          path.write_text(text)
+
+          test = dedent('''
+              package com.wasl.app
+
+              import androidx.compose.foundation.layout.Column
+              import androidx.compose.foundation.layout.fillMaxWidth
+              import androidx.compose.runtime.CompositionLocalProvider
+              import androidx.compose.ui.Modifier
+              import androidx.compose.ui.platform.LocalDensity
+              import androidx.compose.ui.test.assertIsDisplayed
+              import androidx.compose.ui.test.junit4.createComposeRule
+              import androidx.compose.ui.test.onNodeWithTag
+              import androidx.compose.ui.test.performClick
+              import androidx.compose.ui.unit.Density
+              import androidx.test.ext.junit.runners.AndroidJUnit4
+              import com.wasl.app.ui.theme.WaslTheme
+              import kotlin.test.Test
+              import kotlin.test.assertEquals
+              import org.junit.Rule
+              import org.junit.runner.RunWith
+
+              @RunWith(AndroidJUnit4::class)
+              class DocumentsAdaptiveUiInstrumentedTest {
+                  @get:Rule
+                  val composeRule = createComposeRule()
+
+                  @Test
+                  fun largeFontStacksHeaderAndDualActionsWithoutLosingClicks() {
+                      var backClicks = 0
+                      var primaryClicks = 0
+                      var secondaryClicks = 0
+
+                      composeRule.setContent {
+                          val density = LocalDensity.current
+                          CompositionLocalProvider(
+                              LocalDensity provides Density(density.density, fontScale = 2f),
+                          ) {
+                              WaslTheme {
+                                  Column(modifier = Modifier.fillMaxWidth()) {
+                                      DocumentsHubHeader(
+                                          isAccountScoped = true,
+                                          onBack = { backClicks += 1 },
+                                      )
+                                      DocumentDualActionButtons(
+                                          testTagPrefix = "documents-test",
+                                          primaryLabel = "فتح PDF",
+                                          secondaryLabel = "مشاركة",
+                                          primaryFilled = true,
+                                          onPrimary = { primaryClicks += 1 },
+                                          onSecondary = { secondaryClicks += 1 },
+                                      )
+                                  }
+                              }
+                          }
+                      }
+
+                      composeRule.onNodeWithTag("documents-header-stacked").assertIsDisplayed()
+                      composeRule.onNodeWithTag("documents-test-actions-stacked").assertIsDisplayed()
+                      composeRule.onNodeWithTag("documents-test-primary").assertIsDisplayed().performClick()
+                      composeRule.onNodeWithTag("documents-test-secondary").assertIsDisplayed().performClick()
+                      composeRule.runOnIdle {
+                          assertEquals(1, primaryClicks)
+                          assertEquals(1, secondaryClicks)
+                          assertEquals(0, backClicks)
+                      }
+                  }
+              }
+          ''').strip() + '\n'
+          Path('app/src/androidTest/java/com/wasl/app/DocumentsAdaptiveUiInstrumentedTest.kt').write_text(test)
+          PY
+
+          sed -i 's/[[:space:]]\+$//' \
+            app/src/main/java/com/wasl/app/DocumentsHubScreen.kt \
+            app/src/androidTest/java/com/wasl/app/DocumentsAdaptiveUiInstrumentedTest.kt
+          git diff --check
+          grep -F 'documents-header-stacked' app/src/main/java/com/wasl/app/DocumentsHubScreen.kt
+          grep -F 'ready-document-actions-stacked' app/src/main/java/com/wasl/app/DocumentsHubScreen.kt
+          grep -F 'documents-test-actions-stacked' app/src/androidTest/java/com/wasl/app/DocumentsAdaptiveUiInstrumentedTest.kt
+
+      - name: Commit patch and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/patch-documents-adaptive.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/wasl/app/DocumentsHubScreen.kt \
+            app/src/androidTest/java/com/wasl/app/DocumentsAdaptiveUiInstrumentedTest.kt \
+            .github/workflows/patch-documents-adaptive.yml
+          git commit -m "feat: harden documents large-font actions"
+          git push origin HEAD:agent/bootstrap-wasl-foundation

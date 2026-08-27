@@ -11,6 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -1075,17 +1076,18 @@ private fun CreateDebtDialog(
 }
 
 @Composable
-private fun AccountCard(
+internal fun AccountCard(
     account: AccountOverview,
     onClick: () -> Unit,
 ) {
     val header = account.ledger.header
     val receivable = header.direction == DebtDirection.RECEIVABLE
+    val tagPrefix = "account-${header.id.value}"
     Card(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .testTag("account-${header.id.value}"),
+            .testTag(tagPrefix),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         ),
@@ -1095,130 +1097,229 @@ private fun AccountCard(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Surface(
-                    modifier = Modifier.size(46.dp),
-                    shape = MaterialTheme.shapes.large,
-                    color = if (receivable) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    },
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = account.person.displayName.trim().firstOrNull()?.toString() ?: "و",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = if (receivable) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSecondaryContainer
-                            },
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                if (shouldStackDenseRows(maxWidth)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("$tagPrefix-header-stacked"),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        AccountIdentityRow(
+                            account = account,
+                            receivable = receivable,
+                            modifier = Modifier.fillMaxWidth(),
                         )
+                        AccountDirectionBadge(receivable = receivable)
                     }
-                }
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                    Text(
-                        text = account.person.displayName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    header.description?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("$tagPrefix-header-inline"),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AccountIdentityRow(
+                            account = account,
+                            receivable = receivable,
+                            modifier = Modifier.weight(1f),
                         )
+                        AccountDirectionBadge(receivable = receivable)
                     }
-                }
-                Surface(
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = if (receivable) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    },
-                ) {
-                    Text(
-                        text = if (receivable) "لي عنده" else "عليّ له",
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (receivable) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        },
-                    )
                 }
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        text = "المتبقي",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = formatMoney(account.ledger.balance),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        textAlign = TextAlign.Start,
-                    )
-                }
-                Surface(
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = when (account.ledger.state) {
-                        DebtState.SETTLED -> MaterialTheme.colorScheme.primaryContainer
-                        DebtState.PARTIALLY_PAID -> MaterialTheme.colorScheme.tertiaryContainer
-                        DebtState.OPEN -> MaterialTheme.colorScheme.surfaceContainerHigh
-                    },
-                ) {
-                    Text(
-                        text = when (account.ledger.state) {
-                            DebtState.OPEN -> "مفتوح"
-                            DebtState.PARTIALLY_PAID -> "مسدد جزئيًا"
-                            DebtState.SETTLED -> "مسدد"
-                        },
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                if (shouldStackDenseRows(maxWidth)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("$tagPrefix-balance-stacked"),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        AccountRemainingBalance(account = account)
+                        AccountStateBadge(state = account.ledger.state)
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("$tagPrefix-balance-inline"),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        AccountRemainingBalance(account = account)
+                        AccountStateBadge(state = account.ledger.state)
+                    }
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                if (shouldStackDenseRows(maxWidth)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("$tagPrefix-original-stacked"),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                        AccountOriginalAmount(header.originalAmount)
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("$tagPrefix-original-inline"),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = "الأصل",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = formatMoney(header.originalAmount),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountIdentityRow(
+    account: AccountOverview,
+    receivable: Boolean,
+    modifier: Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            modifier = Modifier.size(46.dp),
+            shape = MaterialTheme.shapes.large,
+            color = if (receivable) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.secondaryContainer
+            },
+        ) {
+            Box(contentAlignment = Alignment.Center) {
                 Text(
-                    text = "الأصل",
+                    text = account.person.displayName.trim().firstOrNull()?.toString() ?: "و",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (receivable) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    },
+                )
+            }
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                text = account.person.displayName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            account.ledger.header.description?.let {
+                Text(
+                    text = it,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = formatMoney(header.originalAmount),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
                 )
             }
         }
     }
+}
+
+@Composable
+private fun AccountDirectionBadge(receivable: Boolean) {
+    Surface(
+        shape = MaterialTheme.shapes.extraLarge,
+        color = if (receivable) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer
+        },
+    ) {
+        Text(
+            text = if (receivable) "لي عنده" else "عليّ له",
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = if (receivable) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSecondaryContainer
+            },
+        )
+    }
+}
+
+@Composable
+private fun AccountRemainingBalance(account: AccountOverview) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(
+            text = "المتبقي",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = formatMoney(account.ledger.balance),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Start,
+        )
+    }
+}
+
+@Composable
+private fun AccountStateBadge(state: DebtState) {
+    Surface(
+        shape = MaterialTheme.shapes.extraLarge,
+        color = when (state) {
+            DebtState.SETTLED -> MaterialTheme.colorScheme.primaryContainer
+            DebtState.PARTIALLY_PAID -> MaterialTheme.colorScheme.tertiaryContainer
+            DebtState.OPEN -> MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+    ) {
+        Text(
+            text = when (state) {
+                DebtState.OPEN -> "مفتوح"
+                DebtState.PARTIALLY_PAID -> "مسدد جزئيًا"
+                DebtState.SETTLED -> "مسدد"
+            },
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun AccountOriginalAmount(money: Money) {
+    Text(
+        text = "الأصل",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        text = formatMoney(money),
+        style = MaterialTheme.typography.bodyMedium,
+        fontWeight = FontWeight.SemiBold,
+    )
 }
 
 @Composable
@@ -1237,12 +1338,13 @@ private fun MoneyRow(label: String, money: Money) {
 }
 
 @Composable
-private fun SummaryCard(
+internal fun SummaryCard(
     title: String,
     subtitle: String,
     values: List<String>,
     receivable: Boolean,
 ) {
+    val tagPrefix = if (receivable) "summary-receivable" else "summary-payable"
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -1287,31 +1389,56 @@ private fun SummaryCard(
                 },
             )
             values.forEachIndexed { index, value ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = supportedCurrencies[index].value,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (receivable) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        },
-                    )
-                    Text(
-                        text = value,
-                        textAlign = TextAlign.End,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = if (receivable) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        },
-                    )
+                val currency = supportedCurrencies[index]
+                val contentColor = if (receivable) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                }
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    if (shouldStackDenseRows(maxWidth)) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("$tagPrefix-${currency.value}-stacked"),
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            Text(
+                                text = currency.value,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = contentColor,
+                            )
+                            Text(
+                                text = value,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.End,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = contentColor,
+                            )
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("$tagPrefix-${currency.value}-inline"),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = currency.value,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = contentColor,
+                            )
+                            Text(
+                                text = value,
+                                textAlign = TextAlign.End,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = contentColor,
+                            )
+                        }
+                    }
                 }
             }
         }

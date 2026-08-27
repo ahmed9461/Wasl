@@ -382,6 +382,15 @@ private fun AccountDetailsContent(
             AccountSummaryCard(account, onOpenDueSchedule)
         }
 
+        if (account.ledger.header.direction == DebtDirection.PAYABLE) {
+            item("payment-claims") {
+                PaymentClaimsSectionHost(
+                    debtId = account.ledger.header.id,
+                    canAddClaim = !account.ledger.balance.isZero,
+                )
+            }
+        }
+
         item("payment-promises") {
             PaymentPromisesSection(
                 promises = paymentPromises,
@@ -1068,7 +1077,7 @@ private fun PaymentReceiptDialog(
                 )
                 OutlinedTextField(
                     value = form.phone,
-                    onValueChange = onPhoneChange,
+                    onValueChange = onReceiptPhoneChange,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("الهاتف — اختياري") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),

@@ -2,6 +2,10 @@ package com.wasl.app
 
 import com.wasl.app.data.AccountOverview
 import com.wasl.domain.DebtDirection
+import com.wasl.domain.Money
+import com.wasl.domain.MoneyInputParser
+import java.math.BigDecimal
+import java.text.NumberFormat
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -25,7 +29,7 @@ internal object PaymentMessageTemplates {
             "Payment request messages are only available for receivable accounts."
         }
         val personName = account.person.displayName.trim()
-        val remaining = formatMoney(account.ledger.balance)
+        val remaining = formatMessageMoney(account.ledger.balance)
         val dueText = account.ledger.header.dueDate?.let { dateFormatter.format(it) }
         val duePhrase = dueText?.let { "، وموعد الاستحقاق المسجل هو $it" }.orEmpty()
 
@@ -46,5 +50,16 @@ internal object PaymentMessageTemplates {
                 body = "السلام عليكم $personName، نود تذكيركم بأن الرصيد المتبقي في الحساب هو $remaining$duePhrase. نرجو التكرم بتحديد موعد السداد المناسب. مع الشكر والتقدير.",
             ),
         )
+    }
+
+    private fun formatMessageMoney(money: Money): String {
+        val fractionDigits = MoneyInputParser.fractionDigits(money.currency)
+        val major = BigDecimal.valueOf(money.minorUnits, fractionDigits)
+        val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
+            isGroupingUsed = true
+            minimumFractionDigits = fractionDigits
+            maximumFractionDigits = fractionDigits
+        }
+        return "${formatter.format(major)} ${money.currency.value}"
     }
 }

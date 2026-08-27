@@ -24,14 +24,12 @@ import com.wasl.domain.PersonId
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertIs
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -48,7 +46,8 @@ class NaturalDebtConfirmationServiceTest {
 
         val result = service.confirmAndSave(validDraft(promisedDate = LocalDate.of(2026, 8, 30)))
 
-        val saved = assertIs<NaturalDebtConfirmationResult.Saved>(result)
+        assertTrue(result is NaturalDebtConfirmationResult.Saved)
+        val saved = result as NaturalDebtConfirmationResult.Saved
         assertEquals(existing.id, repository.existingCommand?.personId)
         assertEquals(null, repository.newPersonCommand)
         assertTrue(saved.promiseCreated)
@@ -66,14 +65,15 @@ class NaturalDebtConfirmationServiceTest {
 
         val ambiguous = service.confirmAndSave(draft)
 
-        val result = assertIs<NaturalDebtConfirmationResult.AmbiguousPerson>(ambiguous)
+        assertTrue(ambiguous is NaturalDebtConfirmationResult.AmbiguousPerson)
+        val result = ambiguous as NaturalDebtConfirmationResult.AmbiguousPerson
         assertEquals(listOf(first.id, second.id), result.matchingPeople.map { it.id })
         assertEquals(null, repository.existingCommand)
         assertEquals(null, repository.newPersonCommand)
         assertEquals(null, promises.created)
 
         val selected = service.confirmAndSave(draft, selectedPersonId = second.id)
-        assertIs<NaturalDebtConfirmationResult.Saved>(selected)
+        assertTrue(selected is NaturalDebtConfirmationResult.Saved)
         assertEquals(second.id, repository.existingCommand?.personId)
     }
 
@@ -85,7 +85,7 @@ class NaturalDebtConfirmationServiceTest {
 
         val result = service.confirmAndSave(validDraft(personName = "خالد"))
 
-        assertIs<NaturalDebtConfirmationResult.Saved>(result)
+        assertTrue(result is NaturalDebtConfirmationResult.Saved)
         assertEquals("خالد", repository.newPersonCommand?.personName)
         assertEquals(null, repository.existingCommand)
         assertFalse((result as NaturalDebtConfirmationResult.Saved).promiseCreated)
@@ -94,14 +94,16 @@ class NaturalDebtConfirmationServiceTest {
     private fun service(
         repository: FakeRepository,
         promises: FakePromiseStore,
-    ) = NaturalDebtConfirmationService(
-        repository = repository,
-        paymentPromiseStore = promises,
-        clock = clock,
-        zoneIdProvider = { ZoneOffset.UTC },
-        newId = sequenceOf("debt-id", "person-id", "promise-command", "promise-id")
-            .iterator()::next,
-    )
+    ): NaturalDebtConfirmationService {
+        val ids = sequenceOf("debt-id", "person-id", "promise-command", "promise-id").iterator()
+        return NaturalDebtConfirmationService(
+            repository = repository,
+            paymentPromiseStore = promises,
+            clock = clock,
+            zoneIdProvider = { ZoneOffset.UTC },
+            newId = ids::next,
+        )
+    }
 
     private fun validDraft(
         personName: String = "عبدالله",

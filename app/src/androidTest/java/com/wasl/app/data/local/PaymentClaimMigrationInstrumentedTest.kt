@@ -19,7 +19,7 @@ class PaymentClaimMigrationInstrumentedTest {
     )
 
     @Test
-    fun versionSevenMigratesToEightWithoutChangingExistingDebtData() {
+    fun versionSevenMigratesThroughClaimsToLatestWithoutChangingExistingDebtData() {
         val databaseName = "wasl-schema-v7-claims.db"
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.deleteDatabase(databaseName)
@@ -46,9 +46,10 @@ class PaymentClaimMigrationInstrumentedTest {
 
         migrationHelper.runMigrationsAndValidate(
             databaseName,
-            8,
+            9,
             true,
             WaslDatabase.MIGRATION_7_8,
+            WaslDatabase.MIGRATION_8_9,
         ).use { migrated ->
             migrated.query(
                 "SELECT direction, original_amount_minor, due_date_epoch_day FROM debts WHERE id = 'debt-v7'",
@@ -59,6 +60,10 @@ class PaymentClaimMigrationInstrumentedTest {
                 assertEquals(20700L, it.getLong(2))
             }
             migrated.query("SELECT COUNT(*) FROM payment_claims").use {
+                check(it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM attachments").use {
                 check(it.moveToFirst())
                 assertEquals(0L, it.getLong(0))
             }
@@ -75,6 +80,15 @@ class PaymentClaimMigrationInstrumentedTest {
                 """
                 SELECT COUNT(*) FROM sqlite_master
                 WHERE type = 'index' AND name = 'index_payment_claims_status_follow_up_date_epoch_day'
+                """.trimIndent(),
+            ).use {
+                check(it.moveToFirst())
+                assertEquals(1L, it.getLong(0))
+            }
+            migrated.query(
+                """
+                SELECT COUNT(*) FROM sqlite_master
+                WHERE type = 'index' AND name = 'index_attachments_relative_path'
                 """.trimIndent(),
             ).use {
                 check(it.moveToFirst())

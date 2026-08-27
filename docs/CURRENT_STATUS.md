@@ -11,11 +11,11 @@
 - Pull Request: `#1` إلى `main` وما زال Draft.
 - لا دمج إلى `main` دون طلب صريح.
 - Room Database الحالية: **v9**.
-- ملفات Room التاريخية **1.json → 9.json** أصبحت ملتزمة في Git، بما فيها v8 وv9 الأصليتان المسترجعتان من CI artifacts، وليستا ملفات معاد إنشاؤها بالتخمين.
+- ملفات Room التاريخية **1.json → 9.json** ملتزمة في Git، بما فيها v8 وv9 الأصليتان المسترجعتان من CI artifacts، وليستا ملفات معاد إنشاؤها بالتخمين.
 
 ## آخر بوابة كاملة مثبتة
 
-**Android CI #861 — Run `33116906973` — head `3644b143d53b8ddcbc12f2bc11f72344130e9815`.**
+**Android CI #873 — Run `33123137824` — head `8bb69e733c2158c43913be0d2160069721d179ad`.**
 
 نجح بالكامل:
 
@@ -24,20 +24,21 @@
 - Debug APK ✅
 - Room Schema v9 generated/current verification ✅
 - Claims/Attachments schema checks ✅
-- Android instrumentation: **98/98**، 0 failed، 0 skipped ✅
+- Android instrumentation: **99/99**، 0 failed، 0 errors، 0 skipped ✅
+- اختبار Today الجديد عند **200% Font Scale** نجح ✅
 - Payment Receipt PDF evidence ✅
 - Debt Receipt PDF evidence ✅
 - Account Statement PDF evidence ✅
 
-Artifacts المرجعية من #861:
+Artifacts المرجعية من #873:
 
-- `Wasl-debug`: `9664998276`
-- `Wasl-room-schema`: `9664998888`
-- `Wasl-payment-receipt-evidence`: `9665255570`
-- `Wasl-account-document-evidence`: `9665256369`
-- `Wasl-room-instrumentation-results`: `9665257273`
+- `Wasl-debug`: `9667408679`
+- `Wasl-room-schema`: `9667409178`
+- `Wasl-payment-receipt-evidence`: `9667592361`
+- `Wasl-account-document-evidence`: `9667592640`
+- `Wasl-room-instrumentation-results`: `9667592982`
 
-وبذلك أصبحت Claims وAttachments وSchema v9 مثبتة ببوابة كاملة وليست مجرد compile.
+وبذلك أصبحت دفعة Adaptive الخاصة بـStatistics وPerson Timeline وToday مثبتة ببوابة كاملة، كما تبقى Claims وAttachments وSchema v9 مثبتة.
 
 ## ما يعمل الآن
 
@@ -92,7 +93,7 @@ Artifacts المرجعية من #861:
 - Backup schema v9 يشمل 12 جدولًا وملفات PDF والمرفقات.
 - Restore مرحلي مع Schema/path/hash/FK/invariant validation وRollback.
 - App Lock عبر BiometricPrompt / Device Credential.
-- App Lock session أصبحت مشتركة على مستوى Application بدل Activity محلية.
+- App Lock session مشتركة على مستوى Application بدل Activity محلية.
 - `ProtectedWaslActivity` يحمي Activities الحساسة ويعيد المستخدم إلى Main عند القفل.
 - `FLAG_SECURE` وسياسة خصوصية الإشعارات.
 
@@ -106,43 +107,47 @@ Artifacts المرجعية من #861:
 
 ## Accessibility / Adaptive UI
 
-**الحالة: قيد التنفيذ الفعلي، وليست مجرد تدقيق نظري.**
+**الحالة: قيد التنفيذ الفعلي، مع دفعة أولى Verified.**
 
 الأساس الموجود:
 
 - RTL على مستوى التطبيق.
-- `formatMoney()` يعزل النص المالي باستخدام Unicode Bidi isolation.
 - `WaslMaxContentWidth = 760.dp` مستخدم في شاشات حديثة.
 - `shouldStackDenseRows()` يكدس الصفوف عند العرض الضيق أو `fontScale >= 1.3`.
 - Search/Top-level navigation لديها اختبارات large-font وsemantics.
 
-التحسينات الجديدة:
+الدفعة المثبتة عبر CI #873:
 
-- commit `7a722563c85b7bf065445661c94f894568b6e9e0`: Statistics + Person Timeline تستخدم تكديسًا فعليًا للصفوف المزدحمة وتختبره عند 200% Font Scale.
-- CI #866 على هذا التغيير شغل **98 اختبارًا**؛ فشل اختبار واحد فقط في `StatisticsScreenUiInstrumentedTest` لأن الاختبار مرر إلى أسفل الشاشة ثم طالب أن يبقى نص أعلى الشاشة ظاهرًا. هذا كان Assertion مرتبطًا بالـviewport، وليس فشلًا وظيفيًا أو في Room.
-- commit `ee23079f70f556853337521aa340510d4c110d0a`: جعل Assertion حتميًا بفحص النص العلوي قبل التمرير دون حذف تغطية.
-- commit `774d5df6b96961fb6cb66f288036678e60ae2fd3`: Today أصبح يكدس عند النص الكبير:
-  - بطاقات ملخص اليوم.
-  - عناوين الأقسام والعداد.
-  - المبلغ + حالة الاستحقاق.
-  - أزرار فتح الحساب/الإذن/إعادة المحاولة.
-  - Header الشخص + شارة الاتجاه.
-  - المبلغ/الحالة في الأقساط والوعود والمطالبات.
-- أضيف اختبار Today صريح عند **200% Font Scale** يتحقق من التكديس ووصول زر إذن الإشعارات.
+- Statistics + Person Timeline تستخدم تكديسًا فعليًا للصفوف المزدحمة وتختبره عند 200% Font Scale.
+- Today يكدس بطاقات الملخص، عناوين الأقسام، المبلغ/الحالة، Header الشخص، وأزرار الإذن/إعادة المحاولة عند النص الكبير.
+- اختبار Today الصريح عند 200% Font Scale نجح ضمن **99/99** instrumentation.
+- فشل CI #866 السابق كان Assertion هشًا مرتبطًا بالـviewport في Statistics؛ أصلح في `ee23079f...` دون حذف تغطية، ثم أثبت #873 الإصلاح.
 
-الرأس الحالي يحتاج بوابة CI كاملة جديدة بعد هذه الدفعة قبل وسم Adaptive الجزئي Verified.
+### RTL/Bidi — الدفعة الحالية
+
+commit `36c5297a92f2ee700a41c34fc2d16ca7680b8d3a` يضيف تقوية عرض مختلط الاتجاه ويحتاج بوابة CI على رأس أحدث:
+
+- `ltrIsolate()` مركزي باستخدام LRI/PDI مع منع double wrapping.
+- `formatMoney()` يستخدم helper المركزي بدل literal مكرر.
+- Person Timeline يعيد استخدام `formatMoney()` بدل formatter مالي مكرر.
+- تواريخ/أوقات Person Timeline والعملات وأرقام الهاتف والبريد والحالات اللاتينية معزولة داخل النص العربي.
+- Documents Hub يعيد استخدام `formatMoney()`، ويعزل رقم المستند وmetadata اللاتينية للمرفقات.
+- Unit tests جديدة لـLTR isolation.
+
+الخطوة الحالية هي التحقق الكامل من هذه الدفعة؛ لا توسم Verified قبل نجاح CI.
 
 ## ملاحظة استقرار CI
 
 - فشل CI #858 السابق كان Flaky selector في `DueDateUiInstrumentedTest` بسبب `hasScrollAction()` الذي طابق أكثر من Scrollable.
 - تم استبداله بـ`hasScrollToIndexAction()` للحاوية ذات الفهرسة.
 - نفس SHA نجح في #859، ثم أثبت #861 الإصلاح بالكامل.
-- CI concurrency أصبح يستخدم اسم الفرع (`github.head_ref || github.ref_name`) لمنع تشغيل push وPR متوازيين لنفس الرأس؛ إلغاء #860 عند بدء #861 كان السلوك المقصود.
+- CI concurrency يستخدم اسم الفرع (`github.head_ref || github.ref_name`) لمنع تشغيل push وPR متوازيين لنفس الرأس.
+- الإلغاء التلقائي لتشغيل push الموازي عند بدء PR run هو السلوك المقصود.
 
 ## ترتيب العمل التالي
 
-1. تشغيل بوابة CI كاملة على الرأس الحالي الذي يشمل Adaptive Today والإصلاح الحتمي لاختبار Statistics.
-2. إذا أخضر: متابعة Accessibility/Adaptive audit لبقية الشاشات، خصوصًا touch targets، صفوف الأزرار، text scaling، focus/TalkBack semantics، وRTL/LTR للأرقام والتواريخ والمعرفات.
+1. إغلاق بوابة CI الكاملة لدفعة RTL/Bidi الحالية.
+2. متابعة Accessibility/Adaptive audit لشاشات Security وSettings وDocuments/Home/Account Details بحسب المخاطر الفعلية، خصوصًا text scaling وtouch targets وfocus/TalkBack semantics.
 3. تثبيت أي فجوات وصول باختبارات Instrumentation حقيقية، لا بمجرد تعديلات شكلية.
 4. تنفيذ المصاريف/الديون الجماعية حسب المواصفة دون إنشاء Ledger موازٍ.
 5. جولة UI/PDF polishing النهائية المؤجلة عمدًا حتى اكتمال الوظائف.

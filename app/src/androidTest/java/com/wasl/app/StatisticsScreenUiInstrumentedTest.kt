@@ -38,11 +38,11 @@ class StatisticsScreenUiInstrumentedTest {
         }
 
         composeRule.onNodeWithTag("objective-statistics-screen").assertIsDisplayed()
+        composeRule.onNodeWithText("بدون تقييم الأشخاص", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("المسددة").assertIsDisplayed()
         composeRule.onNodeWithText("تم الوفاء بها").performScrollTo().assertIsDisplayed()
         scrollToTag("statistics-method-note")
         composeRule.onNodeWithTag("statistics-method-note").assertIsDisplayed()
-        composeRule.onNodeWithText("بدون تقييم الأشخاص", substring = true).assertIsDisplayed()
     }
 
     @Test

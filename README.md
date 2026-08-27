@@ -2,45 +2,61 @@
 
 **كل حساب له وصل**
 
-وَصل هو مدير شخصي Local-first للديون والحقوق والالتزامات والسداد والأقساط والتذكيرات والمستندات المالية الشخصية. لا ينفذ تحويلات مالية فعلية، ولا يُقدَّم كنظام محاسبة شركات أو منصة قانونية.
+وَصل مدير مالي شخصي Local-first للديون والحقوق والالتزامات والسداد والأقساط والتذكيرات والمستندات والمرفقات. لا ينفذ تحويلات مالية فعلية، ولا يقدم كنظام محاسبة شركات أو منصة توثيق قانوني.
 
 ## الحالة الحالية
 
-المشروع في المرحلة الأولى للـMVP، وقد اكتملت قاعدة الحفظ لأول مسار فعلي:
+المشروع تجاوز MVP المالي الأساسي ويعمل حاليًا على استكمال الميزات المتقدمة وتثبيت بوابة التحقق قبل الإصدار.
 
-- المرجع التأسيسي محفوظ في WASL_MASTER_PROJECT_PROMPT.md.
-- Stack ومعمارية المنتج موثقان.
-- يوجد تطبيق Android قابل للبناء بواجهة عربية RTL.
-- يوجد Domain مالي مستقل يحفظ أصل الدين ويشتق الرصيد من الدفعات والعكس الموثق.
-- توجد قاعدة Room v3 للأشخاص والديون وLedger append-only والتذكيرات وأحداث التدقيق، مع Migrations صريحة من v1 تحفظ البيانات القديمة وSchemas مصدّرة.
-- يحفظ المسار السريع من الواجهة شخصًا ودينًا فعليين، ثم يعرضهما من قاعدة البيانات بعد إعادة الفتح.
-- يتيح نموذج الدين اختيار شخص محفوظ بالـID من بحث محلي محدود، وإنشاء عدة ديون مستقلة له دون تكرار سجل الشخص.
-- تعرض شاشة التفاصيل أصل الدين والمدفوع والمتبقي وTimeline كاملًا، وتسجل دفعة جزئية أو نهائية بعد مراجعة صريحة.
-- تتيح عكس دفعة بسبب إلزامي دون حذف التاريخ، مع Idempotency وإغلاق/إعادة فتح مشتقين.
-- يستخدم المسار Navigation 3 بمفاتيح Serializable، وتبقى التفاصيل Reactive من Room.
-- يدعم الإنشاء تاريخ استحقاق اختياريًا وتذكيرًا محليًا يومه عبر WorkManager 2.11.2، مع إذن الإشعارات وحالة استرداد وفتح الحساب من التنبيه.
-- يتيح تعديل تاريخ الاستحقاق أو إلغاءه بعد الإنشاء، وإعادة جدولة التذكير أو إلغاءه بمعرف ثابت، مع حدث تدقيق قبل/بعد ظاهر في Timeline.
-- تعرض شاشة «اليوم» الحسابات غير المسددة المستحقة اليوم والمتأخرة وفق تاريخ ومنطقة الجهاز، مع المتبقي وأيام التأخير وحالة التذكير وفتح الحساب.
-- تتيح شاشة «اليوم» طلب إذن الإشعارات أو فتح إعداداتها عند الحظر، وإعادة محاولة التذكير الفاشل دون تكرار العمل المجدول.
-- توفر وجهة بحث محلية في اسم الشخص ووصف الدين، بحد 50 نتيجة وفتح تفاصيل الحساب وتحديث النتائج بعد الحفظ أو الدفع.
-- تغطي الاختبارات المال، Parsing العربي الدقيق، إعادة فتح قاعدة البيانات، إنشاء عدة ديون للشخص نفسه، رحلة الدفع، تعديل الاستحقاق وتدقيقه، استعلامات Today والبحث واختيار الأشخاص، التزامن، القيود وMigrations.
+- تطبيق Android أصلي بـKotlin وJetpack Compose وMaterial 3 وواجهة عربية RTL.
+- Domain مالي مستقل في `core:domain`، مع `Money` بوحدات Minor Units من نوع `Long`.
+- Ledger append-only للدفعات والعكس؛ لا حذف للتاريخ المالي.
+- أشخاص وحسابات متعددة، واتجاهان: لي عند الناس / عليّ للناس، مع YER / SAR / USD دون خلط العملات.
+- Room **Schema v9** مع Migrations متسلسلة من v1 حتى v9 دون destructive migration.
+- الاستحقاقات، Today، WorkManager، Exact Alarm اختياري، تذكيرات متابعة عامة وإجراءات إشعار آمنة.
+- Payment Promises وخطط أقساط مع Revision history وتقدم مشتق من Ledger.
+- بحث محلي ومتقدم وAdaptive search.
+- مستندات PDF: إيصال سداد، إيصال دين، كشف حساب متعدد الصفحات، مع immutable snapshots وSHA-256.
+- Backup/Restore مشفر يشمل الجداول وملفات PDF والمرفقات.
+- App Lock عبر BiometricPrompt / Device Credential وPrivacy controls.
+- «طالبني» / Payment Claims كأحداث متابعة مستقلة عن Ledger.
+- خزنة مرفقات محلية مرتبطة بالدين وبحركة اختيارية مع SHA-256 وفحص سلامة.
+- صفحة شخص موحدة وTimeline عبر حساباته.
+- قوالب رسائل سداد قابلة للنسخ والمشاركة دون إرسال تلقائي.
+- إحصاءات موضوعية.
+- إدخال دين باللغة الطبيعية مع Preview/Confirmation قبل الحفظ.
 
-اقرأ HANDOFF.md لمعرفة الوضع الحي والخطوة التالية الوحيدة.
+الحالة الحية والخطوة التالية موثقتان في `HANDOFF.md` و`docs/CURRENT_STATUS.md`.
+
+## قاعدة البيانات
+
+Schema الحالي: **v9**.
+
+- v1: الأساس المالي.
+- v2: reminders.
+- v3: audit events.
+- v4: document identities / issued documents.
+- v5: payment promises.
+- v6: installment plans / installments.
+- v7: تعميم issued documents ودعم مستندات الحساب غير المرتبطة بحركة واحدة.
+- v8: `payment_claims`.
+- v9: `attachments`.
+
+التفاصيل الدقيقة في `docs/DATABASE_SCHEMA.md`.
 
 ## Stack
 
 - Kotlin 2.3.21
 - Android Gradle Plugin 9.3.1
 - Gradle 9.5.0
-- Jetpack Compose عبر BOM 2026.06.01
-- AndroidX Core 1.18.0 وLifecycle 2.10.0
-- Navigation 3 1.1.6
+- Jetpack Compose
+- Material 3
+- Navigation 3
+- Room 2.8.4
 - WorkManager 2.11.2
-- compileSdk وtargetSdk: 36
+- compileSdk / targetSdk: 36
 - minSdk: 26
 - JDK 17
-
-تفاصيل الاختيار والبدائل في DECISIONS.md.
 
 ## البناء والتحقق
 
@@ -50,36 +66,44 @@
 - Android SDK Platform 36
 - Android SDK Build Tools 36.0.0
 
-الأوامر:
+الأوامر الأساسية:
 
-- ./gradlew :core:domain:test
-- ./gradlew :app:testDebugUnitTest
-- ./gradlew :app:lintDebug
-- ./gradlew :app:assembleDebug
-- ./gradlew :app:connectedDebugAndroidTest
+```bash
+./gradlew :core:domain:test
+./gradlew :app:testDebugUnitTest
+./gradlew :app:lintDebug
+./gradlew :app:assembleDebug
+./gradlew :app:connectedDebugAndroidTest
+```
 
-GitHub Actions يشغّل اختبارات الدومين والـViewModel وLint وبناء Debug، ثم اختبارات Room على Android Emulator فعلي في كل Push وPull Request.
+GitHub Actions يشغل Unit tests وLint وبناء Debug، يتحقق من Room Schema الحالية، ثم يشغل Android instrumentation على Emulator ويفحص أدلة PDF الفعلية.
 
 ## خريطة المستودع
 
 | المسار | الغرض |
 |---|---|
-| WASL_MASTER_PROJECT_PROMPT.md | المرجع التأسيسي الأعلى |
-| AGENTS.md | قواعد العمل الإلزامية |
-| PROJECT_CONTEXT.md | صورة المشروع والبنية الحالية |
-| SPEC.md | المواصفات التشغيلية ومعايير القبول |
-| DECISIONS.md | القرارات المعمارية والبدائل |
-| HANDOFF.md | الحالة الحية والخطوة التالية |
-| CHANGELOG.md | التغييرات المهمة |
-| docs/ | المعمارية وSchema والتنقل والتصميم والأمان والاختبارات |
-| core/domain/ | مصدر الحقيقة المالي الخالي من Android |
-| app/ | تطبيق Android وواجهة Compose وRoom وRepository واختبارات الجهاز |
+| `WASL_MASTER_PROJECT_PROMPT.md` | المرجع التأسيسي الأعلى |
+| `AGENTS.md` | قواعد العمل الإلزامية |
+| `PROJECT_CONTEXT.md` | صورة المشروع والبنية الحالية |
+| `SPEC.md` | المواصفات التشغيلية ومعايير القبول |
+| `DECISIONS.md` | القرارات المعمارية والبدائل |
+| `HANDOFF.md` | الحالة الحية والخطوة التالية |
+| `CHANGELOG.md` | التغييرات المهمة |
+| `docs/` | المعمارية وSchema والتنقل والتصميم والأمان والاختبارات والمراحل |
+| `core/domain/` | مصدر الحقيقة المالي الخالي من Android |
+| `app/` | تطبيق Android وCompose وRoom والـStores والاختبارات |
 
 ## مبادئ غير قابلة للتفاوض
 
-- لا محو للتاريخ المالي.
+- لا محو للتاريخ المالي؛ التصحيح بالعكس.
 - لا خلط بين العملات.
 - لا Floating Point للأموال.
 - لا Backend إجباري للوظائف الأساسية.
 - لا أسرار أو بيانات مالية حساسة في Git أو Logs.
-- لا وظيفة مالية في الواجهة قبل وجود حفظ دائم واختبارات سلامة.
+- لا Payment من Notification callback أو من إدخال طبيعي/صوتي دون Preview/Confirmation.
+- Promise وClaim وReminder وInstallment Plan ليست مصادر حقيقة مالية.
+- أي Schema جديد يأتي مع Migration + tests + Backup/Restore update.
+
+## حالة التحقق الحالية
+
+في Android CI #851 نجحت مرحلة `verify` كاملة، بما فيها Unit tests وLint وDebug APK وRoom Schema v9. توقفت مرحلة Android instrumentation عند compile بسبب أربعة imports قديمة في AndroidTest. يجري إصلاحها على فرع التطوير نفسه، ولا يتم دمج `main` قبل عودة البوابة كاملة إلى الأخضر.

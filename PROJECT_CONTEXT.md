@@ -1,66 +1,71 @@
 # سياق مشروع وَصل
 
-آخر تحديث: 2026-08-13
+آخر تحديث: 2026-08-27
 
 ## الهوية
 
 - الاسم العربي: وَصل
 - الاسم الإنجليزي: Wasl
 - الشعار: كل حساب له وصل
-- المستودع الرسمي: ahmed9461/Wasl
-- Application ID الحالي: com.wasl.app
+- المستودع الرسمي: `ahmed9461/Wasl`
+- Application ID: `com.wasl.app`
+- الفرع النشط: `agent/bootstrap-wasl-foundation`
+- Pull Request: `#1` إلى `main` وما زال Draft.
 
 ## الهدف
 
-توفير مساعد مالي شخصي بسيط وموثوق يتابع دورة الدين كاملة: الإنشاء، الاستحقاق، الدفعات الجزئية والكاملة، التذكيرات، السجل، المستندات، النسخ الاحتياطي والأرشفة.
+وَصل مساعد مالي شخصي Local-first يتابع دورة الدين والحق والالتزام من الإنشاء حتى الإغلاق، مع الدفعات، الاستحقاقات، المتابعة، الأقساط، المستندات، المرفقات، النسخ الاحتياطي والحماية المحلية.
 
 المستخدم المستهدف شخص عادي يريد معرفة ما له وما عليه دون التعامل مع برنامج محاسبة معقد. العربية وRTL تجربة أساسية وليستا ترجمة جانبية.
 
-## الحدود
+## حدود المنتج
 
-وَصل ليس بنكًا أو محفظة أو بوابة دفع أو ERP أو منصة تحصيل أو جهة توثيق قانوني. تسجيل السداد يوثق واقعة داخل التطبيق ولا ينفذ تحويل أموال.
+وَصل ليس بنكًا أو محفظة أو بوابة دفع أو ERP أو منصة تحصيل أو جهة توثيق قانوني. تسجيل السداد يوثق واقعة داخل التطبيق ولا ينفذ تحويل أموال. المستندات والمرفقات سجلات شخصية ولا تمثل ضمانًا قانونيًا تلقائيًا.
 
 ## المرحلة الحالية
 
-MVP Phase 1 / Core debt-payment + audited due schedule + existing-person debts + Today + local search فوق Persistence موثوق.
+المشروع تجاوز MVP المالي الأساسي ودخل مرحلة **Post-MVP feature completion + stabilization**.
 
-ما يعمل الآن:
+الحالة الوظيفية الحالية تشمل:
 
-- Gradle project بوحدتي app وcore:domain.
-- واجهة Compose عربية وRTL مع Light/Dark وحالات Loading وEmpty وError وSuccess.
-- تمثيل دقيق للمال بالوحدات الصغرى Long.
-- Debt ledger يحتفظ بالأصل ويضيف PaymentRecorded وPaymentReversed.
-- اشتقاق الرصيد وحالة الدين والاستحقاق من Domain واحد.
-- تجميع الأرصدة حسب الاتجاه والعملة دون خلط العملات.
-- Room 2.8.4 Schema v3 للجداول persons وdebts وledger_entries وreminders وaudit_events مع Migrations v1→v2→v3 مختبرة.
-- Repository ذري لإنشاء شخص ودين وتسجيل دفعة وعكسها مع Idempotency وReplay بعد القراءة.
-- أول مسار UI يحفظ شخصًا ودينًا ويعرض الحسابات والإجماليات حسب العملة.
-- نموذج إنشاء الدين يختار شخصًا جديدًا أو شخصًا محفوظًا بالـID من استعلام Room محدود، ويضيف للشخص الموجود ديونًا مستقلة دون Person مكرر.
-- Repository يفصل أمر إنشاء الشخص والدين عن أمر إنشاء دين لشخص موجود، ويحفظ الدين وتذكيره ذريًا مع Idempotency بالـdebtId.
-- شاشة تفاصيل حساب تفاعلية تعرض الأصل والمدفوع والمتبقي والحالة والسجل المالي كاملًا.
-- تسجيل دفعة جزئية أو نهائية من UI عبر مراجعة ثم تأكيد، مع أخطاء قابلة للتصحيح وإعادة محاولة Idempotent عند غموض نتيجة الحفظ.
-- عكس دفعة من UI بسبب إلزامي دون حذف الحدث الأصلي، مع إغلاق الدين وإعادة فتحه بصورة مشتقة.
-- Navigation 3 بمفاتيح Serializable صريحة بين الرئيسية وتفاصيل الحساب، وقراءة التفاصيل Reactive من Room.
-- Unit tests واختبارات Room على Emulator للإغلاق وإعادة الفتح والتزامن والقيود.
-- اختبار UI End-to-End ينشئ دينًا، يسجل دفعة جزئية، يعيد فتح قاعدة البيانات، ويتحقق من بقاء المتبقي والسجل.
-- تاريخ استحقاق اختياري في إنشاء الدين وتفاصيله، مع تذكير اختياري قرابة 09:00 حسب المنطقة الزمنية المدنية.
-- تعديل أو إلغاء الاستحقاق من التفاصيل داخل Transaction واحدة مع تذكير ذي ID ثابت وحدث تدقيق before/after؛ وتنعكس إعادة الجدولة أو الإلغاء على Unique Work بعد Commit.
-- تذكير WorkManager فريد وقابل للاسترداد، وقناة إشعار مستقلة وإذن Android 13+ وحالة واضحة عند رفضه.
-- إعادة جدولة Idempotent عند بدء التطبيق وتغيّر الوقت أو المنطقة الزمنية، وفتح الحساب مباشرة من الإشعار.
-- شاشة Today Reactive للديون النشطة غير المسددة المستحقة اليوم والمتأخرة، تفصل الحالتين وتحسب أيام التأخير من DueState وLocalDate الحاليين.
-- الرئيسية وToday وجهتان علويتان بتنقل سفلي، ومن Today تفتح تفاصيل الحساب حيث تسجل الدفعة عبر مسار التأكيد القائم.
-- معالجة BLOCKED_PERMISSION بطلب إذن الإشعارات أو إعدادات القناة، ومعالجة FAILED بإعادة Recovery تعيد الحالة إلى SCHEDULED قبل الجدولة.
-- وجهة بحث محلية Reactive في اسم الشخص ووصف الدين، تعرض كل دين كنتيجة مستقلة وتفتح تفاصيله بالـID.
-- حد بحث ظاهر قدره 50 نتيجة، مع تطبيع المسافات ومعاملة محارف SQL wildcard كنصوص حرفية.
-- CI للبناء والاختبارات وLint واختبارات الجهاز.
+- Android أصلي بـKotlin وJetpack Compose وMaterial 3 وNavigation 3.
+- وحدة `core:domain` مستقلة عن Android لمنطق المال والديون والأقساط.
+- `Money` بوحدات Minor Units من نوع `Long`؛ لا Floating Point في الحساب المالي.
+- Ledger append-only مع Payment وPayment Reversal وIdempotency.
+- إنشاء أشخاص وحسابات متعددة للشخص نفسه دون تكرار Person.
+- الاستحقاقات وتعديلها وإلغاؤها مع Audit.
+- Today للاستحقاقات والوعود والأقساط والمطالبات ذات المتابعة.
+- WorkManager وExact Alarm اختياري وتذكيرات متابعة عامة مستقلة عن `due_date`.
+- إجراءات إشعار آمنة: دفع جزء / تم السداد / ذكرني لاحقًا، دون Ledger write من Notification callback.
+- Payment Promises وخطط أقساط مع Revision history وتقدم مشتق من Ledger.
+- بحث محلي ومتقدم في الأشخاص والحسابات والعمليات والمستندات والمبالغ والتواريخ.
+- مستندات مالية `PAYMENT_RECEIPT`, `DEBT_RECEIPT`, `ACCOUNT_STATEMENT` من Snapshots ثابتة مع PDF وSHA-256.
+- Backup/Restore تطبيقي مشفر يشمل البيانات وملفات PDF والمرفقات.
+- App Lock عبر BiometricPrompt / Device Credential وسياسات Privacy و`FLAG_SECURE`.
+- «طالبني» / Payment Claims محفوظة تاريخيًا ومستقلة عن Ledger.
+- خزنة مرفقات محلية تربط الملفات بالدين وبحركة اختيارية مع SHA-256 وفحص سلامة.
+- صفحة شخص موحدة تجمع حساباته وتعرض Timeline دون خلط العملات.
+- قوالب رسائل سداد قابلة للنسخ/المشاركة دون إرسال تلقائي.
+- إحصاءات موضوعية دون تصنيف الأشخاص.
+- إدخال دين باللغة الطبيعية مع Parse → Draft → Preview/Confirmation → Save.
 
-ما لا يعمل بعد:
+## قاعدة البيانات
 
-- البحث في العمليات والمستندات وأرقامها والتواريخ والمبالغ؛ التنفيذ الحالي يغطي الأشخاص والديون والوصف فقط.
-- أنواع التذكير المتقدمة والتكرار وAlarmManager القوي/الدقيق.
-- المستندات وPDF.
-- النسخ الاحتياطي والاستعادة.
-- PIN والبصمة.
+- Room Schema الحالي: **v9**.
+- سلسلة Migrations: `v1→v2→v3→v4→v5→v6→v7→v8→v9`.
+- لا `fallbackToDestructiveMigration` في Production.
+- v8 أضافت `payment_claims`.
+- v9 أضافت `attachments`.
+- Backup contract الحالي يستخدم Schema v9 ويشمل 12 جدولًا، إضافة إلى ملفات المستندات والمرفقات.
+
+التفاصيل في `docs/DATABASE_SCHEMA.md`.
+
+## بنية المستودع
+
+- `app`: Android entry point، Compose UI، ViewModels، Navigation، Room، Repositories/Stores، Reminders، PDF، Backup، Privacy واختبارات Android.
+- `core:domain`: Money، Debt ledger، Balance summaries، Installment schedule وقواعد مالية خالية من Android.
+- `docs`: عقود التصميم والهندسة والحالة والمراحل.
+- `.github/workflows/ci.yml`: بوابة البناء والاختبارات وLint وRoom schema وAndroid instrumentation وأدلة PDF.
 
 ## Stack المعتمد
 
@@ -69,41 +74,49 @@ MVP Phase 1 / Core debt-payment + audited due schedule + existing-person debts +
 | المنصة | Android أصلي |
 | اللغة | Kotlin |
 | UI | Jetpack Compose + Material 3 |
-| المعمارية | UI / Domain / Data مع UDF وRepositories |
-| المنطق المالي | وحدة JVM مستقلة core:domain |
-| قاعدة البيانات | Room 2.8.4 + KSP 2.3.11، Schema v3 وMigrations v1→v2→v3 |
-| الإعدادات | DataStore عند الحاجة |
-| التنقل | Navigation 3 1.1.6 بمفاتيح Serializable وBack stack مملوك للتطبيق |
-| الأعمال المؤجلة | WorkManager 2.11.2 مع Unique Work بحسب reminder id |
-| التذكير المحدد | AlarmManager غير دقيق افتراضيًا، Exact فقط بطلب مستخدم صريح |
-| مفاتيح التشفير | Android Keystore |
-| المصادقة المحلية | BiometricPrompt + Device Credential عند التنفيذ |
-| PDF | PdfDocument مع Android text layout، بعد بوابة اختبار عربية |
+| المعمارية | UI / Domain / Data مع UDF وRepositories/Stores |
+| المنطق المالي | `core:domain` JVM مستقل |
+| قاعدة البيانات | Room 2.8.4 + KSP، Schema v9 |
+| التنقل | Navigation 3 |
+| الأعمال المؤجلة | WorkManager مع Unique Work |
+| التنبيه القوي | Exact Alarm اختياري بطلب مستخدم صريح مع fallback |
+| المصادقة المحلية | BiometricPrompt + Device Credential |
+| PDF | Android PdfDocument/Text layout من Snapshots ثابتة |
 | البناء | AGP 9.3.1، Gradle 9.5.0، JDK 17 |
 | API | min 26، compile/target 36 |
 
-## البنية الحالية
+## الثوابت المعمارية
 
-- app: Android entry point، Compose، Home/Today/Search/Account details ViewModels، Navigation 3، Room، Repository واختبارات الجهاز.
-- core:domain: Money، CurrencyCode، Debt aggregate، ledger، summary.
-- docs: عقود التصميم والهندسة.
-- .github/workflows/ci.yml: حاجز التحقق الآلي.
+1. Ledger هو مصدر الحقيقة المالي ويظل append-only.
+2. التصحيح المالي بالعكس لا بالحذف أو تعديل الحدث الأصلي.
+3. Promise وClaim وReminder وInstallment Plan ليست Ledger ولا تغيّر الرصيد تلقائيًا.
+4. لا تجمع العملات المختلفة في إجمالي مالي واحد.
+5. PDF والتقارير تستهلك Read models/Snapshots ولا تعيد حساب المال بقواعد موازية.
+6. أي إجراء مالي قادم من إشعار أو إدخال طبيعي يجب أن يمر بمراجعة وتأكيد داخل التطبيق.
+7. الملفات المهمة تخزن داخل مساحة التطبيق ويثبت سلامتها بـSHA-256.
+8. أي Schema جديد يجب أن يأتي مع Migration واختبارات وBackup/Restore update في نفس المرحلة.
 
-الحدود المستهدفة عند نمو المشروع:
+## حالة التحقق في 27 أغسطس 2026
 
-- UI يعتمد على Domain وواجهات Repository.
-- Data يطبق Repository باستخدام Room وملفات خاصة بالتطبيق.
-- لا يعتمد Domain على Android أو Room أو Compose.
-- PDF والتقارير يستهلكان نفس Read models الناتجة من Domain، ولا يعيدان حساب المال.
+آخر رأس قبل هذا التحديث كان `94ce0adf3ff64431a261042ebb62e815b42f13f1`.
 
-## نموذج البيانات
+- Job `verify` في Android CI #851 نجح: Unit tests + Lint + Debug APK + Room Schema v9 verification.
+- Job `database-tests` توقف قبل تشغيل الاختبارات بسبب أربعة imports قديمة لـ`androidx.compose.ui.test.onNode` في ملفات AndroidTest.
+- الإصلاح الجاري يزيل هذه imports فقط؛ الاستدعاءات الصحيحة تبقى `composeRule.onNode(...)`.
+- لا تعتبر Claims/Attachments أو الرأس الحالي مغلقًا نهائيًا حتى تمر بوابة Android instrumentation كاملة على الرأس الجديد.
 
-التفاصيل في docs/DATABASE_SCHEMA.md. نُفذت persons وdebts وledger_entries وreminders وaudit_events في Schema v3. يقتصر audit_events حاليًا على تغيير جدول استحقاق الدين، ويقتصر reminders على DUE_DATE بجدولة WORK؛ وتبقى promises وinstallments وattachments وdocument_identities وdocuments مخططة لشرائحها، ولا تضاف كجداول فارغة قبل وجود سلوك واختبارات.
+## ما تبقى وظيفيًا بعد استعادة CI الأخضر
 
-## التشغيل
+الأولوية التالية:
 
-افتح جذر المستودع في Android Studio حديث يدعم AGP 9.3، واستخدم JDK 17 وSDK 36. يمكن تشغيل وحدة الدومين دون Android device. يحتاج app إلى Emulator أو جهاز API 26 فأعلى.
+1. إغلاق Claims وAttachments رسميًا بعد نجاح البوابة الكاملة وتوثيق Evidence.
+2. توسيع Adaptive UI وAccessibility: Compact/Medium/Expanded، Font scale، semantics، focus وtouch targets.
+3. مراجعة وتثبيت Statistics وNatural Text Entry كمرحلتين مقفلتين بالاختبارات الشاملة.
+4. تنفيذ الإدخال الصوتي: Voice → Text → نفس Natural Parser → Preview → Confirmation، دون حفظ مالي مباشر من الصوت.
+5. المصاريف/الديون الجماعية وفق المواصفة الأساسية.
+6. جولة تحسين UI/PDF النهائية واختبار قبول شامل Offline.
+7. Release signing ونسخة توزيع نهائية.
 
-## البيئات والأسرار
+## التشغيل والأسرار
 
-لا توجد خدمة خلفية أو مفاتيح API في المرحلة الحالية. لا يُسمح بإضافة Signing keystore أو كلمات مرور إلى المستودع. توقيع Release سيُصمم لاحقًا باستخدام GitHub Secrets أو تخزين محلي آمن.
+استخدم JDK 17 وAndroid SDK 36. لا توجد خدمة خلفية لازمة للوظائف الأساسية الحالية. لا تلتزم Signing keystore أو كلمات مرور أو أسرار في Git؛ توقيع Release يستخدم تخزينًا آمنًا/GitHub Secrets عند مرحلة الإصدار.

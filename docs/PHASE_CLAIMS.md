@@ -1,108 +1,90 @@
 # المرحلة A — «طالبني» / مطالبات السداد
 
-الحالة: **بدأت — التصميم الهندسي ومعايير القبول مثبتة، التنفيذ الوظيفي يلي تصحيحات 27 أغسطس مباشرة.**
+آخر تحديث: 2026-08-27
 
-المرجع: قسم «طالبني» في `WASL_MASTER_PROJECT_PROMPT.md`.
+الحالة: **منفذة وظيفيًا في الكود وSchema v8+؛ تنتظر نجاح بوابة Android instrumentation الكاملة على الرأس الحالي قبل إعلان Complete النهائي.**
+
+المرجع الأعلى: قسم «طالبني» في `WASL_MASTER_PROJECT_PROMPT.md`.
 
 ## الهدف
 
-تسجيل أن صاحب الحق طالب المستخدم بالسداد في حساب من اتجاه `PAYABLE`، مع إبقاء هذا الحدث مستقلًا تمامًا عن الدفعات والرصيد. المطالبة لا تعني أن مبلغًا دُفع، ولا تعدّل تاريخ الدين الأصلي، ولا تنشئ Ledger entry.
+تسجيل أن صاحب الحق طالب المستخدم بالسداد في حساب من اتجاه `PAYABLE`، مع إبقاء المطالبة مستقلة تمامًا عن Ledger والدفعات والرصيد وتاريخ الاستحقاق الأصلي.
 
-## نموذج البيانات المقترح
+## التنفيذ الحالي
 
-`PaymentClaimRecord` كسجل تاريخي append-only/terminal-resolution:
+تم تنفيذ:
+
+- `PaymentClaimRecord` ونماذج الأوامر والحالات.
+- `PaymentClaimStore` و`RoomPaymentClaimStore`.
+- `PaymentClaimDao` و`PaymentClaimEntity`.
+- Migration `7→8` وجدول `payment_claims`.
+- `PaymentClaimViewModel` وواجهة الحساب.
+- خيارات `TODAY / TOMORROW / SALARY / CUSTOM`.
+- الحالات `ACTIVE / RESOLVED / CANCELLED`.
+- إظهار المطالبة النشطة ضمن Today وأولوية المتابعة.
+- Backup/Restore للصفوف والتحقق من ثوابتها.
+- اختبارات Models/Resolver/ViewModel/Store/Migration/Account visibility/Today UI.
+
+## نموذج البيانات
 
 - `id`
 - `create_command_id`
 - `debt_id`
 - `claimed_at`
 - `follow_up_kind`: `TODAY | TOMORROW | SALARY | CUSTOM`
-- `follow_up_date` عند الحاجة
+- `follow_up_date_epoch_day` اختياري حسب النوع
 - `note` اختياري
 - `status`: `ACTIVE | RESOLVED | CANCELLED`
-- `resolution_command_id` اختياري
-- `resolved_at` اختياري
-- `resolution_note` اختياري
 - `created_at`
+- `resolution_command_id` اختياري للحالة النشطة وإلزامي للحالة النهائية
+- `resolved_at` اختياري للحالة النشطة وإلزامي للحالة النهائية
+- `resolution_note` اختياري
 - `updated_at`
-
-لا يتم استخدام Boolean داخل جدول الدين لأن المطلوب الاحتفاظ بتاريخ كل مطالبة.
 
 ## الثوابت
 
-1. يسمح بإنشاء مطالبة فقط لدين اتجاهه `PAYABLE` وغير مسدد بالكامل.
-2. المطالبة لا تغيّر `Ledger` ولا `originalAmount` ولا `balance` ولا `due_date`.
-3. `TODAY` و`TOMORROW` يشتقان تاريخ متابعة واضحًا من المنطقة الزمنية الحالية وقت الإنشاء.
-4. `CUSTOM` يتطلب تاريخًا صريحًا غير ماضٍ.
-5. `SALARY` يبقى اختيارًا معنويًا حتى يحدد المستخدم سياسة/تاريخ الراتب؛ لا نخمن تاريخ راتب من عندنا.
-6. كل create/resolve command idempotent.
-7. الحذف الفيزيائي غير مستخدم كسلوك عادي؛ الحسم يحفظ الحالة التاريخية.
-8. أي Reminder ناتج عن المطالبة منفصل عن الدفتر المالي، وفشله لا يلغي حفظ المطالبة.
+1. يسمح بإنشاء Claim فقط لدين `PAYABLE` غير مسدد بالكامل.
+2. Claim لا تغير Ledger أو `originalAmount` أو balance أو `due_date`.
+3. `TODAY` و`TOMORROW` يشتقان تاريخ متابعة من المنطقة الزمنية الحالية وقت الإنشاء.
+4. `CUSTOM` يتطلب تاريخًا صريحًا صالحًا.
+5. `SALARY` لا يخمن تاريخ راتب؛ يبقى اختيارًا معنويًا حتى توجد سياسة صريحة.
+6. create/resolve/cancel commands Idempotent.
+7. لا حذف فيزيائي كسلوك عادي؛ الحالة التاريخية محفوظة.
+8. أي Reminder مرتبط بالمتابعة يبقى أداة scheduling لا عملية مالية.
 
-## واجهة الحساب
+## واجهة الحساب وToday
 
-للحساب `PAYABLE` المفتوح:
+- زر «طالبني» يظهر للحساب `PAYABLE` المفتوح.
+- المستخدم يحدد متابعة وملاحظة اختيارية ثم يراجع قبل الحفظ.
+- Claim تظهر في سجل الحساب منفصلة عن الدفعات.
+- Today يعرض سبب الأولوية وموعد المتابعة عند توفر تاريخ فعلي.
+- لا auto-payment من Claim أو Today.
 
-- زر «طالبني».
-- عند الضغط: عرض وقت المطالبة الحالي وخيارات:
-  - سأسدد اليوم.
-  - غدًا.
-  - عند الراتب.
-  - تاريخ مخصص.
-- ملاحظة اختيارية.
-- Preview/تأكيد قبل الحفظ.
-- بعد الحفظ تظهر المطالبة في سجل الحساب ولا تختلط مع الدفعات.
+## Room / Backup
 
-## Today
+- Schema الإضافة: v8.
+- Migration `7→8` فقط دون destructive migration.
+- Backup v9 الحالي يشمل `payment_claims`.
+- Restore يتحقق من FK والاتجاه والـenums والتواريخ والحالات وcommand IDs.
 
-- المطالبة النشطة ترفع أولوية الحساب.
-- تعرض سبب الأولوية بوضوح: «طالبك بالسداد».
-- تعرض موعد المتابعة المختار إذا كان محددًا.
-- الإجراءات المالية تبقى مسارات مراجعة داخل التطبيق؛ لا auto-payment.
+## Evidence الموجود في المستودع
 
-## التذكيرات
-
-- عند وجود تاريخ متابعة فعلي، يمكن جدولة General Reminder/آلية منفصلة مع subject مناسب.
-- لا Exact Alarm افتراضيًا لمجرد تسجيل المطالبة.
-- لا إشعار إذا سُدد الحساب بالكامل قبل الموعد.
-
-## Room / Migration
-
-- Schema التالية: v8.
-- جدول مستقل `payment_claims` مع FK إلى `debts` وindexes للـdebt/status/follow-up date/command IDs.
-- Migration `7 -> 8` فقط، دون destructive migration.
-- تحديث exported schema والتحقق في CI.
-
-## Backup / Restore
-
-يجب إضافة المطالبات إلى النسخة المنطقية المشفرة، والتحقق عند الاستعادة من:
-
-- FK إلى debt موجود.
-- enum values معروفة.
-- التواريخ والحالات متسقة.
-- command IDs غير متعارضة.
-- `CUSTOM` لديه تاريخ.
-- terminal status لديه `resolved_at`.
-
-## الاختبارات المطلوبة قبل اعتبار المرحلة مكتملة
-
-- Domain/model validation.
-- DAO/Room insert/query/idempotency.
-- Migration 7→8.
-- Repository/Store create + resolve/cancel.
-- رفض claim على `RECEIVABLE` أو دين مسدد.
-- إثبات عدم تغيّر Ledger والرصيد.
-- Today priority/query.
-- UI: إنشاء مطالبة، تاريخ مخصص، إلغاء، عودة/Rotation.
-- Backup/Restore round-trip.
-- Lint + Debug build + instrumentation.
+- `PaymentClaimMigrationInstrumentedTest.kt`
+- `PaymentClaimStoreInstrumentedTest.kt`
+- `PaymentClaimAccountVisibilityInstrumentedTest.kt`
+- `TodayPaymentClaimUiInstrumentedTest.kt`
+- `PaymentClaimViewModelTest.kt`
+- `PaymentClaimModelsTest.kt`
+- `PaymentClaimFollowUpResolverTest.kt`
 
 ## تعريف الاكتمال
 
-لا تُعلّم هذه المرحلة Complete إلا بعد نجاح البوابة كاملة وتحديث:
+التنفيذ الوظيفي موجود، لكن لا توسم المرحلة **Complete/Verified** إلا بعد:
 
-- `docs/CURRENT_STATUS.md`
-- `HANDOFF.md`
-- `CHANGELOG.md`
-- Room schema exported JSON
-- أي ADR عند ظهور قرار معماري جديد.
+1. نجاح Unit/Lint/Debug build.
+2. نجاح Migration/Store/UI instrumentation على الرأس الحالي.
+3. نجاح Backup/Restore regression الذي يشمل Claims.
+4. عدم تغير Ledger أو الرصيد في اختبارات الثوابت.
+5. تحديث `CURRENT_STATUS.md`, `PROJECT_CONTEXT.md`, `HANDOFF.md`, `CHANGELOG.md` وSchema docs.
+
+Android CI #851 أثبت `verify` وSchema v9، لكنه توقف قبل instrumentation بسبب imports Compose test غير مرتبطة بمنطق Claims. الإصلاح الحالي يستهدف إعادة البوابة كاملة إلى الأخضر.

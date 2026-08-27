@@ -6,9 +6,12 @@ import androidx.lifecycle.viewModelScope
 import com.wasl.app.data.AccountOverview
 import com.wasl.app.data.InstallmentPlanStore
 import com.wasl.app.data.InstallmentRecord
+import com.wasl.app.data.PaymentClaimRecord
+import com.wasl.app.data.PaymentClaimStore
 import com.wasl.app.data.PaymentPromiseRecord
 import com.wasl.app.data.PaymentPromiseStore
 import com.wasl.app.data.UnavailableInstallmentPlanStore
+import com.wasl.app.data.UnavailablePaymentClaimStore
 import com.wasl.app.data.UnavailablePaymentPromiseStore
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.reminder.NoOpReminderScheduler
@@ -76,6 +79,25 @@ data class TodayInstallmentItem(
         get() = daysOverdue > 0L
 }
 
+data class TodayClaimItem(
+    val account: AccountOverview,
+    val claim: PaymentClaimRecord,
+    val daysOverdue: Long,
+) {
+    init {
+        require(claim.debtId == account.ledger.header.id) {
+            "Today payment claim must belong to its account."
+        }
+        require(claim.followUpDate != null) {
+            "Today payment claim requires a resolved follow-up date."
+        }
+        require(daysOverdue >= 0L) { "Payment claim days overdue cannot be negative." }
+    }
+
+    val isOverdue: Boolean
+        get() = daysOverdue > 0L
+}
+
 enum class TodayNotice {
     REMINDER_RECOVERY_REQUESTED,
     REMINDER_RECOVERY_FAILED,
@@ -88,6 +110,7 @@ data class TodayUiState(
     val items: List<TodayItem> = emptyList(),
     val promiseItems: List<TodayPromiseItem> = emptyList(),
     val installmentItems: List<TodayInstallmentItem> = emptyList(),
+    val claimItems: List<TodayClaimItem> = emptyList(),
     val isRequestingReminderRecovery: Boolean = false,
     val notice: TodayNotice? = null,
 ) {
@@ -109,8 +132,14 @@ data class TodayUiState(
     val dueTodayInstallmentItems: List<TodayInstallmentItem>
         get() = installmentItems.filterNot { it.isOverdue }
 
+    val overdueClaimItems: List<TodayClaimItem>
+        get() = claimItems.filter { it.isOverdue }
+
+    val dueTodayClaimItems: List<TodayClaimItem>
+        get() = claimItems.filterNot { it.isOverdue }
+
     val totalAttentionItems: Int
-        get() = items.size + promiseItems.size + installmentItems.size
+        get() = items.size + promiseItems.size + installmentItems.size + claimItems.size
 }
 
 class TodayViewModel(
@@ -119,6 +148,7 @@ class TodayViewModel(
     private val zoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
     private val reminderScheduler: ReminderScheduler = NoOpReminderScheduler,
     private val paymentPromiseStore: PaymentPromiseStore = UnavailablePaymentPromiseStore,
+    private val paymentClaimStore: PaymentClaimStore = UnavailablePaymentClaimStore,
     private val installmentPlanStore: InstallmentPlanStore =
         (repository as? InstallmentPlanStore) ?: UnavailableInstallmentPlanStore,
 ) : ViewModel() {
@@ -183,6 +213,7 @@ class TodayViewModel(
                 items = if (dateChanged) emptyList() else it.items,
                 promiseItems = if (dateChanged) emptyList() else it.promiseItems,
                 installmentItems = if (dateChanged) emptyList() else it.installmentItems,
+                claimItems = if (dateChanged) emptyList() else it.claimItems,
             )
         }
         observationJob = viewModelScope.launch {
@@ -191,7 +222,8 @@ class TodayViewModel(
                 repository.observeAccounts(),
                 paymentPromiseStore.observePendingPaymentPromises(date),
                 installmentPlanStore.observeActionableInstallments(date),
-            ) { dueAccounts, allAccounts, promises, installments ->
+                paymentClaimStore.observeOpenClaims(date),
+            ) { dueAccounts, allAccounts, promises, installments, claims ->
                 val accountsByDebtId = allAccounts.associateBy { it.ledger.header.id }
                 TodayUiProjection(
                     items = buildTodayItems(dueAccounts, date),
@@ -201,13 +233,14 @@ class TodayViewModel(
                         accountsByDebtId,
                         date,
                     ),
+                    claimItems = buildTodayClaimItems(claims, accountsByDebtId, date),
                 )
             }.catch { error ->
                 if (error is CancellationException) throw error
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        loadError = "تعذر قراءة استحقاقات ووعود وأقساط اليوم المحفوظة.",
+                        loadError = "تعذر قراءة استحقاقات ووعود وأقساط ومطالبات اليوم المحفوظة.",
                     )
                 }
             }.collect { projection ->
@@ -218,6 +251,7 @@ class TodayViewModel(
                         items = projection.items,
                         promiseItems = projection.promiseItems,
                         installmentItems = projection.installmentItems,
+                        claimItems = projection.claimItems,
                     )
                 }
             }
@@ -285,10 +319,30 @@ class TodayViewModel(
             .thenBy { it.installment.sequenceNumber },
     )
 
+    private fun buildTodayClaimItems(
+        claims: List<PaymentClaimRecord>,
+        accountsByDebtId: Map<DebtId, AccountOverview>,
+        date: LocalDate,
+    ): List<TodayClaimItem> = claims.mapNotNull { claim ->
+        val followUpDate = claim.followUpDate ?: return@mapNotNull null
+        if (followUpDate.isAfter(date)) return@mapNotNull null
+        val account = accountsByDebtId[claim.debtId] ?: return@mapNotNull null
+        TodayClaimItem(
+            account = account,
+            claim = claim,
+            daysOverdue = ChronoUnit.DAYS.between(followUpDate, date),
+        )
+    }.sortedWith(
+        compareBy<TodayClaimItem> { it.claim.followUpDate }
+            .thenBy { it.account.person.displayName }
+            .thenBy { it.claim.id },
+    )
+
     private data class TodayUiProjection(
         val items: List<TodayItem>,
         val promiseItems: List<TodayPromiseItem>,
         val installmentItems: List<TodayInstallmentItem>,
+        val claimItems: List<TodayClaimItem>,
     )
 
     class Factory(
@@ -297,6 +351,7 @@ class TodayViewModel(
         private val clock: Clock = Clock.systemUTC(),
         private val zoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
         private val paymentPromiseStore: PaymentPromiseStore = UnavailablePaymentPromiseStore,
+        private val paymentClaimStore: PaymentClaimStore = UnavailablePaymentClaimStore,
         private val installmentPlanStore: InstallmentPlanStore =
             (repository as? InstallmentPlanStore) ?: UnavailableInstallmentPlanStore,
     ) : ViewModelProvider.Factory {
@@ -311,6 +366,7 @@ class TodayViewModel(
                 zoneIdProvider = zoneIdProvider,
                 reminderScheduler = reminderScheduler,
                 paymentPromiseStore = paymentPromiseStore,
+                paymentClaimStore = paymentClaimStore,
                 installmentPlanStore = installmentPlanStore,
             ) as T
         }

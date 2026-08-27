@@ -32,7 +32,7 @@ class AttachmentStoreInstrumentedTest {
     private lateinit var database: WaslDatabase
     private lateinit var repository: RoomWaslRepository
     private lateinit var store: RoomAttachmentStore
-    private lateinit var debtId: DebtId
+    private var debtId: DebtId = DebtId("uninitialized")
     private val createdIds = mutableListOf<String>()
 
     @BeforeTest

@@ -11,7 +11,6 @@ import com.wasl.domain.DebtId
 import com.wasl.domain.Money
 import com.wasl.domain.PersonId
 import java.time.Clock
-import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
 import java.util.UUID
@@ -30,7 +29,7 @@ sealed interface NaturalDebtConfirmationResult {
 
     data class AmbiguousPerson(
         val personName: String,
-        val matchingPersonIds: List<PersonId>,
+        val matchingPeople: List<PersonRecord>,
     ) : NaturalDebtConfirmationResult
 }
 
@@ -41,7 +40,10 @@ class NaturalDebtConfirmationService(
     private val zoneIdProvider: () -> ZoneId = { ZoneId.systemDefault() },
     private val newId: () -> String = { UUID.randomUUID().toString() },
 ) {
-    suspend fun confirmAndSave(draft: NaturalEntryDraft): NaturalDebtConfirmationResult {
+    suspend fun confirmAndSave(
+        draft: NaturalEntryDraft,
+        selectedPersonId: PersonId? = null,
+    ): NaturalDebtConfirmationResult {
         if (!draft.canPreviewAsDebt) {
             return NaturalDebtConfirmationResult.InvalidDraft(draft.missingRequiredFields)
         }
@@ -54,11 +56,19 @@ class NaturalDebtConfirmationService(
             .first()
             .filter { normalizeName(it.displayName) == normalizeName(personName) }
 
-        if (exactPeople.size > 1) {
-            return NaturalDebtConfirmationResult.AmbiguousPerson(
-                personName = personName,
-                matchingPersonIds = exactPeople.map(PersonRecord::id),
-            )
+        val selectedPerson = if (selectedPersonId != null) {
+            exactPeople.singleOrNull { it.id == selectedPersonId }
+                ?: return NaturalDebtConfirmationResult.InvalidDraft(
+                    setOf(NaturalDraftField.PERSON),
+                )
+        } else {
+            if (exactPeople.size > 1) {
+                return NaturalDebtConfirmationResult.AmbiguousPerson(
+                    personName = personName,
+                    matchingPeople = exactPeople,
+                )
+            }
+            exactPeople.singleOrNull()
         }
 
         val now = clock.instant()
@@ -74,7 +84,7 @@ class NaturalDebtConfirmationService(
         val originalAmount = Money(amountMinorUnits, currency)
         val sourceNote = "الإدخال الطبيعي الأصلي: ${draft.sourceText.trim()}"
 
-        val account = exactPeople.singleOrNull()?.let { person ->
+        val account = selectedPerson?.let { person ->
             repository.createDebtForExistingPerson(
                 CreateDebtForExistingPersonCommand(
                     personId = person.id,

@@ -110,7 +110,16 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
+            set +e
             gradle --no-daemon -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true :app:connectedDebugAndroidTest
+            TEST_STATUS=$?
+            echo "=== Android instrumentation XML reports ==="
+            find app/build/outputs/androidTest-results/connected -type f -name '*.xml' -print -exec cat {} \; 2>/dev/null || true
+            echo "=== End Android instrumentation XML reports ==="
+            if [ "$TEST_STATUS" -ne 0 ]; then
+              exit "$TEST_STATUS"
+            fi
+            set -e
             mkdir -p app/build/outputs/payment-receipt app/build/outputs/account-documents
             adb exec-out run-as com.wasl.app cat files/test-artifacts/wasl-payment-receipt-sample.pdf > app/build/outputs/payment-receipt/wasl-payment-receipt-sample.pdf
             adb exec-out run-as com.wasl.app cat files/test-artifacts/wasl-debt-receipt-sample.pdf > app/build/outputs/account-documents/wasl-debt-receipt-sample.pdf

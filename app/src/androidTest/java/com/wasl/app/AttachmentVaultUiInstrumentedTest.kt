@@ -2,13 +2,10 @@ package com.wasl.app
 
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasScrollAction
-import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollTo
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -97,8 +94,7 @@ class AttachmentVaultUiInstrumentedTest {
         waitForTag("account-attachments")
         composeRule.onNodeWithTag("account-attachments").assertIsDisplayed()
         composeRule.onNodeWithTag("add-attachment").assertIsDisplayed()
-        composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag("attachment-$attachmentId"))
-        composeRule.onNodeWithTag("attachment-$attachmentId").assertIsDisplayed()
+        composeRule.onNodeWithTag("attachment-$attachmentId").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("invoice-proof.pdf").assertIsDisplayed()
         composeRule.onNodeWithText("سلامة الملف: سليمة").assertIsDisplayed()
     }
@@ -122,8 +118,7 @@ class AttachmentVaultUiInstrumentedTest {
 
         setDocumentsContent()
         waitForTag("account-attachments")
-        composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag("attachment-$attachmentId"))
-        composeRule.onNodeWithTag("attachment-$attachmentId").assertIsDisplayed()
+        composeRule.onNodeWithTag("attachment-$attachmentId").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("سلامة الملف: البصمة لا تطابق المحتوى").assertIsDisplayed()
     }
 

@@ -7,9 +7,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.wasl.app.data.AddAttachmentCommand
 import com.wasl.app.data.AttachmentIntegrity
 import com.wasl.app.data.CreatePersonWithDebtCommand
+import com.wasl.app.data.RecordPaymentCommand
 import com.wasl.domain.CurrencyCode
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtId
+import com.wasl.domain.LedgerEntryId
 import com.wasl.domain.Money
 import com.wasl.domain.PersonId
 import java.io.ByteArrayInputStream
@@ -89,6 +91,102 @@ class AttachmentStoreInstrumentedTest {
 
         File(context.filesDir, record.relativePath).writeText("changed")
         assertEquals(AttachmentIntegrity.HASH_MISMATCH, store.findById(id)?.integrity)
+    }
+
+    @Test
+    fun missingFilesAndCommonMimeTypesRemainExplicit() = runBlocking {
+        val cases = listOf(
+            "image.jpg" to "image/jpeg",
+            "receipt.pdf" to "application/pdf",
+            "archive.bin" to "application/octet-stream",
+        )
+        val records = cases.mapIndexed { index, (name, mime) ->
+            val id = UUID.randomUUID().toString().also(createdIds::add)
+            store.importAttachment(
+                AddAttachmentCommand(
+                    id = id,
+                    debtId = debtId,
+                    displayName = name,
+                    mimeType = mime,
+                    createdAt = Instant.parse("2026-08-27T09:0${index}:00Z"),
+                ),
+                ByteArrayInputStream("payload-$index".encodeToByteArray()),
+            )
+        }
+
+        assertEquals(cases.map { it.second }, records.map { it.mimeType })
+        assertEquals(3, store.observeForDebt(debtId).first().size)
+
+        val removed = records.first()
+        File(context.filesDir, removed.relativePath).delete()
+        assertEquals(AttachmentIntegrity.MISSING, store.findById(removed.id)?.integrity)
+    }
+
+    @Test
+    fun ledgerLinkedAttachmentRequiresEntryFromSameDebt() = runBlocking {
+        val ownPaymentId = LedgerEntryId("payment-${UUID.randomUUID()}")
+        repository.recordPayment(
+            RecordPaymentCommand(
+                commandId = "command-${UUID.randomUUID()}",
+                entryId = ownPaymentId,
+                debtId = debtId,
+                amount = Money(10_000L, CurrencyCode.YER),
+                paidAt = Instant.parse("2026-08-27T10:00:00Z"),
+                recordedAt = Instant.parse("2026-08-27T10:00:00Z"),
+            ),
+        )
+        val linkedId = UUID.randomUUID().toString().also(createdIds::add)
+        val linked = store.importAttachment(
+            AddAttachmentCommand(
+                id = linkedId,
+                debtId = debtId,
+                ledgerEntryId = ownPaymentId,
+                displayName = "payment-proof.pdf",
+                mimeType = "application/pdf",
+                createdAt = Instant.parse("2026-08-27T10:01:00Z"),
+            ),
+            ByteArrayInputStream("linked-proof".encodeToByteArray()),
+        )
+        assertEquals(ownPaymentId, linked.ledgerEntryId)
+
+        val otherDebtId = DebtId("debt-${UUID.randomUUID()}")
+        repository.createPersonWithDebt(
+            CreatePersonWithDebtCommand(
+                personId = PersonId("person-${UUID.randomUUID()}"),
+                debtId = otherDebtId,
+                personName = "حساب آخر",
+                direction = DebtDirection.RECEIVABLE,
+                originalAmount = Money(50_000L, CurrencyCode.YER),
+                openedAt = Instant.parse("2026-08-27T08:00:00Z"),
+                createdAt = Instant.parse("2026-08-27T08:00:00Z"),
+            ),
+        )
+        val otherPaymentId = LedgerEntryId("payment-${UUID.randomUUID()}")
+        repository.recordPayment(
+            RecordPaymentCommand(
+                commandId = "command-${UUID.randomUUID()}",
+                entryId = otherPaymentId,
+                debtId = otherDebtId,
+                amount = Money(5_000L, CurrencyCode.YER),
+                paidAt = Instant.parse("2026-08-27T10:02:00Z"),
+                recordedAt = Instant.parse("2026-08-27T10:02:00Z"),
+            ),
+        )
+
+        val rejectedId = UUID.randomUUID().toString().also(createdIds::add)
+        assertFailsWith<IllegalArgumentException> {
+            store.importAttachment(
+                AddAttachmentCommand(
+                    id = rejectedId,
+                    debtId = debtId,
+                    ledgerEntryId = otherPaymentId,
+                    displayName = "wrong-payment.pdf",
+                    mimeType = "application/pdf",
+                    createdAt = Instant.parse("2026-08-27T10:03:00Z"),
+                ),
+                ByteArrayInputStream("wrong-link".encodeToByteArray()),
+            )
+        }
     }
 
     @Test

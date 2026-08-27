@@ -202,7 +202,7 @@ class MvpAcceptanceInstrumentedTest {
         } finally {
             password.fill('\u0000')
         }
-        assertEquals(8, backup.schemaVersion)
+        assertEquals(9, backup.schemaVersion)
         assertEquals(1, backup.documentCount)
 
         val extraDebtId = DebtId("mvp-extra-debt")

@@ -112,6 +112,12 @@ class MainActivity : FragmentActivity() {
                         .then(blockedContentModifier),
                 ) {
                     CompositionLocalProvider(
+                        LocalOpenPersonTimeline provides { personId ->
+                            startActivity(
+                                Intent(this@MainActivity, PersonTimelineActivity::class.java)
+                                    .putExtra(PersonTimelineActivity.EXTRA_PERSON_ID, personId.value),
+                            )
+                        },
                         LocalOpenInstallmentsHub provides {
                             settingsOpen = false
                             documentsOpen = false

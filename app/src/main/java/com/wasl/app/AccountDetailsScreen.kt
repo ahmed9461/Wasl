@@ -501,6 +501,7 @@ private fun AccountSummaryCard(
     account: AccountOverview,
     onOpenDueSchedule: () -> Unit,
 ) {
+    val openPersonTimeline = LocalOpenPersonTimeline.current
     val ledger = account.ledger
     val receivable = ledger.header.direction == DebtDirection.RECEIVABLE
     val heroContainer = if (receivable) {
@@ -638,6 +639,15 @@ private fun AccountSummaryCard(
                         MetadataRow("تاريخ الإغلاق", formatInstant(closedAt))
                     }
                 }
+            }
+
+            OutlinedButton(
+                onClick = { openPersonTimeline(account.person.id) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("open-person-timeline"),
+            ) {
+                Text("صفحة الشخص والسجل الموحد")
             }
 
             if (!ledger.balance.isZero) {

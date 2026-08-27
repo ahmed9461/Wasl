@@ -386,6 +386,30 @@ class AndroidBackupService(
                 """.trimIndent(),
             ) == 0L,
         ) { "النسخة تحتوي قسطًا بعملة لا تطابق الدين." }
+        require(
+            singleLong(
+                db,
+                """
+                SELECT COUNT(*) FROM payment_claims c
+                JOIN debts d ON d.id = c.debt_id
+                WHERE d.direction != 'PAYABLE'
+                """.trimIndent(),
+            ) == 0L,
+        ) { "النسخة تحتوي مطالبة سداد مرتبطة بدين ليس من نوع عليّ له." }
+        require(
+            singleLong(
+                db,
+                """
+                SELECT COUNT(*) FROM payment_claims
+                WHERE follow_up_kind NOT IN ('TODAY', 'TOMORROW', 'SALARY', 'CUSTOM')
+                   OR status NOT IN ('ACTIVE', 'RESOLVED', 'CANCELLED')
+                   OR (follow_up_kind = 'CUSTOM' AND follow_up_date_epoch_day IS NULL)
+                   OR (follow_up_kind = 'SALARY' AND follow_up_date_epoch_day IS NOT NULL)
+                   OR (status = 'ACTIVE' AND (resolved_at IS NOT NULL OR resolution_command_id IS NOT NULL))
+                   OR (status != 'ACTIVE' AND (resolved_at IS NULL OR resolution_command_id IS NULL))
+                """.trimIndent(),
+            ) == 0L,
+        ) { "النسخة تحتوي سجل مطالبة سداد غير متسق." }
     }
 
     private fun singleLong(db: SupportSQLiteDatabase, sql: String): Long =
@@ -429,7 +453,7 @@ class AndroidBackupService(
     )
 
     private companion object {
-        const val SCHEMA_VERSION = 7
+        const val SCHEMA_VERSION = 8
         const val MIN_PASSWORD_LENGTH = 8
         const val READY_STATUS = "READY"
         const val DOCUMENTS_DIRECTORY = "documents"
@@ -446,6 +470,7 @@ class AndroidBackupService(
             "document_identities",
             "issued_documents",
             "payment_promises",
+            "payment_claims",
             "installment_plans",
             "installments",
         )
@@ -461,6 +486,7 @@ class AndroidBackupService(
             "document_identities" to "SELECT * FROM document_identities ORDER BY created_at, id",
             "issued_documents" to "SELECT * FROM issued_documents ORDER BY created_at, id",
             "payment_promises" to "SELECT * FROM payment_promises ORDER BY created_at, id",
+            "payment_claims" to "SELECT * FROM payment_claims ORDER BY claimed_at, created_at, id",
             "installment_plans" to "SELECT * FROM installment_plans ORDER BY debt_id, revision_number, id",
             "installments" to "SELECT * FROM installments ORDER BY plan_id, sequence_number, id",
         )

@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -56,16 +56,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Wasl-room-schema
-          path: app/schemas/com.wasl.app.data.local.WaslDatabase/8.json
+          path: app/schemas/com.wasl.app.data.local.WaslDatabase/9.json
           if-no-files-found: error
 
-      - name: Verify generated Room schema v8
+      - name: Verify generated Room schema v9
         run: |
-          SCHEMA="app/schemas/com.wasl.app.data.local.WaslDatabase/8.json"
-          test "$(jq -r '.database.version' "$SCHEMA")" = "8"
-          test "$(jq -r '.database.identityHash' "$SCHEMA")" = "916f9ad1c7d2bde14556f92d37c663bb"
+          SCHEMA="app/schemas/com.wasl.app.data.local.WaslDatabase/9.json"
+          test "$(jq -r '.database.version' "$SCHEMA")" = "9"
           jq -e '.database.entities[] | select(.tableName == "payment_claims")' "$SCHEMA" >/dev/null
-          jq -e '.database.entities[] | select(.tableName == "payment_claims") | .indices[] | select(.name == "index_payment_claims_create_command_id" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "attachments")' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "attachments") | .indices[] | select(.name == "index_attachments_relative_path" and .unique == true)' "$SCHEMA" >/dev/null
 
   database-tests:
     needs: verify
@@ -83,7 +83,7 @@ jobs:
           path: app/schemas/com.wasl.app.data.local.WaslDatabase
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"

@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.wasl.app.ui.theme.WaslTheme
 import kotlin.test.Test
 import org.junit.Rule
 import org.junit.runner.RunWith

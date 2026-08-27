@@ -1,6 +1,9 @@
 package com.wasl.app
 
+import android.app.Activity
 import android.app.Application
+import android.os.Bundle
+import android.os.SystemClock
 import com.wasl.app.backup.AndroidBackupService
 import com.wasl.app.backup.BackupService
 import com.wasl.app.data.AttachmentStore
@@ -25,6 +28,8 @@ import com.wasl.app.document.AccountDocumentService
 import com.wasl.app.document.AndroidAccountDocumentService
 import com.wasl.app.document.AndroidPaymentReceiptService
 import com.wasl.app.document.PaymentReceiptService
+import com.wasl.app.privacy.AppForegroundTracker
+import com.wasl.app.privacy.AppLockSession
 import com.wasl.app.privacy.PrivacyPreferences
 import com.wasl.app.reminder.GeneralReminderNotificationPublisher
 import com.wasl.app.reminder.GeneralReminderScheduler
@@ -143,6 +148,8 @@ class WaslApplication : Application() {
         PrivacyPreferences(this)
     }
 
+    internal val appLockSession = AppLockSession()
+
     val backupService: BackupService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         AndroidBackupService(
             context = this,
@@ -164,10 +171,44 @@ class WaslApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        appLockSession.initialize(privacyPreferences.appLockEnabled)
+        registerAppLockLifecycle()
         UnavailableAttachmentStore.install(attachmentStore)
         reminderNotificationPublisher.ensureChannels()
         generalReminderNotificationPublisher.ensureChannel()
         reminderScheduler.requestRecovery()
         generalReminderScheduler.requestRecovery()
+    }
+
+    private fun registerAppLockLifecycle() {
+        val tracker = AppForegroundTracker(
+            onForeground = {
+                appLockSession.onForeground(
+                    enabledFromPreferences = privacyPreferences.appLockEnabled,
+                    timeoutMillis = privacyPreferences.appLockTimeout.durationMillis,
+                    nowElapsedRealtime = SystemClock.elapsedRealtime(),
+                )
+            },
+            onBackground = {
+                appLockSession.onBackground(SystemClock.elapsedRealtime())
+            },
+        )
+        registerActivityLifecycleCallbacks(
+            object : Application.ActivityLifecycleCallbacks {
+                override fun onActivityStarted(activity: Activity) {
+                    tracker.activityStarted()
+                }
+
+                override fun onActivityStopped(activity: Activity) {
+                    tracker.activityStopped(activity.isChangingConfigurations)
+                }
+
+                override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+                override fun onActivityResumed(activity: Activity) = Unit
+                override fun onActivityPaused(activity: Activity) = Unit
+                override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+                override fun onActivityDestroyed(activity: Activity) = Unit
+            },
+        )
     }
 }

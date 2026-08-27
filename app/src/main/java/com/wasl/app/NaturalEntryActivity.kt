@@ -37,12 +37,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.fragment.app.FragmentActivity
 import com.wasl.app.data.PersonRecord
 import com.wasl.app.ui.theme.WaslTheme
 import com.wasl.domain.CurrencyCode
@@ -53,7 +53,7 @@ import java.math.BigDecimal
 import java.util.Locale
 import kotlinx.coroutines.launch
 
-class NaturalEntryActivity : FragmentActivity() {
+class NaturalEntryActivity : ProtectedWaslActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val app = application as WaslApplication
@@ -88,6 +88,7 @@ internal fun NaturalEntryScreen(
     var isSaving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     fun analyze(source: String = text) {
         draft = parser.parse(source)
@@ -133,15 +134,19 @@ internal fun NaturalEntryScreen(
     val voiceLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
     ) { result ->
-        if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
-        val recognized = result.data
-            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            ?.firstOrNull()
-            ?.trim()
-            .orEmpty()
-        if (recognized.isNotBlank()) {
-            text = recognized
-            analyze(recognized)
+        val accepted = result.resultCode == Activity.RESULT_OK
+        val recognized = recognizedSpeechText(
+            accepted = accepted,
+            candidates = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS),
+        )
+        when {
+            recognized != null -> {
+                text = recognized
+                analyze(recognized)
+            }
+            accepted -> {
+                message = "لم يتم التعرف على كلام واضح. حاول مرة أخرى أو اكتب النص يدويًا."
+            }
         }
     }
 
@@ -220,9 +225,16 @@ internal fun NaturalEntryScreen(
                                 )
                                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar")
                                 putExtra(RecognizerIntent.EXTRA_PROMPT, "تحدث الآن")
+                                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
                             }
-                            runCatching { voiceLauncher.launch(intent) }
-                                .onFailure { message = "خدمة التعرف على الصوت غير متاحة على هذا الجهاز." }
+                            if (intent.resolveActivity(context.packageManager) == null) {
+                                message = "خدمة التعرف على الصوت غير متاحة على هذا الجهاز."
+                            } else {
+                                runCatching { voiceLauncher.launch(intent) }
+                                    .onFailure {
+                                        message = "تعذر فتح خدمة التعرف على الصوت. يمكنك الكتابة يدويًا."
+                                    }
+                            }
                         },
                     ) {
                         Text("إملاء صوتي")

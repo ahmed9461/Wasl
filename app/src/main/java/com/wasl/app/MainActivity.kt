@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.os.SystemClock
 import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -47,7 +46,10 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val waslApplication = application as WaslApplication
-        appLockViewModel = ViewModelProvider(this)[AppLockViewModel::class.java]
+        appLockViewModel = ViewModelProvider(
+            this,
+            AppLockViewModel.Factory(waslApplication.appLockSession),
+        )[AppLockViewModel::class.java]
         appLockViewModel.initialize(waslApplication.privacyPreferences.appLockEnabled)
         biometricPrompt = BiometricPrompt(
             this,
@@ -288,12 +290,6 @@ class MainActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         val waslApplication = application as WaslApplication
-        val preferences = waslApplication.privacyPreferences
-        appLockViewModel.onForeground(
-            enabledFromPreferences = preferences.appLockEnabled,
-            timeoutMillis = preferences.appLockTimeout.durationMillis,
-            nowElapsedRealtime = SystemClock.elapsedRealtime(),
-        )
         applySecureScreenPreference()
         if (
             appLockViewModel.locked &&
@@ -308,13 +304,6 @@ class MainActivity : FragmentActivity() {
         if (waslApplication.generalReminderNotificationPublisher.canNotify()) {
             runCatching { waslApplication.generalReminderService.requestRecovery() }
         }
-    }
-
-    override fun onStop() {
-        if (!isChangingConfigurations) {
-            appLockViewModel.onBackground(SystemClock.elapsedRealtime())
-        }
-        super.onStop()
     }
 
     override fun onRequestPermissionsResult(

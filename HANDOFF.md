@@ -14,7 +14,7 @@
 - لا تدمج `main` إلا بطلب صريح وبعد نجاح بوابة التحقق.
 - Room Schema الحالي: **v9**.
 - سلسلة Migrations: v1→v9 دون destructive migration.
-- الرأس قبل دفعة إصلاح CI الحالية: `94ce0adf3ff64431a261042ebb62e815b42f13f1`.
+- الرأس السابق قبل دفعة التزامن الحالية: `94ce0adf3ff64431a261042ebb62e815b42f13f1`.
 
 ## مصدر الحقيقة عند التعارض
 
@@ -107,15 +107,29 @@
 - `NaturalEntryActivity/Parser/Draft/ConfirmationService`.
 - الإدخال الطبيعي يمر Parse → Preview → Confirmation → Save، ولا يحفظ مباشرة من النص دون مراجعة.
 
-## ما لم ينفذ بعد
+### Voice Dictation
 
-- Voice entry الفعلي (`Voice → Text → Natural Parser → Preview → Confirm`).
-- اكتمال Accessibility/Adaptive audit الشامل عبر كل الشاشات.
+الإملاء الصوتي **موجود فعليًا** داخل `NaturalEntryActivity` عبر Android `RecognizerIntent`:
+
+`Voice → RecognizerIntent result → text → NaturalEntryParser → Preview → Confirmation → Save`
+
+- الزر الحالي: «إملاء صوتي».
+- أول نتيجة معترف بها تملأ النص وتدخل التحليل.
+- عدم توفر recognizer يعرض رسالة للمستخدم.
+- لا حفظ مالي مباشر من الصوت.
+
+المتبقي هنا هو **التقوية والاختبارات**، لا إعادة بناء الميزة من الصفر: adapter قابل للاختبار، حالات cancel/empty/unavailable، واختبار صريح لمسار نتيجة الصوت حتى confirmation.
+
+## ما لم يغلق بعد
+
+- Full CI للرأس النهائي بعد إصلاح AndroidTest imports.
+- Accessibility/Adaptive audit الشامل عبر كل الشاشات.
+- Voice dictation hardening واختبارات مخصصة.
 - المصاريف/الديون الجماعية بحسب المواصفة الأساسية.
 - جولة UI/PDF polishing النهائية.
 - Release signing والتوزيع النهائي.
 
-## حالة CI الحية
+## حالة CI المرجعية قبل الإصلاح
 
 Android CI #851 للرأس `94ce0adf...`:
 
@@ -127,31 +141,31 @@ Android CI #851 للرأس `94ce0adf...`:
 - Lint ✅
 - Debug APK ✅
 - Room Schema v9 generated/current check ✅
-- التحقق من وجود `payment_claims` ✅
-- التحقق من وجود `attachments` وفهرس `relative_path` الفريد ✅
+- `payment_claims` ✅
+- `attachments` وفهرس `relative_path` الفريد ✅
 
 ### `database-tests`
 
-توقف في `compileDebugAndroidTestKotlin` قبل تشغيل instrumentation بسبب import غير صالح:
+توقف في `compileDebugAndroidTestKotlin` قبل instrumentation بسبب import غير صالح:
 
 `androidx.compose.ui.test.onNode`
 
-في أربعة ملفات:
+في:
 
 - `DueDateUiInstrumentedTest.kt`
 - `PersonTimelineUiInstrumentedTest.kt`
 - `StatisticsScreenUiInstrumentedTest.kt`
 - `TodayUiInstrumentedTest.kt`
 
-الاستدعاءات نفسها صحيحة بصيغة `composeRule.onNode(...)`؛ لذلك الإصلاح هو إزالة import القديم فقط، دون تغيير منطق الاختبارات.
+الإصلاح يزيل import فقط؛ `composeRule.onNode(...)` يبقى كما هو، ولا تخفف assertions.
 
-## الخطوة التالية الوحيدة بعد هذه الدفعة
+## الخطوة التالية الوحيدة
 
-1. Push commit الذي يجمع إصلاح imports وتحديث الوثائق.
+1. Push الرأس النهائي الذي يجمع إصلاح imports ومزامنة كل الوثائق المتأخرة.
 2. متابعة CI الجديد.
-3. إذا أخضر: توثيق الرأس/رقم CI واعتبار Claims + Attachments مغلقتين بعد التأكد من نتائج اختباراتهم وBackup regression.
-4. إذا ظهر فشل جديد: إصلاح السبب الحقيقي فقط، بلا تعطيل اختبارات أو تخفيف assertions.
-5. بعد البوابة الخضراء: الانتقال إلى Accessibility/Adaptive audit ثم Voice entry.
+3. إذا أخضر: توثيق الرأس/رقم CI وإغلاق Claims + Attachments بعد مراجعة اختباراتهم وBackup regression.
+4. إذا ظهر فشل جديد: إصلاح السبب الحقيقي فقط، بلا تعطيل اختبارات.
+5. بعد الأخضر: Accessibility/Adaptive audit ثم Voice hardening ثم الميزات الجماعية.
 
 ## قواعد ثابتة لا تكسر
 
@@ -163,7 +177,7 @@ Android CI #851 للرأس `94ce0adf...`:
 6. Reminder ليست Payment.
 7. Installment Plan ليس Ledger موازيًا.
 8. Notification action لا يكتب عملية مالية مباشرة.
-9. Natural/Voice entry لا يحفظ ماليًا دون Preview/Confirmation.
+9. Natural/Voice input لا يحفظ ماليًا دون Preview/Confirmation.
 10. PDF يعتمد Snapshot ثابتًا.
 11. READY document/attachment لا يفتح إذا فقد الملف أو فشل SHA-256.
 12. Backup/Restore لا يتجاوز Schema/path/hash/FK/invariant validation.

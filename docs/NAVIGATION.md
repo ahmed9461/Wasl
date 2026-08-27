@@ -1,81 +1,113 @@
 # معمارية التنقل
 
-الحالة: Navigation 3 منفذ للرئيسية وToday والبحث وتفاصيل الحساب؛ بقية الوجهات العليا والتكيف Medium/Expanded ما زالت عقد تصميم.
+آخر تحديث: 2026-08-27
 
-## المسار المنفذ
+الحالة: Navigation 3 هو المسار الرئيسي داخل التطبيق، مع وجهات إضافية مستقلة لبعض الأدوات المحمية. التوثيق القديم الذي حصر التنفيذ في Home/Today/Search/Account Details لم يعد صحيحًا.
 
-- `HomeRoute`: جذر التطبيق وقائمة الحسابات.
-- `TodayRoute`: وجهة عليا تعرض العمل اليومي الحالي، وتنتقل إليها من التنقل السفلي.
-- `SearchRoute`: وجهة عليا تحتفظ بعبارة البحث ونتائجها Reactive وتنتقل إليها من التنقل السفلي.
-- `AccountDetailsRoute(debtId)`: يحمل Debt ID فقط، ثم يقرأ البيانات Reactive من Repository.
-- يملك `WaslApp` Back stack واحدًا عبر `rememberNavBackStack`، والمفاتيح `NavKey` قابلة للتسلسل.
-- يعيد Back من التفاصيل إلى القائمة الموجودة في المكدس؛ System back يمر عبر `NavDisplay`.
-- فتح التفاصيل من Today يعيد Back إلى Today، وفتحها من Search يعيد Back إلى البحث وعبارته نفسها، والعودة إلى الرئيسية تنظف ما فوق جذر Home دون تكرار وجهة عليا.
-- إشعار موعد الدين يرسل `debtId` فقط إلى MainActivity ذات `singleTop`، ويضيف AccountDetailsRoute بعد التحقق عبر Repository.
-- نموذج الدين داخل Home لا ينشئ Route جديدًا لاختيار الشخص؛ يبدل بين «شخص جديد» و«شخص موجود»، ويحفظ اختيار الموجود بالـPerson ID ثم يغلق بعد نجاح الحفظ فقط.
+## المسارات الحالية
 
-## الوجهات العليا
+### داخل `WaslApp` / Navigation 3
 
-- الرئيسية.
-- اليوم.
-- البحث.
-- الحسابات.
-- الأشخاص.
-- المستندات.
-- المزيد.
+- Home / الحسابات.
+- Today.
+- Search الأساسي والمتقدم.
+- Account Details بالـ`debtId` فقط.
+- Installments Hub.
+- Documents Hub.
+- Settings Hub.
+- Security Hub.
 
-داخل المزيد:
+### مسارات/Activities مساندة
 
-- التقارير.
-- التنبيهات.
-- الإعدادات.
+- General Reminders Hub من الإعدادات.
+- Person Timeline لعرض الشخص وحساباته.
+- Statistics.
+- Natural Entry، ويتضمن إدخالًا نصيًا وإملاءً صوتيًا أساسيًا.
 
-داخل الإعدادات:
+تظل البيانات المالية نفسها مقروءة من Repository بالـIDs؛ لا تحمل Routes مبالغ أو Snapshots كبيرة كمصدر حقيقة.
 
-- الهوية وهويات المستندات.
-- العملات.
-- التنبيهات.
-- الخصوصية.
-- النسخ الاحتياطي.
-- المظهر.
-- عام.
+## القواعد
 
-## التكيف
+- Navigation keys صريحة وقابلة للتسلسل عند استخدامها في Navigation 3.
+- Back stack يملكه App state واحد للمسارات الرئيسية.
+- التفاصيل تقرأ Reactive من Repository بالـID.
+- Saved state لا يحمل ملفات أو بيانات مالية كبيرة.
+- System back هو المرجع؛ لا ينشأ زر رجوع يناقضه.
+- أي Activity مساندة محمية لا تستخدم كمسار لتجاوز App Lock.
+- `GeneralRemindersHubActivity` غير مصدرة وتستخدم `noHistory` حتى لا تبقى مدخلًا جانبيًا بعد مغادرة التطبيق.
 
-- Compact: Bottom navigation لأكثر الوجهات استخدامًا، و«المزيد» للبقية.
-- Medium: Navigation rail.
-- Expanded: Rail أو Navigation drawer مع pane ثانٍ عند شاشة قائمة وتفاصيل.
+## التدفقات المنفذة
 
-لا تتغير أسماء الوجهات أو قدرتها لمجرد تغير العرض.
+- Home → Account Details.
+- Today → Account Details → Payment review/confirm.
+- Search → نتيجة → Account Details مع بقاء عبارة البحث.
+- Installments Hub → Account Details.
+- Notification body → Account Details.
+- Notification partial/full action → Payment path داخل التطبيق، بلا auto-submit.
+- Settings → Documents / Security / General Reminders حسب الخيار.
+- Account Details → Person Timeline.
+- Account Details → Attachment vault/actions.
+- Natural Entry text → Parsed Draft → Preview/Confirmation → Repository.
+- Natural Entry voice → Android Recognizer UI → recognized text → نفس Parsed Draft/Preview/Confirmation.
 
-## Back stack
+## الأشخاص
 
-- كل Top-level destination يحتفظ بحالته الأساسية عند الانتقال.
-- ضغط Back داخل تفاصيل يعود إلى القائمة نفسها مع موضعها وفلاترها.
-- Back من Root يعيد الوجهة السابقة أو يخرج وفق سلوك Android.
-- لا تستخدم زر رجوع مخصص يناقض System back.
-- إلغاء نموذج مالي يعرض تأكيدًا إذا وجدت تغييرات غير محفوظة.
+صفحة الشخص منفذة عبر `PersonTimelineActivity/Screen/ViewModel`:
 
-## المسارات
+- تعرض بيانات الشخص.
+- تجمع حساباته مع إبقاء كل عملة منفصلة.
+- تعرض Timeline عبر حساباته.
+- تفتح حسابًا محددًا بالـDebt ID.
 
-- Home accounts → Account details منفذ حاليًا.
-- Person list → Person details → Debt details → Ledger entry details مستهدف عند بناء صفحات الأشخاص.
-- Today → Account details → تسجيل دفعة/إجراء منفذ للديون المستحقة والمتأخرة.
-- Documents → Document preview.
-- Search → نتيجة دين → تفاصيل الحساب منفذ؛ أنواع العمليات والمستندات تنتظر نماذجها ووجهاتها الأصلية.
+لا يعتمد الربط على الاسم؛ `PersonId` هو المرجع.
+
+## المستندات والمرفقات
+
+- Documents Hub يعرض المستندات المالية ويفتح/يشارك بعد فحص السلامة.
+- Account Details يربط المستندات بالحساب المعني بدل تصدير عام مبهم.
+- Attachments ترتبط بالدين وبحركة اختيارية، وتفتح/تشارك عبر مسار ملف آمن.
 
 ## Deep links وNotifications
 
-- كل رابط يحمل ID داخليًا فقط، ولا يثق بنصوص أو Amount قادمة من Intent.
-- يتحقق Repository أن الهدف موجود ومسموح قبل العرض.
-- PendingIntent يحدد mutability المناسبة.
-- الضغط على إجراء مالي في Notification لا يتجاوز Confirmation عند الحاجة.
-- لا تصدر Activities إضافية دون ضرورة.
+- Intent يحمل IDs داخلية فقط وبيانات UI غير موثوقة لا تستخدم كمصدر مالي.
+- Repository يتحقق من الهدف ويعيد الحالة الحالية.
+- PendingIntents immutable حيث يلزم.
+- `PARTIAL` / `FULL` من الإشعار يفتحان مسار الدفع مع Preview/Confirmation.
+- «ذكرني لاحقًا» يغير scheduling فقط ولا يغير Ledger أو due date.
 
-## قواعد Navigation 3
+## Natural / Voice Entry
 
-- Keys أنواع صريحة وليست Routes نصية مبعثرة.
-- Back stack يملكه App state واحد.
-- Parameters الصغيرة فقط في Key؛ البيانات تقرأ من Repository بالID.
-- Saved state لا يحمل ملفات أو Snapshots مالية كبيرة.
-- اختبار Process recreation لكل مسار رئيسي.
+المسار النصي:
+
+`Text → Parser → Draft → Preview → Confirmation → Repository`
+
+الإملاء الصوتي الأساسي منفذ حاليًا:
+
+`Voice → RecognizerIntent result → Text → Parser → Draft → Preview → Confirmation → Repository`
+
+المتبقي هو جعل Voice adapter/result handling قابلًا للاختبار بصورة معزولة وتغطية unavailable/cancel/empty result. لا يسمح بأي مسار Voice أو AI يكتب Payment/Debt مباشرة دون confirmation.
+
+## التكيف
+
+المبدأ المستهدف:
+
+- Compact: Bottom navigation للوجهات الأعلى استخدامًا، والبقية من More/Settings.
+- Medium: Navigation rail عند ملاءمة الشاشة.
+- Expanded: Rail/Drawer مع إمكان pane إضافي عند القوائم/التفاصيل.
+
+Adaptive coverage بدأ لكنه غير مغلق بعد. لا تغير هوية الوجهات أو قدراتها بسبب عرض الشاشة؛ يتغير التركيب البصري فقط.
+
+## Back stack / State
+
+- العودة من Account Details تعيد المستخدم إلى السياق الذي فتحه متى كان داخل نفس stack.
+- Search state وquery لا يعاد إنشاؤهما دون حاجة عند العودة.
+- النماذج المالية ذات تغييرات غير محفوظة يجب ألا تضيع بصمت.
+- Process recreation يعيد بناء الشاشة من IDs والحالة الدائمة، لا من Objects مالية كبيرة داخل route.
+
+## ما تبقى
+
+- توحيد بعض Activities المساندة مع Navigation 3 عندما يعطي ذلك فائدة حقيقية دون كسر الحماية أو state restoration.
+- اختبار Compact/Medium/Expanded أوسع.
+- Process recreation وback-stack regression لكل مسار جديد.
+- TalkBack focus order والتنقل عبر الشاشات الكبيرة.
+- Voice input adapter/test seam دون الاعتماد على recognizer خارجي في CI.

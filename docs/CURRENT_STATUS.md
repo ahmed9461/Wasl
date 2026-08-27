@@ -18,7 +18,7 @@
 
 الـMVP المالي الأساسي مكتمل من ناحية التنفيذ: الأشخاص والحسابات، Ledger، الدفعات والعكس، الاستحقاقات، Today، التذكيرات، البحث، PDF، Backup/Restore، App Lock، الوعود والأقساط.
 
-بعده دخلت ميزات إضافية تم تنفيذها فعليًا في الكود: Claims، Attachments، Person Timeline، Payment Messages، Statistics، Natural Text Entry وAdaptive Search. هذه الميزات لا تعتبر مقفلة نهائيًا إلا بعد نجاح بوابة Android instrumentation على الرأس الحالي.
+بعده دخلت ميزات إضافية تم تنفيذها فعليًا: Claims، Attachments، Person Timeline، Payment Messages، Statistics، Natural Text Entry، **Voice Dictation الأساسي** وAdaptive Search. هذه الميزات لا تعتبر مقفلة نهائيًا إلا بعد نجاح بوابة Android instrumentation على الرأس الحالي.
 
 ## ما يعمل الآن
 
@@ -95,7 +95,7 @@
 - جدول `attachments` في Schema v9.
 - ربط بالدين وبـLedger entry اختياري.
 - تخزين داخلي خاص بالتطبيق.
-- `display_name`, MIME, size, relative path, SHA-256, note, created_at.
+- metadata + SHA-256.
 - فتح/مشاركة آمنة عبر FileProvider.
 - فحص فقد الملف/اختلاف SHA.
 - Backup/Restore للملفات والmetadata.
@@ -137,7 +137,7 @@
 
 ### G1 — الإدخال الطبيعي للنص
 
-**الحالة: منفذ وتحتاج تثبيت نهائي عبر البوابة الكاملة.**
+**الحالة: منفذ ويحتاج تثبيت نهائي عبر البوابة الكاملة.**
 
 - `NaturalEntryActivity`.
 - `NaturalEntryParser`.
@@ -146,17 +146,28 @@
 - Parse → Preview → Confirm → Save.
 - Unit/UI tests موجودة.
 
-### G2 — الإدخال الصوتي
+### G2 — الإملاء الصوتي
 
-**الحالة: لم يبدأ التنفيذ الفعلي.**
+**الحالة: منفذ بصورة أساسية، ويحتاج تقوية واختبارات مخصصة.**
 
-المسار المطلوب: Voice → Text → نفس Natural Parser → Preview → Confirmation. لا كتابة مالية مباشرة من الصوت.
+المسار الحالي داخل `NaturalEntryActivity`:
+
+`RecognizerIntent → recognized text → NaturalEntryParser → Preview → explicit confirmation → save`
+
+الثابت المهم: نتيجة الصوت لا تحفظ حسابًا مباشرة؛ تدخل نفس مسار المعاينة والتأكيد.
+
+المتبقي:
+
+- فصل طبقة إطلاق/قراءة recognizer لتصبح قابلة للاختبار دون Activity خارجي فعلي.
+- اختبار success / cancel / empty result / recognizer unavailable.
+- تحسين رسالة عدم توفر خدمة التعرف.
+- الحفاظ على النص المعترف به قابلًا للتحرير قبل التأكيد.
 
 ### G3 — المصاريف/الديون الجماعية
 
 **الحالة: متبقية.**
 
-تنفذ بعد تثبيت الإدخال الطبيعي/الصوتي وبحسب المواصفة الأساسية، دون إنشاء Ledger موازٍ غير منضبط.
+تنفذ بعد تثبيت Natural/Voice Entry وبحسب المواصفة الأساسية، دون إنشاء Ledger موازٍ غير منضبط.
 
 ### H — جاهزية الإصدار
 
@@ -171,26 +182,27 @@
 
 ## حالة CI الحالية
 
-آخر رأس قبل إصلاح هذه الدفعة: `94ce0adf3ff64431a261042ebb62e815b42f13f1`.
-
-Android CI #851:
+Android CI #851 على الرأس `94ce0adf...` أثبت:
 
 - `verify` ✅: Unit tests + Lint + Debug APK + Room Schema v9 verification.
-- `database-tests` ❌ قبل تشغيل الاختبارات: `compileDebugAndroidTestKotlin` فشل بسبب أربعة imports غير صالحة لـ`androidx.compose.ui.test.onNode` في:
-  - `DueDateUiInstrumentedTest.kt`
-  - `PersonTimelineUiInstrumentedTest.kt`
-  - `StatisticsScreenUiInstrumentedTest.kt`
-  - `TodayUiInstrumentedTest.kt`
+- `database-tests` ❌ قبل تشغيل الاختبارات: `compileDebugAndroidTestKotlin` فشل بسبب أربعة imports غير صالحة لـ`androidx.compose.ui.test.onNode`.
 
-الإصلاح الحالي يزيل imports فقط، لأن الاستدعاء الصحيح موجود بالفعل كـ`composeRule.onNode(...)`.
+تم إعداد إصلاح يزيل imports فقط من:
+
+- `DueDateUiInstrumentedTest.kt`
+- `PersonTimelineUiInstrumentedTest.kt`
+- `StatisticsScreenUiInstrumentedTest.kt`
+- `TodayUiInstrumentedTest.kt`
+
+ولا يغير Assertions أو منطق الاختبارات.
 
 ## ترتيب العمل التالي
 
-1. إعادة CI إلى الأخضر على الرأس الجديد.
+1. إعادة CI إلى الأخضر على الرأس النهائي بعد مزامنة الوثائق.
 2. إغلاق Claims وAttachments رسميًا بعد Evidence كامل.
 3. تدقيق Adaptive UI + Accessibility.
-4. تثبيت Statistics + Natural Text Entry ضمن acceptance suite.
-5. تنفيذ Voice Entry.
+4. تثبيت Statistics + Natural Text/Voice Entry ضمن acceptance suite.
+5. تقوية Voice adapter والاختبارات بدل إعادة بناء الميزة من الصفر.
 6. تنفيذ الميزات الجماعية بحسب المواصفة.
 7. جولة UI/PDF polishing شاملة.
 8. Full offline acceptance + migrations/backup regression.

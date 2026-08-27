@@ -1,119 +1,184 @@
 # معمارية وَصل
 
+آخر تحديث: 2026-08-27
+
 ## المبادئ
 
 - Local database هي المصدر التشغيلي الأساسي.
-- core:domain هو مصدر القواعد المالية ولا يعتمد على Android.
+- `core:domain` هو مصدر القواعد المالية ولا يعتمد على Android.
 - UI لا تتعامل مع DAO أو SQL مباشرة.
-- كل Write مالي يمر بأمر واحد وTransaction واحدة.
-- كل Read مالي يأتي من Domain أو Projection مشتق منه.
+- كل Write مالي يمر بأمر واضح وTransaction ذرية.
+- كل Read مالي يأتي من Domain أو Read model مشتق من البيانات الدائمة.
 - الخدمات الخارجية المستقبلية اختيارية ومحاطة بواجهات.
+- Ledger وحده مصدر الحقيقة المالي؛ Reminder/Promise/Claim/Installment/Document/Attachment لا تتحول إلى Ledger موازٍ.
 
 ## الطبقات
 
 ### UI
 
-Compose screens وViewModels وUiState وUser actions. مسؤولة عن Parsing الإدخال والعرض وإدارة دورة حياة الشاشة، وليست مسؤولة عن حساب الرصيد. واجهة الدفع تعرض Review منفصلًا قبل التأكيد، وواجهة العكس تجمع سببًا إلزاميًا.
+Compose screens وViewModels وUiState وUser actions. مسؤولة عن جمع الإدخال والعرض والتنقل، لا عن حساب الرصيد.
+
+مسارات الدفع والعكس والإدخال الطبيعي/الصوتي تستخدم Preview/Confirmation قبل Commit. UI لا تنفذ Payment من Notification callback أو Parsing/Voice result مباشرة.
 
 ### Domain
 
-Money وCurrencyCode وDebtLedger والقواعد والـUse cases المشتركة. لا يعتمد على Compose أو Room أو Context.
+`Money`, `CurrencyCode`, `DebtLedger`, balance summaries, installment schedule وقواعد مالية مشتركة. لا يعتمد على Compose أو Room أو Context.
 
 ### Data
 
-Room entities وDAO وRepository implementations وMappers وTransactions وملفات المرفقات والنسخ الاحتياطي. لا تسرب Entity إلى UI.
+Room entities وDAO وRepository/Store implementations وMappers وTransactions، إضافة إلى Metadata للمستندات والمرفقات وعقود Backup/Restore.
+
+Schema الحالية v9 وتضم المصادر الدائمة للأشخاص والديون والLedger والتذكيرات والتدقيق والمستندات والوعود والأقساط والمطالبات والمرفقات.
 
 ### Platform
 
-Notifications وAlarmManager وWorkManager وBiometrics وKeystore وFileProvider وPDF. تستدعى عبر واجهات لكي تختبر دون جهاز متى أمكن.
+Notifications، AlarmManager، WorkManager، Biometrics، FileProvider، PDF، filesystem vault، وAndroid speech recognition launcher. تستدعى عبر طبقات قابلة للاختبار متى أمكن؛ الإملاء الصوتي الحالي يستخدم `RecognizerIntent` مباشرة ويحتاج seam أو Adapter أوضح للاختبارات.
 
 ## اتجاه الاعتماد
 
-- app/UI يعتمد على Domain وعلى Repository interfaces.
-- Data يعتمد على Domain ويطبق Repository interfaces.
+- UI يعتمد على Domain وعلى Repository/Store interfaces.
+- Data يعتمد على Domain ويطبق interfaces.
 - Platform adapters تعتمد على Android وتعيد نتائج صريحة.
-- Domain لا يعتمد على أي طبقة أعلى.
+- Domain لا يعتمد على طبقات أعلى.
+- PDF/Statistics/Search يقرأ من نفس الحقائق ولا يعيد كتابة قواعد رصيد مستقلة.
 
 ## تدفق القراءة
 
-1. DAO يعيد Flow من بيانات محلية أو Projection.
-2. Repository يحول Entity إلى Domain أو Read model.
-3. ViewModel يحول Flow إلى StateFlow.
-4. Compose تجمع الحالة بطريقة Lifecycle-aware.
-5. Formatting للمبلغ يحدث في UI باستخدام Currency definition.
+1. DAO/Store يعيد Flow أو snapshot من Room.
+2. Repository يعيد بناء Domain aggregate أو Read model.
+3. ViewModel يحول البيانات إلى StateFlow/UiState.
+4. Compose تجمع الحالة Lifecycle-aware.
+5. Formatting يحدث عند العرض باستخدام تعريف العملة والتاريخ المناسب.
 
-في Today يمر LocalDate الحالي إلى استعلام Room محدد يستخدم فهرس `lifecycle_state, due_date_epoch_day` ويعيد فقط ACTIVE غير المسدد المستحق حتى ذلك اليوم. يعيد Repository بناء DebtLedger للعناصر المرشحة، ثم يشتق ViewModel حالة DUE_TODAY/OVERDUE وعدد الأيام دون تخزين نص حالة في القاعدة.
+### Today
 
-في Search تطبع `LocalSearchQuery` مدخل المستخدم وتحوّل محارف SQLite LIKE إلى قيم حرفية. ينفذ DAO استعلامًا محدودًا يصل debts بـpersons ويعيد 51 Aggregate فقط؛ يعرض ViewModel أول 50 ويستخدم العنصر الإضافي لإظهار وجود المزيد. تبقى العلاقات والLedger تحت Room Flow نفسها، لذلك ينعكس إنشاء دين أو تسجيل دفعة على النتائج الحالية دون نسخة بحث منفصلة أو مصدر رصيد جديد.
+يجمع مرشحين من الاستحقاقات والوعود والأقساط والمطالبات مع بقاء كل نموذج مستقل. لا يخزن نص «متأخر» في القاعدة؛ Due state والأيام مشتقة من التاريخ الحالي.
 
-في اختيار الشخص الموجود يستخدم HomeViewModel استعلام `persons` مستقلًا ومحدودًا بـ21 سجلًا؛ يعرض أول 20 وينبه إلى وجود المزيد. البحث بالاسم للعثور والعرض فقط، بينما يحفظ الاختيار `PersonId` ويُرسل إلى أمر Repository، فلا يتحول تشابه الأسماء إلى ربط مالي خاطئ.
+### Search
+
+- Local search يطبع whitespace ويعامل SQLite wildcard كنصوص حرفية.
+- Advanced search يغطي الأشخاص/الديون/العمليات/المستندات/المبالغ/التواريخ.
+- نتائج البحث تحمل IDs وتفتح المصدر الأصلي؛ لا تنشئ نسخة مالية منفصلة.
+
+### Person Timeline
+
+يجمع حسابات شخص واحد بالـ`PersonId` ويعرض timeline موحدًا. العملات تبقى مجموعات منفصلة ولا تنتج «صافي» مضللًا بين YER/SAR/USD.
 
 ## تدفق الكتابة المالية
 
-مثال تسجيل دفعة:
+مثال Payment:
 
-1. UI تجمع Amount وDate وNote وتعرض التأكيد.
-2. ViewModel يرسل RecordPaymentCommand مع commandId فريد.
-3. Use case يتحقق من الشكل الأساسي.
-4. Repository يفتح Database transaction.
-5. يقرأ الدين وLedger الحاليين داخل Transaction.
-6. Domain يسجل PaymentRecorded أو يرفض.
-7. Repository يضيف Ledger entity وAudit metadata.
-8. يحدث Projection إن وجدت.
-9. يعيد قراءة النتيجة ويتحقق من الرصيد والحالة.
-10. Commit.
-11. بعد نجاح Commit فقط تُجدول آثار جانبية قابلة لإعادة المحاولة مثل Reminder أو اقتراح PDF.
+1. UI تجمع amount/date/note وتعرض review.
+2. ViewModel ينشئ commandId ثابتًا للمحاولة.
+3. Repository يفتح Transaction.
+4. يقرأ debt + ledger الحاليين.
+5. Domain يتحقق ويسجل Payment event أو يرفض.
+6. يضاف Ledger entity ويعاد حساب projection.
+7. Commit.
+8. الآثار الجانبية بعد Commit فقط، وقابلة لإعادة المحاولة.
 
-لا يُنشأ PDF أو Notification داخل Transaction قاعدة البيانات.
+لا PDF ولا Notification داخل Transaction المالية.
 
-إنشاء دين لشخص موجود يمر بمسار كتابة مستقل: يتحقق Repository من وجود `PersonId` وأنه غير مؤرشف، ثم يضيف الدين والتذكير الاختياري في Transaction واحدة دون Insert أو Update للشخص. يبقى لكل دين ID وLedger مستقلان، وتعيد إعادة المحاولة بالـDebt ID النتيجة نفسها أو ترفض Payload المتعارض.
+## كتابات غير مالية
 
-تعديل جدول الاستحقاق يقرأ الدين والتذكير الحاليين داخل Transaction، ويحدّث `due_date_epoch_day` ثم يعيد جدولة سجل reminder أو يعلّمه `CANCELLED`، ويضيف `audit_events` محدودًا يحمل Snapshot قبل/بعد. يضمن `command_id` الفريد Replay آمنًا ويرفض Payload المتعارض. بعد Commit فقط يستبدل Scheduler الـUnique Work بالـreminder ID نفسه أو يلغيه؛ فشل المنصة لا يتراجع عن التغيير الموثق ويمكن استرداده.
+### Due schedule / Reminders
+
+تغير scheduling metadata وAudit، ثم تنفذ WorkManager/Alarm side effects بعد Commit. فشل المنصة لا يغير الرصيد.
+
+### Payment Promise
+
+سجل متابعة مستقل. `KEPT` لا ينشئ Payment تلقائيًا.
+
+### Payment Claim — «طالبني»
+
+- يسمح فقط لدين `PAYABLE` المفتوح.
+- يسجل follow-up/history وحالته.
+- لا يغير Ledger أو due date.
+- Backup/Restore يفحص الاتجاه والحالات والتواريخ.
+
+### Installment Plan
+
+خطة توقع/جدولة. Revision جديدة تحفظ السابقة `SUPERSEDED`. التقدم الحقيقي مشتق من Ledger.
+
+### Documents
+
+تلتقط immutable snapshot ثم تولد PDF خارج Transaction المصدر. سجل `READY` لا يفتح إذا فشل فحص الملف/sha256.
+
+### Attachments
+
+ينسخ الملف إلى internal vault، يحسب SHA-256 ويحفظ metadata في Room. الربط بحركة اختياري ويجب أن تكون الحركة من نفس الدين.
+
+### Natural + Voice Entry
+
+النص:
+
+`Text → Parser → Draft → Preview → Confirmation → Repository`
+
+الإملاء الصوتي الحالي:
+
+`RecognizerIntent → recognized text → نفس Parser → Draft → Preview → Confirmation → Repository`
+
+نتيجة الصوت لا تكتب قاعدة البيانات. الخطوة المعمارية المتبقية هي فصل launch/result mapping عن Compose بما يكفي لاختبار success/cancel/empty/unavailable دون الاعتماد على تطبيق تعرف صوت خارجي في CI.
 
 ## Idempotency والتزامن
 
-- كل Command مالي أو أمر تعديل جدول الاستحقاق يملك commandId فريدًا مع Unique index في Ledger أو Audit بحسب نوعه.
-- تكرار commandId يعيد النتيجة السابقة ولا يضيف حدثًا.
-- القراءة والتحقق والإضافة في Transaction واحدة لمنع دفعتين تتجاوزان المتبقي.
-- IDs تولد قبل الكتابة وتبقى ثابتة عبر Retry.
-- إذا فشل الرد بعد احتمال Commit، يحتفظ ViewModel بكائن Command نفسه كاملًا ويعيد إرساله؛ أي تعديل من المستخدم يلغي الأمر المعلّق ويولد أمرًا جديدًا بعد المراجعة.
-- لا تعتمد سلامة الكتابة على ترتيب وصول UI وحده.
+- Commands الحساسة تملك IDs فريدة.
+- Retry يعيد نفس command object بدل إنشاء حدث جديد بلا داعٍ.
+- القراءة والتحقق والكتابة داخل Transaction واحدة عند وجود تنافس مالي.
+- IDs تولد قبل الكتابة وتبقى ثابتة عبر retry.
+- Side effects تستخدم unique identities أو replace semantics بحسب النوع.
 
 ## الزمن
 
-- Instant للأحداث التقنية والدفعات والتسجيل.
-- LocalDate لموعد استحقاق مدني.
-- ZoneId محفوظ عند إنشاء Reminder يحتاج معنى محليًا.
-- كل تحويل للعرض يستخدم Timezone الحالي أو Timezone الحدث وفق نوعه.
-
-## الحالة
-
-- DebtState المالي مشتق من الأصل والLedger.
-- DueState مشتق من Due date واليوم.
-- Lifecycle state مثل Archived أو Void منفصل عن الرصيد.
-- نصوص الواجهة ليست قيم قاعدة البيانات.
+- `Instant` للأحداث التقنية والدفعات.
+- `LocalDate` للمواعيد المدنية.
+- `ZoneId` محفوظ عند الحاجة إلى معنى محلي للتذكير.
+- App Lock timeout يستخدم monotonic elapsed time وليس wall clock.
 
 ## بنية الحزم الحالية
 
-- `com.wasl.domain`: القواعد المالية وParsing الدقيق للإدخال.
-- `com.wasl.app`: Application entry وComposition root وHome/Today/Search/Account details ViewModels وشاشات Compose وNavigation keys.
-- `com.wasl.app.data`: عقود Repository وRead/Command models.
-- `com.wasl.app.data.local`: Room database وRepository الذري وMappers الداخلية.
-- `com.wasl.app.data.local.entity`: persons وdebts وledger_entries وreminders وaudit_events وعلاقات القراءة.
-- `com.wasl.app.data.local.dao`: واجهات الإدخال والاستعلام بلا Update/Delete للسجل المالي، مع انتقالات حالة محدودة للتذكير.
-- `com.wasl.app.reminder`: حساب الزمن المدني، سياسة Recovery قابلة لاختبار JVM، WorkManager scheduler/workers، القناة وناشر الإشعار وRecovery receiver.
-- `com.wasl.app.ui`: Theme، وتستقبل الشاشات الجديدة عند توسعها.
+- `com.wasl.domain`: Money، Ledger، summaries، installment schedule، parsers المالية.
+- `com.wasl.app`: application entry، navigation، screens/viewmodels الرئيسية، Person/Statistics/Natural Entry.
+- `com.wasl.app.data`: عقود repository/stores وmodels.
+- `com.wasl.app.data.local`: Room database، stores/repository وsnapshot codecs.
+- `com.wasl.app.data.local.entity`: entities حتى Schema v9.
+- `com.wasl.app.data.local.dao`: DAOs لكل المصادر الدائمة.
+- `com.wasl.app.reminder`: WorkManager/Exact Alarm/recovery/notifications/snooze.
+- `com.wasl.app.document`: PDF renderers/services وFile access للمستندات والمرفقات.
+- `com.wasl.app.backup`: encrypted logical Backup/Restore v9.
+- `com.wasl.app.privacy`: App Lock وPrivacy preferences.
+- `com.wasl.app.ui`: Theme ومكونات UI المشتركة.
 
-لا تنشأ وحدة Gradle جديدة قبل وجود سبب مثل زمن بناء أو إعادة استخدام أو فصل Platform واضح.
+لا تنشأ وحدة Gradle جديدة قبل سبب معماري واضح مثل إعادة استخدام أو زمن بناء أو فصل Platform حقيقي.
 
 ## التعامل مع الفشل
 
-- Validation failure يعود كخطأ مستخدم ولا يكتب شيئًا.
-- Storage failure يتراجع بالكامل.
-- Side-effect failure بعد Commit يسجل كحالة Pending قابلة لإعادة المحاولة، ولا يعكس الدفعة.
-- Corrupt data يفشل بصوت عالٍ ويمنع حسابًا مضللًا.
-- لا Catch فارغ ولا قيمة افتراضية مالية تخفي فسادًا.
+- Validation failure: لا كتابة.
+- Storage failure داخل Transaction: rollback.
+- Side-effect failure بعد Commit: حالة قابلة للاسترداد، لا عكس للعملية الأصلية.
+- Corrupt financial data: fail loudly، لا قيم مالية افتراضية تخفي المشكلة.
+- Missing/hash-mismatched document/attachment: لا فتح أو مشاركة باعتباره سليمًا.
+- Backup validation failure: لا تغيير للحالة الحية.
+- Speech recognizer unavailable/cancel/empty: لا Draft مالي جديد ولا Save؛ تبقى الواجهة قابلة للمحاولة النصية.
+
+## الأمان
+
+- لا cleartext traffic كافتراضي.
+- لا secrets/keystores في Git.
+- App Lock يفوض المصادقة للنظام ولا يخزن PIN خاصًا.
+- `FLAG_SECURE` وفق سياسة القفل/الخصوصية.
+- PendingIntents الخاصة بالإشعارات immutable حيث يلزم.
+- Notification payment action يفتح التطبيق ولا يكتب Ledger مباشرة.
+- FileProvider هو بوابة المشاركة للملفات الداخلية.
+- Voice recognition مجرد قناة إدخال؛ لا يمنحها صلاحية كتابة مالية مختلفة عن النص.
 
 ## التوسع
 
-AI وCloud Sync وDocument verification ستكون Adapters اختيارية. لا تدخل إلى Domain كشرط. Group expenses تضيف Aggregate وتوزيعات مرتبطة ولا تغير Debt ledger الحالي بصورة ملتوية.
+- Voice hardening: فصل adapter واختبار حالات النتائج، لا إعادة بناء Parser.
+- AI: مساعد اختياري لصياغة/استخراج، لا مصدر حقيقة ولا executor مالي دون confirmation.
+- Cloud Sync: Adapter اختياري لاحق، لا شرط للوظائف الأساسية.
+- Group expenses: Aggregate مستقل وتوزيعات واضحة، دون ليّ DebtLedger الحالي ليصبح نموذجًا غير مناسب.
+
+## حالة الجودة الحالية
+
+Android CI #851 أثبت Unit/Lint/Debug build وRoom v9، وتوقف instrumentation بسبب أربعة imports Compose test قديمة. الإصلاح الحالي لا يغير المعمارية؛ يعيد تجميع الاختبارات حتى تعمل البوابة كاملة من جديد.

@@ -25,6 +25,7 @@
 - قوالب رسائل سداد قابلة للنسخ والمشاركة دون إرسال تلقائي.
 - إحصاءات موضوعية.
 - إدخال دين باللغة الطبيعية مع Preview/Confirmation قبل الحفظ.
+- إملاء صوتي أساسي عبر Android `RecognizerIntent`؛ النتيجة تمر عبر نفس Parser والمعاينة والتأكيد قبل الحفظ.
 
 الحالة الحية والخطوة التالية موثقتان في `HANDOFF.md` و`docs/CURRENT_STATUS.md`.
 
@@ -54,6 +55,7 @@ Schema الحالي: **v9**.
 - Navigation 3
 - Room 2.8.4
 - WorkManager 2.11.2
+- Android RecognizerIntent للإملاء الصوتي الحالي
 - compileSdk / targetSdk: 36
 - minSdk: 26
 - JDK 17
@@ -106,4 +108,4 @@ GitHub Actions يشغل Unit tests وLint وبناء Debug، يتحقق من Roo
 
 ## حالة التحقق الحالية
 
-في Android CI #851 نجحت مرحلة `verify` كاملة، بما فيها Unit tests وLint وDebug APK وRoom Schema v9. توقفت مرحلة Android instrumentation عند compile بسبب أربعة imports قديمة في AndroidTest. يجري إصلاحها على فرع التطوير نفسه، ولا يتم دمج `main` قبل عودة البوابة كاملة إلى الأخضر.
+Android CI #851 أثبت نجاح Unit tests وLint وDebug APK وRoom Schema v9، لكنه توقف قبل Android instrumentation بسبب أربعة imports قديمة في AndroidTest. تم إعداد إصلاحها على فرع التطوير، ولا يتم دمج `main` قبل عودة البوابة كاملة إلى الأخضر.

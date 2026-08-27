@@ -1,51 +1,68 @@
 # مرحلة «طالبني» — Payment Claims
 
+آخر تحديث: 2026-08-27
+
+الحالة: **التنفيذ موجود في Schema v8+ وUI/Today/Backup؛ الإغلاق النهائي ينتظر CI الأخضر للرأس الحالي.**
+
 ## الهدف
 
-تسجيل أن الطرف الآخر طالب المستخدم بالسداد في حساب من نوع `PAYABLE`، مع تحديد موعد متابعة، من دون إنشاء دفعة أو تعديل الرصيد أو تاريخ الاستحقاق أو الـLedger.
+تسجيل أن الطرف الآخر طالب المستخدم بالسداد في حساب من نوع `PAYABLE`، مع تحديد موعد متابعة، من دون إنشاء دفعة أو تعديل الرصيد أو تاريخ الاستحقاق أو Ledger.
 
 ## القواعد المعتمدة
 
 - الميزة متاحة للحسابات `PAYABLE` النشطة وغير المسددة فقط.
-- كل مطالبة سجل تاريخي مستقل ولا تُستبدل المطالبة السابقة.
+- كل مطالبة سجل تاريخي مستقل ولا تستبدل المطالبة السابقة.
 - خيارات المتابعة:
-  - اليوم: يحفظ تاريخ اليوم.
-  - غدًا: يحفظ اليوم التالي.
-  - عند الراتب: لا يخمّن التطبيق تاريخًا؛ يبقى التاريخ فارغًا حتى توجد سياسة راتب يحددها المستخدم.
-  - تاريخ مخصص: يتطلب تاريخًا غير ماضٍ.
+  - اليوم: تاريخ اليوم.
+  - غدًا: اليوم التالي.
+  - عند الراتب: لا يخمن التطبيق تاريخًا.
+  - تاريخ مخصص: يتطلب تاريخًا صالحًا غير ماضٍ وفق validation الحالي.
 - الحالات: `ACTIVE`, `RESOLVED`, `CANCELLED`.
 - أوامر الإنشاء والحسم idempotent عبر command IDs فريدة.
-- إنشاء أو حسم مطالبة لا يغير أصل الدين أو الرصيد أو سجل الدفعات.
+- إنشاء أو حسم مطالبة لا يغير أصل الدين أو الرصيد أو سجل الدفعات أو `due_date`.
 
 ## التخزين
 
-- Room schema: v8.
+- أضيفت في Room Schema v8 وتستمر في v9.
 - الجدول: `payment_claims`.
-- Migration: v7 -> v8.
-- المطالبات مشمولة في النسخ الاحتياطي والاستعادة.
+- Migration: `v7→v8`.
+- المطالبات مشمولة في Backup/Restore v9.
+- Restore يفحص اتجاه الدين والـenums والتواريخ وحالات resolution.
 
-## طبقة العرض
+## طبقة العرض والتنفيذ
 
-تمت إضافة:
+موجود:
 
-- `PaymentClaimViewModel.kt`: حالة العرض والإنشاء والحسم ومعالجة الأخطاء.
-- `PaymentClaimUi.kt`: قسم الحساب، بطاقات السجل، حوار الإنشاء، اختيار التاريخ، وحوار الحسم.
-- `WaslApplication.paymentClaimStore`: مصدر الإنتاج القائم على `RoomPaymentClaimStore`.
-- اختبارات ViewModel لليوم و«عند الراتب» للتأكد من عدم تخمين تاريخ.
+- `PaymentClaimViewModel.kt`.
+- `PaymentClaimUi.kt`.
+- `PaymentClaimStore` / `RoomPaymentClaimStore`.
+- `PaymentClaimDao` / `PaymentClaimEntity`.
+- integration في Account Details وToday.
+
+## Evidence الموجودة
+
+- `PaymentClaimModelsTest`.
+- `PaymentClaimFollowUpResolverTest`.
+- `PaymentClaimViewModelTest`.
+- `PaymentClaimMigrationInstrumentedTest`.
+- `PaymentClaimStoreInstrumentedTest`.
+- `PaymentClaimAccountVisibilityInstrumentedTest`.
+- `TodayPaymentClaimUiInstrumentedTest`.
+- Backup/Restore validation داخل خدمة النسخ واختباراتها.
 
 ## بوابة الإكمال
 
-لا تعتبر المرحلة مكتملة حتى تتحقق جميع النقاط التالية:
+لا تعتبر المرحلة Verified/Complete حتى:
 
-1. ربط قسم «طالبني» داخل تفاصيل الحساب `PAYABLE` فقط.
-2. عدم ظهور زر الإنشاء في حساب `RECEIVABLE` أو حساب مسدد.
-3. ظهور المطالبات النشطة ذات التاريخ المستحق في شاشة «اليوم».
-4. اختبار UI للإنشاء والحسم والتاريخ المخصص.
-5. اختبار يثبت ثبات الرصيد والـLedger قبل وبعد المطالبة.
-6. نجاح migration v7 -> v8 على المحاكي.
-7. نجاح Backup/Restore للمطالبات.
-8. Unit + Lint + Debug APK + Room schema + Android instrumentation كلها خضراء.
+1. ينجح Android instrumentation كاملًا على الرأس الحالي.
+2. يثبت UI أن الإنشاء لا يظهر إلا في `PAYABLE` المفتوح.
+3. تظهر المطالبات ذات المتابعة المستحقة في Today.
+4. ينجح create/resolve/custom-date flow.
+5. يثبت عدم تغير Ledger والرصيد.
+6. Migration `7→8` خضراء.
+7. Backup/Restore round-trip أخضر.
+8. Unit + Lint + APK + Schema v9 + instrumentation كلها خضراء.
 
-## ما بعد المرحلة
+## الحالة التالية
 
-بعد إغلاق «طالبني» تنتقل الخطة إلى المرفقات وخزنة الإثباتات، ثم صفحة الشخص الكاملة والـTimeline الموحد، وفق `docs/CURRENT_STATUS.md`.
+المرفقات وصفحة الشخص لم تعودا مراحل مستقبلية: كلاهما منفذ بالفعل في الكود (Attachments في Schema v9 وPerson Timeline بلا Migration جديدة). بعد إغلاق CI الحالي تنتقل الأولوية إلى Accessibility/Adaptive audit ثم تقوية Natural/Voice Entry، وفق `docs/CURRENT_STATUS.md`.

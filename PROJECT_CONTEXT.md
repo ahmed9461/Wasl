@@ -48,6 +48,7 @@
 - قوالب رسائل سداد قابلة للنسخ/المشاركة دون إرسال تلقائي.
 - إحصاءات موضوعية دون تصنيف الأشخاص.
 - إدخال دين باللغة الطبيعية مع Parse → Draft → Preview/Confirmation → Save.
+- **إملاء صوتي أساسي منفذ** عبر Android `RecognizerIntent`: النتيجة تتحول إلى نص ثم تدخل نفس `NaturalEntryParser` وتعرض Preview قبل أي حفظ.
 
 ## قاعدة البيانات
 
@@ -81,6 +82,7 @@
 | الأعمال المؤجلة | WorkManager مع Unique Work |
 | التنبيه القوي | Exact Alarm اختياري بطلب مستخدم صريح مع fallback |
 | المصادقة المحلية | BiometricPrompt + Device Credential |
+| الإدخال الصوتي | Android RecognizerIntent → نص → Natural Parser → Preview |
 | PDF | Android PdfDocument/Text layout من Snapshots ثابتة |
 | البناء | AGP 9.3.1، Gradle 9.5.0، JDK 17 |
 | API | min 26، compile/target 36 |
@@ -92,27 +94,27 @@
 3. Promise وClaim وReminder وInstallment Plan ليست Ledger ولا تغيّر الرصيد تلقائيًا.
 4. لا تجمع العملات المختلفة في إجمالي مالي واحد.
 5. PDF والتقارير تستهلك Read models/Snapshots ولا تعيد حساب المال بقواعد موازية.
-6. أي إجراء مالي قادم من إشعار أو إدخال طبيعي يجب أن يمر بمراجعة وتأكيد داخل التطبيق.
+6. أي إجراء مالي قادم من إشعار أو إدخال طبيعي أو صوتي يجب أن يمر بمراجعة وتأكيد داخل التطبيق.
 7. الملفات المهمة تخزن داخل مساحة التطبيق ويثبت سلامتها بـSHA-256.
 8. أي Schema جديد يجب أن يأتي مع Migration واختبارات وBackup/Restore update في نفس المرحلة.
 
 ## حالة التحقق في 27 أغسطس 2026
 
-آخر رأس قبل هذا التحديث كان `94ce0adf3ff64431a261042ebb62e815b42f13f1`.
+الرأس السابق قبل دفعة إصلاح التوثيق/CI كان `94ce0adf3ff64431a261042ebb62e815b42f13f1`.
 
 - Job `verify` في Android CI #851 نجح: Unit tests + Lint + Debug APK + Room Schema v9 verification.
 - Job `database-tests` توقف قبل تشغيل الاختبارات بسبب أربعة imports قديمة لـ`androidx.compose.ui.test.onNode` في ملفات AndroidTest.
-- الإصلاح الجاري يزيل هذه imports فقط؛ الاستدعاءات الصحيحة تبقى `composeRule.onNode(...)`.
-- لا تعتبر Claims/Attachments أو الرأس الحالي مغلقًا نهائيًا حتى تمر بوابة Android instrumentation كاملة على الرأس الجديد.
+- تم إعداد إصلاح يزيل هذه imports فقط؛ الاستدعاءات الصحيحة تبقى `composeRule.onNode(...)`.
+- لا تعتبر Claims/Attachments أو الرأس الحالي مغلقًا نهائيًا حتى تمر بوابة Android instrumentation كاملة على الرأس النهائي.
 
-## ما تبقى وظيفيًا بعد استعادة CI الأخضر
+## ما تبقى بعد استعادة CI الأخضر
 
 الأولوية التالية:
 
 1. إغلاق Claims وAttachments رسميًا بعد نجاح البوابة الكاملة وتوثيق Evidence.
 2. توسيع Adaptive UI وAccessibility: Compact/Medium/Expanded، Font scale، semantics، focus وtouch targets.
-3. مراجعة وتثبيت Statistics وNatural Text Entry كمرحلتين مقفلتين بالاختبارات الشاملة.
-4. تنفيذ الإدخال الصوتي: Voice → Text → نفس Natural Parser → Preview → Confirmation، دون حفظ مالي مباشر من الصوت.
+3. تثبيت Statistics وNatural Text/Voice Entry كمرحلة واحدة باختبارات شاملة.
+4. **تقوية الإملاء الصوتي**: فصل Adapter قابل للاختبار، حالات عدم توفر recognizer/الإلغاء/النتيجة الفارغة، واختبار أن الصوت لا يحفظ قبل Preview/Confirmation.
 5. المصاريف/الديون الجماعية وفق المواصفة الأساسية.
 6. جولة تحسين UI/PDF النهائية واختبار قبول شامل Offline.
 7. Release signing ونسخة توزيع نهائية.

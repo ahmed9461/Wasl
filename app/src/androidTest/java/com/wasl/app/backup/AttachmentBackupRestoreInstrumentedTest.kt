@@ -70,18 +70,7 @@ class AttachmentBackupRestoreInstrumentedTest {
 
     @Test
     fun encryptedBackupRestoresAttachmentMetadataAndExactPrivateFileBytes() = runTest {
-        val debtId = DebtId("attachment-backup-debt")
-        repository.createPersonWithDebt(
-            CreatePersonWithDebtCommand(
-                personId = PersonId("attachment-backup-person"),
-                debtId = debtId,
-                personName = "نسخة المرفقات",
-                direction = DebtDirection.RECEIVABLE,
-                originalAmount = Money(75_000L, CurrencyCode.YER),
-                openedAt = Instant.parse("2026-08-27T08:00:00Z"),
-                createdAt = Instant.parse("2026-08-27T08:00:00Z"),
-            ),
-        )
+        val debtId = createDebt("attachment-backup", 75_000L)
         val bytes = "%PDF-1.4\nWasl attachment evidence\n%%EOF".encodeToByteArray()
         val before = attachmentStore.importAttachment(
             AddAttachmentCommand(
@@ -96,12 +85,7 @@ class AttachmentBackupRestoreInstrumentedTest {
         )
         assertEquals(AttachmentIntegrity.OK, before.integrity)
 
-        val password = "attachment-backup-secret".toCharArray()
-        val backup = try {
-            backupService.create(password)
-        } finally {
-            password.fill('\u0000')
-        }
+        val backup = createBackup("attachment-backup-secret")
         assertEquals(9, backup.schemaVersion)
         assertEquals(1, backup.documentCount)
 
@@ -111,12 +95,7 @@ class AttachmentBackupRestoreInstrumentedTest {
         check(liveFile.delete())
         assertEquals(null, attachmentStore.findById(before.id))
 
-        val restorePassword = "attachment-backup-secret".toCharArray()
-        val restored = try {
-            backupService.restore(backup.bytes, restorePassword)
-        } finally {
-            restorePassword.fill('\u0000')
-        }
+        val restored = restoreBackup(backup.bytes, "attachment-backup-secret")
         assertEquals(9, restored.schemaVersion)
         assertEquals(1, restored.documentCount)
 
@@ -128,18 +107,7 @@ class AttachmentBackupRestoreInstrumentedTest {
 
     @Test
     fun backupRefusesTamperedAttachmentBeforeProducingArchive() = runTest {
-        val debtId = DebtId("attachment-corrupt-debt")
-        repository.createPersonWithDebt(
-            CreatePersonWithDebtCommand(
-                personId = PersonId("attachment-corrupt-person"),
-                debtId = debtId,
-                personName = "سلامة المرفقات",
-                direction = DebtDirection.RECEIVABLE,
-                originalAmount = Money(25_000L, CurrencyCode.YER),
-                openedAt = Instant.parse("2026-08-27T08:00:00Z"),
-                createdAt = Instant.parse("2026-08-27T08:00:00Z"),
-            ),
-        )
+        val debtId = createDebt("attachment-corrupt", 25_000L)
         val attachment = attachmentStore.importAttachment(
             AddAttachmentCommand(
                 id = "attachment-corrupt-id",
@@ -157,5 +125,94 @@ class AttachmentBackupRestoreInstrumentedTest {
             backupService.create("attachment-backup-secret".toCharArray())
         }
         assertNotNull(database.attachmentDao().findById(attachment.id))
+    }
+
+    @Test
+    fun restoreRejectsAttachmentPathTraversalBeforeMutatingLiveData() = runTest {
+        val debtId = createDebt("attachment-path", 40_000L)
+        val attachment = attachmentStore.importAttachment(
+            AddAttachmentCommand(
+                id = "attachment-path-id",
+                debtId = debtId,
+                displayName = "safe.txt",
+                mimeType = "text/plain",
+                createdAt = Instant.parse("2026-08-27T09:00:00Z"),
+            ),
+            ByteArrayInputStream("safe evidence".encodeToByteArray()),
+        )
+        val password = "attachment-path-secret".toCharArray()
+        val validBackup = try {
+            backupService.create(password)
+        } finally {
+            password.fill('\u0000')
+        }
+
+        val openPassword = "attachment-path-secret".toCharArray()
+        val opened = try {
+            BackupEnvelope.open(validBackup.bytes, openPassword)
+        } finally {
+            openPassword.fill('\u0000')
+        }
+        val maliciousPayload = opened.payload.copy(
+            attachmentFiles = opened.payload.attachmentFiles.mapIndexed { index, file ->
+                if (index == 0) file.copy(relativePath = "attachments/../outside.blob") else file
+            },
+        )
+        val sealPassword = "attachment-path-secret".toCharArray()
+        val maliciousBackup = try {
+            BackupEnvelope.seal(maliciousPayload, opened.createdAt, sealPassword)
+        } finally {
+            sealPassword.fill('\u0000')
+        }
+
+        val restorePassword = "attachment-path-secret".toCharArray()
+        try {
+            assertFailsWith<IllegalArgumentException> {
+                backupService.restore(maliciousBackup, restorePassword)
+            }
+        } finally {
+            restorePassword.fill('\u0000')
+        }
+
+        val stillLive = assertNotNull(attachmentStore.findById(attachment.id))
+        assertEquals(AttachmentIntegrity.OK, stillLive.integrity)
+        assertContentEquals(
+            "safe evidence".encodeToByteArray(),
+            File(testFilesDir, stillLive.relativePath).readBytes(),
+        )
+    }
+
+    private suspend fun createDebt(prefix: String, amount: Long): DebtId {
+        val debtId = DebtId("$prefix-debt")
+        repository.createPersonWithDebt(
+            CreatePersonWithDebtCommand(
+                personId = PersonId("$prefix-person"),
+                debtId = debtId,
+                personName = "اختبار $prefix",
+                direction = DebtDirection.RECEIVABLE,
+                originalAmount = Money(amount, CurrencyCode.YER),
+                openedAt = Instant.parse("2026-08-27T08:00:00Z"),
+                createdAt = Instant.parse("2026-08-27T08:00:00Z"),
+            ),
+        )
+        return debtId
+    }
+
+    private suspend fun createBackup(passwordText: String): BackupCreated {
+        val password = passwordText.toCharArray()
+        return try {
+            backupService.create(password)
+        } finally {
+            password.fill('\u0000')
+        }
+    }
+
+    private suspend fun restoreBackup(bytes: ByteArray, passwordText: String): BackupRestored {
+        val password = passwordText.toCharArray()
+        return try {
+            backupService.restore(bytes, password)
+        } finally {
+            password.fill('\u0000')
+        }
     }
 }

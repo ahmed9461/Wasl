@@ -1,0 +1,184 @@
+name: Patch bidi display
+
+on:
+  push:
+    branches:
+      - agent/bootstrap-wasl-foundation
+    paths:
+      - .github/workflows/patch-bidi-display.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/bootstrap-wasl-foundation
+
+      - name: Apply deterministic bidi patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, got {count}')
+              return text.replace(old, new, 1)
+
+          helper = '''package com.wasl.app
+
+private const val LTR_ISOLATE = "\\u2066"
+private const val POP_DIRECTIONAL_ISOLATE = "\\u2069"
+
+internal fun ltrIsolate(value: String): String {
+    if (value.startsWith(LTR_ISOLATE) && value.endsWith(POP_DIRECTIONAL_ISOLATE)) {
+        return value
+    }
+    return "$LTR_ISOLATE$value$POP_DIRECTIONAL_ISOLATE"
+}
+'''
+          Path('app/src/main/java/com/wasl/app/DirectionalText.kt').write_text(helper)
+
+          helper_test = '''package com.wasl.app
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+class DirectionalTextTest {
+    @Test
+    fun ltrIsolateWrapsMixedDirectionValues() {
+        assertEquals("\\u206612/08/2026 14:30\\u2069", ltrIsolate("12/08/2026 14:30"))
+        assertEquals("\\u2066STAT-2026-00044\\u2069", ltrIsolate("STAT-2026-00044"))
+    }
+
+    @Test
+    fun ltrIsolateDoesNotDoubleWrapAlreadyIsolatedText() {
+        val isolated = "\\u2066123,456.78 USD\\u2069"
+        assertEquals(isolated, ltrIsolate(isolated))
+    }
+}
+'''
+          Path('app/src/test/java/com/wasl/app/DirectionalTextTest.kt').write_text(helper_test)
+
+          wasl_path = Path('app/src/main/java/com/wasl/app/WaslApp.kt')
+          wasl = wasl_path.read_text()
+          wasl = replace_once(
+              wasl,
+              '    return "\\u2066${formatter.format(major)} ${money.currency.value}\\u2069"',
+              '    return ltrIsolate("${formatter.format(major)} ${money.currency.value}")',
+              'canonical money formatter',
+          )
+          wasl_path.write_text(wasl)
+
+          person_path = Path('app/src/main/java/com/wasl/app/PersonTimelineScreen.kt')
+          person = person_path.read_text()
+          for old in [
+              'import com.wasl.domain.MoneyInputParser\n',
+              'import java.math.BigDecimal\n',
+              'import java.text.NumberFormat\n',
+          ]:
+              if old not in person:
+                  raise SystemExit(f'person import missing: {old!r}')
+              person = person.replace(old, '', 1)
+          replacements = [
+              ('"${directionLabel(group.direction)} • ${group.currency.value}"', '"${directionLabel(group.direction)} • ${ltrIsolate(group.currency.value)}"', 'group currency'),
+              ('"${directionLabel(event.direction)} • ${event.currency.value}"', '"${directionLabel(event.direction)} • ${ltrIsolate(event.currency.value)}"', 'event currency'),
+              ('person.phone?.takeIf { it.isNotBlank() }?.let { Text("الهاتف: $it") }', 'person.phone?.takeIf { it.isNotBlank() }?.let { Text("الهاتف: ${ltrIsolate(it)}") }', 'phone'),
+              ('person.email?.takeIf { it.isNotBlank() }?.let { Text("البريد: $it") }', 'person.email?.takeIf { it.isNotBlank() }?.let { Text("البريد: ${ltrIsolate(it)}") }', 'email'),
+              ('"${directionLabel(header.direction)} • ${header.originalAmount.currency.value}"', '"${directionLabel(header.direction)} • ${ltrIsolate(header.originalAmount.currency.value)}"', 'account currency'),
+              ('Text("فتح في ${header.openedAt.atZone(ZoneId.systemDefault()).toLocalDate()}")', 'Text("فتح في ${ltrIsolate(header.openedAt.atZone(ZoneId.systemDefault()).toLocalDate().toString())}")', 'opened date'),
+              ('header.dueDate?.let { Text("الاستحقاق: $it") }', 'header.dueDate?.let { Text("الاستحقاق: ${ltrIsolate(it.toString())}") }', 'due date'),
+              ('"الحالة: ${account.lifecycleState.name}"', '"الحالة: ${ltrIsolate(account.lifecycleState.name)}"', 'lifecycle'),
+          ]
+          for old, new, label in replacements:
+              person = replace_once(person, old, new, label)
+          old_money = '''private fun formatPersonMoney(money: Money): String {
+              val fractionDigits = MoneyInputParser.fractionDigits(money.currency)
+              val major = BigDecimal.valueOf(money.minorUnits, fractionDigits)
+              val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
+                  isGroupingUsed = true
+                  minimumFractionDigits = fractionDigits
+                  maximumFractionDigits = fractionDigits
+              }
+              return "${formatter.format(major)} ${money.currency.value}"
+          }'''.replace('          ', '')
+          person = replace_once(
+              person,
+              old_money,
+              'private fun formatPersonMoney(money: Money): String = formatMoney(money)',
+              'person money formatter',
+          )
+          person = replace_once(
+              person,
+              'private fun formatPersonTimelineInstant(instant: java.time.Instant): String =\n    personTimelineFormatter.format(instant.atZone(ZoneId.systemDefault()))',
+              'private fun formatPersonTimelineInstant(instant: java.time.Instant): String =\n    ltrIsolate(personTimelineFormatter.format(instant.atZone(ZoneId.systemDefault())))',
+              'timeline datetime',
+          )
+          person_path.write_text(person)
+
+          documents_path = Path('app/src/main/java/com/wasl/app/DocumentsHubScreen.kt')
+          documents = documents_path.read_text()
+          for old in [
+              'import com.wasl.domain.MoneyInputParser\n',
+              'import java.math.BigDecimal\n',
+              'import java.text.NumberFormat\n',
+          ]:
+              if old not in documents:
+                  raise SystemExit(f'documents import missing: {old!r}')
+              documents = documents.replace(old, '', 1)
+          documents = replace_once(
+              documents,
+              'Text(document.documentNumber)',
+              'Text(ltrIsolate(document.documentNumber))',
+              'document number',
+          )
+          documents = replace_once(
+              documents,
+              '"${formatFileSize(attachment.sizeBytes)} • ${attachment.mimeType}"',
+              '"${ltrIsolate(formatFileSize(attachment.sizeBytes))} • ${ltrIsolate(attachment.mimeType)}"',
+              'attachment metadata',
+          )
+          old_documents_money = '''private fun formatDocumentsMoney(money: Money): String {
+              val fractionDigits = MoneyInputParser.fractionDigits(money.currency)
+              val major = BigDecimal.valueOf(money.minorUnits, fractionDigits)
+              val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
+                  isGroupingUsed = true
+                  minimumFractionDigits = fractionDigits
+                  maximumFractionDigits = fractionDigits
+              }
+              return "${formatter.format(major)} ${money.currency.value}"
+          }'''.replace('          ', '')
+          documents = replace_once(
+              documents,
+              old_documents_money,
+              'private fun formatDocumentsMoney(money: Money): String = formatMoney(money)',
+              'documents money formatter',
+          )
+          documents_path.write_text(documents)
+          PY
+
+          git diff --check
+          grep -F 'fun ltrIsolate' app/src/main/java/com/wasl/app/DirectionalText.kt
+          grep -F 'return ltrIsolate' app/src/main/java/com/wasl/app/WaslApp.kt
+          grep -F 'formatPersonMoney(money: Money): String = formatMoney(money)' app/src/main/java/com/wasl/app/PersonTimelineScreen.kt
+          grep -F 'formatDocumentsMoney(money: Money): String = formatMoney(money)' app/src/main/java/com/wasl/app/DocumentsHubScreen.kt
+
+      - name: Commit patch and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/patch-bidi-display.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/wasl/app/DirectionalText.kt \
+            app/src/test/java/com/wasl/app/DirectionalTextTest.kt \
+            app/src/main/java/com/wasl/app/WaslApp.kt \
+            app/src/main/java/com/wasl/app/PersonTimelineScreen.kt \
+            app/src/main/java/com/wasl/app/DocumentsHubScreen.kt \
+            .github/workflows/patch-bidi-display.yml
+          git commit -m "fix: isolate mixed-direction display values"
+          git push origin HEAD:agent/bootstrap-wasl-foundation

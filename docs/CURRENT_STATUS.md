@@ -107,7 +107,7 @@ Artifacts المرجعية من #873:
 
 ## Accessibility / Adaptive UI
 
-**الحالة: قيد التنفيذ الفعلي، مع دفعة أولى Verified.**
+**الحالة: قيد التنفيذ الفعلي، مع دفعة أولى Verified ودفعة ثانية تحت بوابة التحقق الكاملة.**
 
 الأساس الموجود:
 
@@ -123,18 +123,30 @@ Artifacts المرجعية من #873:
 - اختبار Today الصريح عند 200% Font Scale نجح ضمن **99/99** instrumentation.
 - فشل CI #866 السابق كان Assertion هشًا مرتبطًا بالـviewport في Statistics؛ أصلح في `ee23079f...` دون حذف تغطية، ثم أثبت #873 الإصلاح.
 
-### RTL/Bidi — الدفعة الحالية
+### RTL/Bidi — تحت التحقق النهائي
 
-commit `36c5297a92f2ee700a41c34fc2d16ca7680b8d3a` يضيف تقوية عرض مختلط الاتجاه ويحتاج بوابة CI على رأس أحدث:
+commit `36c5297a92f2ee700a41c34fc2d16ca7680b8d3a`:
 
 - `ltrIsolate()` مركزي باستخدام LRI/PDI مع منع double wrapping.
 - `formatMoney()` يستخدم helper المركزي بدل literal مكرر.
-- Person Timeline يعيد استخدام `formatMoney()` بدل formatter مالي مكرر.
-- تواريخ/أوقات Person Timeline والعملات وأرقام الهاتف والبريد والحالات اللاتينية معزولة داخل النص العربي.
-- Documents Hub يعيد استخدام `formatMoney()`، ويعزل رقم المستند وmetadata اللاتينية للمرفقات.
+- Person Timeline وDocuments Hub يعيدان استخدام `formatMoney()` بدل formatter مالي مكرر.
+- عزل العملات والتواريخ/الأوقات وأرقام المستندات والهاتف والبريد والحالات التقنية وmetadata اللاتينية للمرفقات داخل RTL.
 - Unit tests جديدة لـLTR isolation.
 
-الخطوة الحالية هي التحقق الكامل من هذه الدفعة؛ لا توسم Verified قبل نجاح CI.
+### Security / Settings — تحت التحقق النهائي
+
+commit `c035bc56fb526e2ae8e891a526b970f717f8d39f`:
+
+- Security entry actions تتكدس وتصبح full-width عند النص الكبير.
+- Security Hub header يتكدس عند المساحة الضيقة أو Font Scale المرتفع.
+- App Lock toggle يتكدس بدل ضغط الوصف والـSwitch في Row واحد.
+- Security Hub يستخدم `WaslMaxContentWidth` المركزي.
+- Settings header يتكدس عند النص الكبير.
+- Privacy switches في Settings تتكدس عند النص الكبير.
+- اختبار Security عند 200% Font Scale أصبح يثبت التكديس نفسه، لا مجرد قابلية التمرير.
+- أضيف `SettingsUiInstrumentedTest` عند 200% Font Scale ويثبت التكديس ووصول/تغيير إعداد الخصوصية.
+
+الـPR run الذي ظهر مباشرة من commit المنشأ داخل GitHub Actions كان `action_required` بلا Jobs، لذلك لا يعتبر بوابة تحقق. commit التوثيق الحالي موجود عمدًا لتشغيل Android CI طبيعية على نفس الكود؛ لا توسم دفعة RTL/Bidi + Security/Settings Verified قبل نجاحها بالكامل.
 
 ## ملاحظة استقرار CI
 
@@ -146,8 +158,8 @@ commit `36c5297a92f2ee700a41c34fc2d16ca7680b8d3a` يضيف تقوية عرض م�
 
 ## ترتيب العمل التالي
 
-1. إغلاق بوابة CI الكاملة لدفعة RTL/Bidi الحالية.
-2. متابعة Accessibility/Adaptive audit لشاشات Security وSettings وDocuments/Home/Account Details بحسب المخاطر الفعلية، خصوصًا text scaling وtouch targets وfocus/TalkBack semantics.
+1. إغلاق بوابة CI الكاملة للرأس الحالي الذي يشمل RTL/Bidi + Security/Settings large-font.
+2. إذا أخضر: متابعة Documents Hub ثم Home ثم Account Details بحسب فجوات text scaling وtouch targets وfocus/TalkBack semantics الفعلية.
 3. تثبيت أي فجوات وصول باختبارات Instrumentation حقيقية، لا بمجرد تعديلات شكلية.
 4. تنفيذ المصاريف/الديون الجماعية حسب المواصفة دون إنشاء Ledger موازٍ.
 5. جولة UI/PDF polishing النهائية المؤجلة عمدًا حتى اكتمال الوظائف.

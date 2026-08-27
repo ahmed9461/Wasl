@@ -4,6 +4,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -68,6 +69,8 @@ class PersonTimelineUiInstrumentedTest {
         composeRule.onNodeWithTag("person-account-debt-sar")
             .performScrollTo()
             .assertExists()
+        composeRule.onAllNodesWithText("فتح الحساب")[1]
+            .performScrollTo()
             .performClick()
         assertEquals(DebtId("debt-sar"), opened)
     }

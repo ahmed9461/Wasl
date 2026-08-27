@@ -1,5 +1,10 @@
 package com.wasl.app
 
+import android.database.Cursor
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -37,11 +42,17 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.wasl.app.data.AccountOverview
+import com.wasl.app.data.AddAttachmentCommand
+import com.wasl.app.data.AttachmentIntegrity
+import com.wasl.app.data.AttachmentRecord
+import com.wasl.app.data.AttachmentStore
 import com.wasl.app.data.DocumentType
 import com.wasl.app.data.IssuedDocumentRecord
 import com.wasl.app.data.PrepareAccountStatementCommand
 import com.wasl.app.data.PrepareDebtReceiptCommand
+import com.wasl.app.data.UnavailableAttachmentStore
 import com.wasl.app.data.WaslRepository
+import com.wasl.app.document.AttachmentFileAccess
 import com.wasl.app.document.PaymentReceiptService
 import com.wasl.app.document.ReceiptFileAccess
 import com.wasl.domain.DebtId
@@ -65,6 +76,7 @@ internal fun DocumentsHubRoute(
     documentService: PaymentReceiptService,
     onBack: () -> Unit,
     initialDebtId: DebtId? = null,
+    attachmentStore: AttachmentStore = UnavailableAttachmentStore,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -79,6 +91,46 @@ internal fun DocumentsHubRoute(
     var identityLoaded by remember { mutableStateOf(false) }
     var busyKey by remember { mutableStateOf<String?>(null) }
     var readyDocument by remember { mutableStateOf<IssuedDocumentRecord?>(null) }
+    var attachments by remember { mutableStateOf<List<AttachmentRecord>>(emptyList()) }
+    var attachmentBusy by remember { mutableStateOf(false) }
+
+    fun showMessage(message: String) {
+        scope.launch { snackbar.showSnackbar(message) }
+    }
+
+    val attachmentPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        val debtId = initialDebtId
+        if (uri == null || debtId == null || attachmentBusy) return@rememberLauncherForActivityResult
+        attachmentBusy = true
+        scope.launch {
+            try {
+                val resolver = context.contentResolver
+                val metadata = queryAttachmentMetadata(context, uri)
+                val mime = resolver.getType(uri)?.takeIf { it.isNotBlank() } ?: "application/octet-stream"
+                resolver.openInputStream(uri)?.use { input ->
+                    attachmentStore.importAttachment(
+                        AddAttachmentCommand(
+                            id = UUID.randomUUID().toString(),
+                            debtId = debtId,
+                            displayName = metadata.displayName,
+                            mimeType = mime,
+                            createdAt = Instant.now(),
+                        ),
+                        input,
+                    )
+                } ?: error("تعذر قراءة الملف المختار.")
+                showMessage("تم حفظ المرفق داخل خزنة وَصل.")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                showMessage(error.message?.takeIf { it.isNotBlank() } ?: "تعذر حفظ المرفق.")
+            } finally {
+                attachmentBusy = false
+            }
+        }
+    }
 
     LaunchedEffect(repository) {
         repository.observeAccounts()
@@ -101,9 +153,11 @@ internal fun DocumentsHubRoute(
             }
         identityLoaded = true
     }
-
-    fun showMessage(message: String) {
-        scope.launch { snackbar.showSnackbar(message) }
+    LaunchedEffect(attachmentStore, initialDebtId) {
+        val debtId = initialDebtId ?: return@LaunchedEffect
+        attachmentStore.observeForDebt(debtId)
+            .catch { error -> showMessage(error.message ?: "تعذر قراءة المرفقات.") }
+            .collect { attachments = it }
     }
 
     fun issue(account: AccountOverview, type: DocumentType) {
@@ -190,7 +244,7 @@ internal fun DocumentsHubRoute(
                     OutlinedButton(onClick = onBack) { Text("رجوع") }
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(
-                            if (initialDebtId == null) "تصدير وتقارير PDF" else "مستندات الحساب",
+                            if (initialDebtId == null) "تصدير وتقارير PDF" else "مستندات وإثباتات الحساب",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.ExtraBold,
                         )
@@ -198,10 +252,57 @@ internal fun DocumentsHubRoute(
                             if (initialDebtId == null) {
                                 "اختر حسابًا ثم صدّر مستنداته."
                             } else {
-                                "أصدر إيصال الدين أو كشفًا كاملًا لهذا الحساب فقط."
+                                "مستندات PDF ومرفقات هذا الحساب فقط."
                             },
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+                }
+            }
+
+            if (initialDebtId != null) {
+                item("attachments") {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().testTag("account-attachments"),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        ),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(18.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Text("المرفقات وخزنة الإثباتات", fontWeight = FontWeight.Bold)
+                            Text(
+                                "الملفات تُنسخ إلى التخزين الخاص بالتطبيق وتُفحص ببصمة SHA-256. لا يحتاج وَصل إلى صلاحية الوصول الشامل للملفات.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Button(
+                                modifier = Modifier.fillMaxWidth().testTag("add-attachment"),
+                                enabled = !attachmentBusy,
+                                onClick = { attachmentPicker.launch(arrayOf("image/*", "application/pdf", "text/*", "application/octet-stream")) },
+                            ) {
+                                if (attachmentBusy) CircularProgressIndicator() else Text("إضافة صورة أو PDF أو ملف")
+                            }
+                            if (attachments.isEmpty()) {
+                                Text("لا توجد مرفقات لهذا الحساب بعد.")
+                            } else {
+                                attachments.forEach { attachment ->
+                                    AttachmentRow(
+                                        attachment = attachment,
+                                        onOpen = {
+                                            runCatching { AttachmentFileAccess.open(context, attachment) }
+                                                .onFailure { showMessage("تعذر فتح المرفق أو أن فحص سلامته لم ينجح.") }
+                                        },
+                                        onShare = {
+                                            runCatching { AttachmentFileAccess.share(context, attachment) }
+                                                .onFailure { showMessage("تعذرت مشاركة المرفق أو أن فحص سلامته لم ينجح.") }
+                                        },
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -262,10 +363,7 @@ internal fun DocumentsHubRoute(
                             modifier = Modifier.padding(18.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            Text(
-                                "${document.type.arabicLabel()} جاهز",
-                                fontWeight = FontWeight.Bold,
-                            )
+                            Text("${document.type.arabicLabel()} جاهز", fontWeight = FontWeight.Bold)
                             Text(document.documentNumber)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button(onClick = {
@@ -283,19 +381,14 @@ internal fun DocumentsHubRoute(
             }
 
             loadError?.let { error ->
-                item("load-error") {
-                    Text(error, color = MaterialTheme.colorScheme.error)
-                }
+                item("load-error") { Text(error, color = MaterialTheme.colorScheme.error) }
             }
 
             if (visibleAccounts.isEmpty() && loadError == null) {
                 item("empty") {
                     Text(
-                        if (initialDebtId == null) {
-                            "لا توجد حسابات لإصدار مستندات لها بعد."
-                        } else {
-                            "تعذر العثور على الحساب المحدد."
-                        },
+                        if (initialDebtId == null) "لا توجد حسابات لإصدار مستندات لها بعد."
+                        else "تعذر العثور على الحساب المحدد.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -319,16 +412,14 @@ internal fun DocumentsHubRoute(
                             enabled = busyKey == null && identityLoaded,
                             onClick = { issue(account, DocumentType.DEBT_RECEIPT) },
                         ) {
-                            if (busyKey == debtKey) CircularProgressIndicator()
-                            else Text("إصدار إيصال دين")
+                            if (busyKey == debtKey) CircularProgressIndicator() else Text("إصدار إيصال دين")
                         }
                         OutlinedButton(
                             modifier = Modifier.fillMaxWidth().testTag("issue-account-statement-${account.ledger.header.id.value}"),
                             enabled = busyKey == null && identityLoaded,
                             onClick = { issue(account, DocumentType.ACCOUNT_STATEMENT) },
                         ) {
-                            if (busyKey == statementKey) CircularProgressIndicator()
-                            else Text("تصدير كل المعاملات PDF")
+                            if (busyKey == statementKey) CircularProgressIndicator() else Text("تصدير كل المعاملات PDF")
                         }
                         Text(
                             "كشف الحساب يحفظ Snapshot ثابتًا للحساب ويشمل أصل الدين، صافي المسدد، المتبقي، وكل دفعة أو عملية عكس مسجلة حتى وقت التصدير.",
@@ -340,6 +431,78 @@ internal fun DocumentsHubRoute(
             }
         }
     }
+}
+
+@Composable
+private fun AttachmentRow(
+    attachment: AttachmentRecord,
+    onOpen: () -> Unit,
+    onShare: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("attachment-${attachment.id}"),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(attachment.displayName, fontWeight = FontWeight.SemiBold)
+        Text(
+            "${formatFileSize(attachment.sizeBytes)} • ${attachment.mimeType}",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        val integrityText = when (attachment.integrity) {
+            AttachmentIntegrity.OK -> "سلامة الملف: سليمة"
+            AttachmentIntegrity.MISSING -> "سلامة الملف: الملف مفقود"
+            AttachmentIntegrity.HASH_MISMATCH -> "سلامة الملف: البصمة لا تطابق المحتوى"
+        }
+        Text(
+            integrityText,
+            color = if (attachment.integrity == AttachmentIntegrity.OK) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.error
+            },
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                enabled = attachment.integrity == AttachmentIntegrity.OK,
+                onClick = onOpen,
+            ) { Text("فتح") }
+            OutlinedButton(
+                enabled = attachment.integrity == AttachmentIntegrity.OK,
+                onClick = onShare,
+            ) { Text("مشاركة") }
+        }
+    }
+}
+
+private data class PickedAttachmentMetadata(val displayName: String)
+
+private fun queryAttachmentMetadata(context: android.content.Context, uri: Uri): PickedAttachmentMetadata {
+    var name: String? = null
+    val cursor: Cursor? = context.contentResolver.query(
+        uri,
+        arrayOf(OpenableColumns.DISPLAY_NAME),
+        null,
+        null,
+        null,
+    )
+    cursor?.use {
+        if (it.moveToFirst()) {
+            val index = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index >= 0) name = it.getString(index)
+        }
+    }
+    return PickedAttachmentMetadata(
+        displayName = name?.trim()?.takeIf(String::isNotBlank) ?: "مرفق",
+    )
+}
+
+private fun formatFileSize(bytes: Long): String = when {
+    bytes >= 1024L * 1024L -> String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
+    bytes >= 1024L -> String.format(Locale.US, "%.1f KB", bytes / 1024.0)
+    else -> "$bytes B"
 }
 
 private fun DocumentType.arabicLabel(): String = when (this) {

@@ -40,6 +40,7 @@ class AttachmentFileAccessInstrumentedTest {
         assertEquals(Intent.ACTION_VIEW, openTarget.action)
         assertSecureAttachmentUri(assertNotNull(openTarget.data))
         assertTrue(openTarget.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+        assertNotNull(openTarget.clipData)
 
         context.startedIntent = null
         AttachmentFileAccess.share(context, attachment)
@@ -48,6 +49,7 @@ class AttachmentFileAccessInstrumentedTest {
         val sharedUri = shareTarget.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
         assertSecureAttachmentUri(assertNotNull(sharedUri))
         assertTrue(shareTarget.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+        assertNotNull(shareTarget.clipData)
     }
 
     @Test
@@ -97,7 +99,7 @@ class AttachmentFileAccessInstrumentedTest {
 
     private fun assertSecureAttachmentUri(uri: Uri) {
         assertEquals("content", uri.scheme)
-        assertEquals("${baseContext.packageName}.files", uri.authority)
+        assertEquals("${baseContext.packageName}.fileprovider", uri.authority)
         assertTrue(uri.path.orEmpty().contains("attachments"))
     }
 

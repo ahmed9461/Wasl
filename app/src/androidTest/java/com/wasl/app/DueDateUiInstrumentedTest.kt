@@ -2,10 +2,10 @@ package com.wasl.app
 
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -120,9 +120,8 @@ class DueDateUiInstrumentedTest {
         composeRule.onNodeWithTag("remove-due-date").performClick()
         composeRule.onNodeWithTag("save-due-schedule").performClick()
 
-        composeRule.onNode(
-            hasScrollAction() and hasAnyDescendant(hasText("سجل العمليات")),
-        ).performScrollToNode(hasText("تم إلغاء تاريخ الاستحقاق"))
+        composeRule.onNode(hasScrollAction())
+            .performScrollToNode(hasText("تم إلغاء تاريخ الاستحقاق"))
         composeRule.onNodeWithText("تم إلغاء تاريخ الاستحقاق").assertIsDisplayed()
         runBlocking {
             val account = requireNotNull(repository.getAccount(DebtId("debt-due")))

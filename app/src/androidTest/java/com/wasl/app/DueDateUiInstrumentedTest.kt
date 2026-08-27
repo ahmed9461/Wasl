@@ -2,7 +2,7 @@ package com.wasl.app
 
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -119,7 +119,7 @@ class DueDateUiInstrumentedTest {
         composeRule.onNodeWithTag("remove-due-date").performClick()
         composeRule.onNodeWithTag("save-due-schedule").performClick()
 
-        composeRule.onNode(hasScrollAction())
+        composeRule.onNode(hasScrollToIndexAction())
             .performScrollToNode(hasText("تم إلغاء تاريخ الاستحقاق"))
         composeRule.onNodeWithText("تم إلغاء تاريخ الاستحقاق").assertIsDisplayed()
         runBlocking {

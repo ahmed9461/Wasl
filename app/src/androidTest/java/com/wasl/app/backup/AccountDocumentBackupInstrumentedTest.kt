@@ -92,7 +92,7 @@ class AccountDocumentBackupInstrumentedTest {
                 originalAmount = Money(100_000L, CurrencyCode.YER),
                 openedAt = Instant.parse("2026-08-24T09:00:00Z"),
                 createdAt = Instant.parse("2026-08-24T09:00:00Z"),
-                description = "اختبار حفظ مستند v7 داخل النسخة الاحتياطية",
+                description = "اختبار حفظ مستند v8 داخل النسخة الاحتياطية",
             ),
         )
         repository.recordPayment(
@@ -134,7 +134,7 @@ class AccountDocumentBackupInstrumentedTest {
         } finally {
             password.fill('\u0000')
         }
-        assertEquals(7, backup.schemaVersion)
+        assertEquals(8, backup.schemaVersion)
         assertEquals(1, backup.documentCount)
 
         originalFile.writeText("corrupted after backup")

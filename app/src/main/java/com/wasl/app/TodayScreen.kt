@@ -2,6 +2,7 @@ package com.wasl.app
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -374,22 +375,48 @@ private fun TodaySummaryCard(state: TodayUiState) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                TodayMetric(
-                    modifier = Modifier.weight(1f),
-                    value = overdueCount,
-                    label = "متأخرة",
-                    emphasized = overdueCount > 0,
-                )
-                TodayMetric(
-                    modifier = Modifier.weight(1f),
-                    value = todayCount,
-                    label = "مستحقة اليوم",
-                    emphasized = false,
-                )
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                if (shouldStackDenseRows(maxWidth)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("today-summary-metrics-stacked"),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        TodayMetric(
+                            modifier = Modifier.fillMaxWidth(),
+                            value = overdueCount,
+                            label = "متأخرة",
+                            emphasized = overdueCount > 0,
+                        )
+                        TodayMetric(
+                            modifier = Modifier.fillMaxWidth(),
+                            value = todayCount,
+                            label = "مستحقة اليوم",
+                            emphasized = false,
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("today-summary-metrics-inline"),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        TodayMetric(
+                            modifier = Modifier.weight(1f),
+                            value = overdueCount,
+                            label = "متأخرة",
+                            emphasized = overdueCount > 0,
+                        )
+                        TodayMetric(
+                            modifier = Modifier.weight(1f),
+                            value = todayCount,
+                            label = "مستحقة اليوم",
+                            emphasized = false,
+                        )
+                    }
+                }
             }
             Text(
                 text = "$overdueCount متأخرة · $todayCount مستحقة اليوم",
@@ -497,45 +524,79 @@ private fun TodaySectionHeading(
     count: Int,
     overdue: Boolean,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("today-section-heading-stacked-$title"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TodaySectionHeadingText(title = title, subtitle = subtitle)
+                TodayCountPill(count = count, overdue = overdue)
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("today-section-heading-inline-$title"),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TodaySectionHeadingText(
+                    title = title,
+                    subtitle = subtitle,
+                    modifier = Modifier.weight(1f),
+                )
+                TodayCountPill(count = count, overdue = overdue)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TodaySectionHeadingText(
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Surface(
-            shape = CircleShape,
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun TodayCountPill(count: Int, overdue: Boolean) {
+    Surface(
+        shape = CircleShape,
+        color = if (overdue) {
+            MaterialTheme.colorScheme.errorContainer
+        } else {
+            MaterialTheme.colorScheme.primaryContainer
+        },
+    ) {
+        Text(
+            text = count.toString(),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            style = MaterialTheme.typography.labelLarge,
             color = if (overdue) {
-                MaterialTheme.colorScheme.errorContainer
+                MaterialTheme.colorScheme.onErrorContainer
             } else {
-                MaterialTheme.colorScheme.primaryContainer
+                MaterialTheme.colorScheme.onPrimaryContainer
             },
-        ) {
-            Text(
-                text = count.toString(),
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                style = MaterialTheme.typography.labelLarge,
-                color = if (overdue) {
-                    MaterialTheme.colorScheme.onErrorContainer
-                } else {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                },
-            )
-        }
+        )
     }
 }
 
@@ -551,10 +612,11 @@ private fun TodayAccountCard(
     val account = item.account
     val reminder = account.dueReminder
     val overdue = item.dueState == DueState.OVERDUE
+    val debtId = account.ledger.header.id.value
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .testTag("today-account-${account.ledger.header.id.value}"),
+            .testTag("today-account-$debtId"),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         ),
@@ -569,33 +631,17 @@ private fun TodayAccountCard(
                 direction = account.ledger.header.direction,
                 subtitle = account.ledger.header.description,
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        text = "المتبقي",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = formatMoney(account.ledger.balance),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        textAlign = TextAlign.Start,
-                    )
-                }
-                TodayStatusPill(
-                    text = when (item.dueState) {
-                        DueState.DUE_TODAY -> "مستحق اليوم"
-                        DueState.OVERDUE -> overdueLabel(item.daysOverdue)
-                        else -> error("Unsupported Today due state.")
-                    },
-                    overdue = overdue,
-                )
-            }
+            TodayAmountStatusRow(
+                label = "المتبقي",
+                amount = formatMoney(account.ledger.balance),
+                statusText = when (item.dueState) {
+                    DueState.DUE_TODAY -> "مستحق اليوم"
+                    DueState.OVERDUE -> overdueLabel(item.daysOverdue)
+                    else -> error("Unsupported Today due state.")
+                },
+                overdue = overdue,
+                testTag = "today-amount-status-$debtId",
+            )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Text(
                 text = reminderStatusText(reminder?.status),
@@ -608,52 +654,115 @@ private fun TodayAccountCard(
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
             )
+            TodayReminderActions(
+                debtId = debtId,
+                reminderStatus = reminder?.status,
+                notificationsAvailable = notificationsAvailable,
+                isReminderActionRunning = isReminderActionRunning,
+                onOpenAccount = onOpenAccount,
+                onResolveNotificationPermission = onResolveNotificationPermission,
+                onRetryReminders = onRetryReminders,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TodayReminderActions(
+    debtId: String,
+    reminderStatus: ReminderStatus?,
+    notificationsAvailable: Boolean,
+    isReminderActionRunning: Boolean,
+    onOpenAccount: () -> Unit,
+    onResolveNotificationPermission: () -> Unit,
+    onRetryReminders: () -> Unit,
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("today-actions-stacked-$debtId"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = onOpenAccount,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("today-open-$debtId"),
+                ) { Text("فتح الحساب") }
+                TodayReminderSecondaryAction(
+                    modifier = Modifier.fillMaxWidth(),
+                    debtId = debtId,
+                    reminderStatus = reminderStatus,
+                    notificationsAvailable = notificationsAvailable,
+                    isReminderActionRunning = isReminderActionRunning,
+                    onResolveNotificationPermission = onResolveNotificationPermission,
+                    onRetryReminders = onRetryReminders,
+                )
+            }
+        } else {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("today-actions-inline-$debtId"),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Button(
                     onClick = onOpenAccount,
                     modifier = Modifier
                         .weight(1f)
-                        .testTag("today-open-${account.ledger.header.id.value}"),
-                ) {
-                    Text("فتح الحساب")
-                }
-                when (reminder?.status) {
-                    ReminderStatus.BLOCKED_PERMISSION -> OutlinedButton(
-                        onClick = if (notificationsAvailable) {
-                            onRetryReminders
-                        } else {
-                            onResolveNotificationPermission
-                        },
-                        enabled = !isReminderActionRunning,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("today-enable-notifications-${account.ledger.header.id.value}"),
-                    ) {
-                        Text(
-                            if (notificationsAvailable) "إعادة التفعيل" else "السماح بالإشعارات",
-                        )
-                    }
-
-                    ReminderStatus.FAILED -> OutlinedButton(
-                        onClick = onRetryReminders,
-                        enabled = !isReminderActionRunning,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("today-retry-reminder-${account.ledger.header.id.value}"),
-                    ) {
-                        Text("إعادة المحاولة")
-                    }
-
-                    ReminderStatus.SCHEDULED,
-                    ReminderStatus.DELIVERED,
-                    ReminderStatus.CANCELLED,
-                    null -> Unit
-                }
+                        .testTag("today-open-$debtId"),
+                ) { Text("فتح الحساب") }
+                TodayReminderSecondaryAction(
+                    modifier = Modifier.weight(1f),
+                    debtId = debtId,
+                    reminderStatus = reminderStatus,
+                    notificationsAvailable = notificationsAvailable,
+                    isReminderActionRunning = isReminderActionRunning,
+                    onResolveNotificationPermission = onResolveNotificationPermission,
+                    onRetryReminders = onRetryReminders,
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun TodayReminderSecondaryAction(
+    modifier: Modifier,
+    debtId: String,
+    reminderStatus: ReminderStatus?,
+    notificationsAvailable: Boolean,
+    isReminderActionRunning: Boolean,
+    onResolveNotificationPermission: () -> Unit,
+    onRetryReminders: () -> Unit,
+) {
+    when (reminderStatus) {
+        ReminderStatus.BLOCKED_PERMISSION -> OutlinedButton(
+            onClick = if (notificationsAvailable) {
+                onRetryReminders
+            } else {
+                onResolveNotificationPermission
+            },
+            enabled = !isReminderActionRunning,
+            modifier = modifier.testTag("today-enable-notifications-$debtId"),
+        ) {
+            Text(if (notificationsAvailable) "إعادة التفعيل" else "السماح بالإشعارات")
+        }
+
+        ReminderStatus.FAILED -> OutlinedButton(
+            onClick = onRetryReminders,
+            enabled = !isReminderActionRunning,
+            modifier = modifier.testTag("today-retry-reminder-$debtId"),
+        ) {
+            Text("إعادة المحاولة")
+        }
+
+        ReminderStatus.SCHEDULED,
+        ReminderStatus.DELIVERED,
+        ReminderStatus.CANCELLED,
+        null -> Unit
     }
 }
 
@@ -682,33 +791,17 @@ private fun TodayInstallmentCard(
                 direction = account.ledger.header.direction,
                 subtitle = "القسط ${installment.sequenceNumber} · الخطة ${installment.revisionNumber}",
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        text = if (installment.isPartiallyPaid) "المتبقي في القسط" else "قيمة القسط",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = formatMoney(installment.remainingAmount),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        textAlign = TextAlign.Start,
-                    )
-                }
-                TodayStatusPill(
-                    text = if (item.isOverdue) {
-                        overdueLabel(item.daysOverdue)
-                    } else {
-                        "قسط اليوم"
-                    },
-                    overdue = item.isOverdue,
-                )
-            }
+            TodayAmountStatusRow(
+                label = if (installment.isPartiallyPaid) "المتبقي في القسط" else "قيمة القسط",
+                amount = formatMoney(installment.remainingAmount),
+                statusText = if (item.isOverdue) {
+                    overdueLabel(item.daysOverdue)
+                } else {
+                    "قسط اليوم"
+                },
+                overdue = item.isOverdue,
+                testTag = "today-amount-status-installment-${installment.id}",
+            )
             if (installment.isPartiallyPaid) {
                 Text(
                     text = "دُفع ${formatMoney(installment.paidAmount)} من ${formatMoney(installment.scheduledAmount)}.",
@@ -764,33 +857,17 @@ private fun TodayPromiseCard(
                 direction = account.ledger.header.direction,
                 subtitle = "وعد بالسداد · \u2066${promise.promisedDate.format(todayDateFormatter)}\u2069",
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        text = "المتبقي في الحساب",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = formatMoney(account.ledger.balance),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        textAlign = TextAlign.Start,
-                    )
-                }
-                TodayStatusPill(
-                    text = if (item.isOverdue) {
-                        "الوعد ${overdueLabel(item.daysOverdue)}"
-                    } else {
-                        "وعد اليوم"
-                    },
-                    overdue = item.isOverdue,
-                )
-            }
+            TodayAmountStatusRow(
+                label = "المتبقي في الحساب",
+                amount = formatMoney(account.ledger.balance),
+                statusText = if (item.isOverdue) {
+                    "الوعد ${overdueLabel(item.daysOverdue)}"
+                } else {
+                    "وعد اليوم"
+                },
+                overdue = item.isOverdue,
+                testTag = "today-amount-status-promise-${promise.id}",
+            )
             promise.note?.let { note ->
                 Text(
                     text = note,
@@ -842,33 +919,17 @@ private fun TodayClaimCard(
                 direction = account.ledger.header.direction,
                 subtitle = "طالبني · متابعة \u2066${followUpDate.format(todayDateFormatter)}\u2069",
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        text = "المتبقي في الحساب",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = formatMoney(account.ledger.balance),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        textAlign = TextAlign.Start,
-                    )
-                }
-                TodayStatusPill(
-                    text = if (item.isOverdue) {
-                        "المطالبة ${overdueLabel(item.daysOverdue)}"
-                    } else {
-                        "متابعة اليوم"
-                    },
-                    overdue = item.isOverdue,
-                )
-            }
+            TodayAmountStatusRow(
+                label = "المتبقي في الحساب",
+                amount = formatMoney(account.ledger.balance),
+                statusText = if (item.isOverdue) {
+                    "المطالبة ${overdueLabel(item.daysOverdue)}"
+                } else {
+                    "متابعة اليوم"
+                },
+                overdue = item.isOverdue,
+                testTag = "today-amount-status-claim-${claim.id}",
+            )
             claim.note?.let { note ->
                 Text(
                     text = note,
@@ -900,31 +961,132 @@ private fun TodayAccountHeader(
     direction: DebtDirection,
     subtitle: String?,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TodayPersonAvatar(personName)
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            Text(
-                text = personName,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            subtitle?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("today-account-header-stacked"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TodayPersonAvatar(personName)
+                    TodayAccountHeaderText(
+                        personName = personName,
+                        subtitle = subtitle,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                TodayDirectionPill(direction)
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("today-account-header-inline"),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TodayPersonAvatar(personName)
+                TodayAccountHeaderText(
+                    personName = personName,
+                    subtitle = subtitle,
+                    modifier = Modifier.weight(1f),
                 )
+                TodayDirectionPill(direction)
             }
         }
-        TodayDirectionPill(direction)
+    }
+}
+
+@Composable
+private fun TodayAccountHeaderText(
+    personName: String,
+    subtitle: String?,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Text(
+            text = personName,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        subtitle?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TodayAmountStatusRow(
+    label: String,
+    amount: String,
+    statusText: String,
+    overdue: Boolean,
+    testTag: String,
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("$testTag-stacked"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TodayAmountText(label = label, amount = amount)
+                TodayStatusPill(text = statusText, overdue = overdue)
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("$testTag-inline"),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                TodayAmountText(
+                    label = label,
+                    amount = amount,
+                    modifier = Modifier.weight(1f),
+                )
+                TodayStatusPill(text = statusText, overdue = overdue)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TodayAmountText(
+    label: String,
+    amount: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = amount,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Start,
+        )
     }
 }
 

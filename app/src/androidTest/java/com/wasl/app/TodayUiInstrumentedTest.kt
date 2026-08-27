@@ -1,6 +1,8 @@
 package com.wasl.app
 
 import android.content.Context
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
@@ -10,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.unit.Density
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -164,6 +167,45 @@ class TodayUiInstrumentedTest {
             assertEquals(1, permissionActions)
             assertEquals(1, retryActions)
         }
+    }
+
+
+    @Test
+    fun largeFontStacksDenseTodayRowsAndKeepsReminderActionReachable() {
+        val blocked = uiItem("large-font", ReminderStatus.BLOCKED_PERMISSION)
+
+        composeRule.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(
+                LocalDensity provides Density(density.density, fontScale = 2f),
+            ) {
+                TodayScreen(
+                    state = TodayUiState(
+                        today = LocalDate.parse("2026-08-14"),
+                        isLoading = false,
+                        items = listOf(blocked),
+                    ),
+                    notificationsAvailable = false,
+                    onOpenHome = {},
+                    onOpenSearch = {},
+                    onOpenAccount = {},
+                    onRefreshDate = {},
+                    onRetryLoad = {},
+                    onResolveNotificationPermission = {},
+                    onRetryReminders = {},
+                    onNoticeShown = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("today-summary-metrics-stacked").assertIsDisplayed()
+        scrollToTag("today-section-heading-stacked-مستحقة اليوم")
+        composeRule.onNodeWithTag("today-section-heading-stacked-مستحقة اليوم").assertIsDisplayed()
+        scrollToTag("today-amount-status-debt-large-font-stacked")
+        composeRule.onNodeWithTag("today-amount-status-debt-large-font-stacked").assertIsDisplayed()
+        scrollToTag("today-actions-stacked-debt-large-font")
+        composeRule.onNodeWithTag("today-actions-stacked-debt-large-font").assertIsDisplayed()
+        composeRule.onNodeWithTag("today-enable-notifications-debt-large-font").assertIsDisplayed()
     }
 
     private fun command(

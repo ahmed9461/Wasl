@@ -52,6 +52,12 @@ class WaslApplication : Application() {
         RoomInstallmentPlanStore(database, roomRepository)
     }
 
+    private val roomPaymentClaimStore: RoomPaymentClaimStore by lazy(
+        LazyThreadSafetyMode.SYNCHRONIZED,
+    ) {
+        RoomPaymentClaimStore(database)
+    }
+
     private val installmentAwareRepository: InstallmentAwareWaslRepository by lazy(
         LazyThreadSafetyMode.SYNCHRONIZED,
     ) {
@@ -59,6 +65,7 @@ class WaslApplication : Application() {
             waslRepository = roomRepository,
             installmentPlanStore = roomInstallmentPlanStore,
             advancedSearchStore = roomAdvancedSearchStore,
+            paymentClaimStore = roomPaymentClaimStore,
         )
     }
 
@@ -76,9 +83,8 @@ class WaslApplication : Application() {
         RoomPaymentPromiseStore(database)
     }
 
-    val paymentClaimStore: PaymentClaimStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        RoomPaymentClaimStore(database)
-    }
+    val paymentClaimStore: PaymentClaimStore
+        get() = installmentAwareRepository
 
     val installmentPlanStore: InstallmentPlanStore
         get() = installmentAwareRepository

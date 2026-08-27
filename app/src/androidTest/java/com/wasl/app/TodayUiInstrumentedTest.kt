@@ -6,6 +6,7 @@ import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -125,7 +126,7 @@ class TodayUiInstrumentedTest {
 
         scrollToTag("today-open-debt-today")
         composeRule.onNodeWithTag("today-open-debt-today").performClick()
-        waitForText("سجل العمليات")
+        waitForText("شخص اليوم")
         composeRule.onNodeWithText("شخص اليوم").assertIsDisplayed()
     }
 

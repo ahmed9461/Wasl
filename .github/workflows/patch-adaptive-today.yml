@@ -1,0 +1,766 @@
+name: Patch adaptive Today
+
+on:
+  push:
+    branches:
+      - agent/bootstrap-wasl-foundation
+    paths:
+      - .github/workflows/patch-adaptive-today.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/bootstrap-wasl-foundation
+
+      - name: Apply deterministic adaptive patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          screen_path = Path('app/src/main/java/com/wasl/app/TodayScreen.kt')
+          test_path = Path('app/src/androidTest/java/com/wasl/app/TodayUiInstrumentedTest.kt')
+          screen = screen_path.read_text()
+          test = test_path.read_text()
+
+          def replace_once(text: str, old: str, new: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one match, got {count}: {old[:80]!r}')
+              return text.replace(old, new, 1)
+
+          def replace_section(text: str, start: str, end: str, new: str) -> str:
+              start_index = text.find(start)
+              if start_index < 0:
+                  raise SystemExit(f'Missing start marker: {start}')
+              end_index = text.find(end, start_index)
+              if end_index < 0:
+                  raise SystemExit(f'Missing end marker: {end}')
+              return text[:start_index] + new.rstrip() + '\n\n' + text[end_index:]
+
+          screen = replace_once(
+              screen,
+              'import androidx.compose.foundation.layout.Box\n',
+              'import androidx.compose.foundation.layout.Box\nimport androidx.compose.foundation.layout.BoxWithConstraints\n',
+          )
+
+          summary = r'''@Composable
+          private fun TodaySummaryCard(state: TodayUiState) {
+              val overdueCount = state.overdueItems.size +
+                  state.overduePromiseItems.size +
+                  state.overdueInstallmentItems.size +
+                  state.overdueClaimItems.size
+              val todayCount = state.dueTodayItems.size +
+                  state.dueTodayPromiseItems.size +
+                  state.dueTodayInstallmentItems.size +
+                  state.dueTodayClaimItems.size
+              Card(
+                  modifier = Modifier
+                      .fillMaxWidth()
+                      .testTag("today-summary"),
+                  colors = CardDefaults.cardColors(
+                      containerColor = MaterialTheme.colorScheme.primaryContainer,
+                  ),
+                  elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+              ) {
+                  Column(
+                      modifier = Modifier.padding(20.dp),
+                      verticalArrangement = Arrangement.spacedBy(16.dp),
+                  ) {
+                      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                          Text(
+                              text = "اليوم لديك ${state.totalAttentionItems} أمور",
+                              style = MaterialTheme.typography.titleLarge,
+                              fontWeight = FontWeight.ExtraBold,
+                              color = MaterialTheme.colorScheme.onPrimaryContainer,
+                          )
+                          Text(
+                              text = "ركّز على المتأخر أولًا، ثم استحقاقات وأقساط ووعود ومطالبات اليوم.",
+                              style = MaterialTheme.typography.bodyMedium,
+                              color = MaterialTheme.colorScheme.onPrimaryContainer,
+                          )
+                      }
+                      BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                          if (shouldStackDenseRows(maxWidth)) {
+                              Column(
+                                  modifier = Modifier
+                                      .fillMaxWidth()
+                                      .testTag("today-summary-metrics-stacked"),
+                                  verticalArrangement = Arrangement.spacedBy(10.dp),
+                              ) {
+                                  TodayMetric(
+                                      modifier = Modifier.fillMaxWidth(),
+                                      value = overdueCount,
+                                      label = "متأخرة",
+                                      emphasized = overdueCount > 0,
+                                  )
+                                  TodayMetric(
+                                      modifier = Modifier.fillMaxWidth(),
+                                      value = todayCount,
+                                      label = "مستحقة اليوم",
+                                      emphasized = false,
+                                  )
+                              }
+                          } else {
+                              Row(
+                                  modifier = Modifier
+                                      .fillMaxWidth()
+                                      .testTag("today-summary-metrics-inline"),
+                                  horizontalArrangement = Arrangement.spacedBy(10.dp),
+                              ) {
+                                  TodayMetric(
+                                      modifier = Modifier.weight(1f),
+                                      value = overdueCount,
+                                      label = "متأخرة",
+                                      emphasized = overdueCount > 0,
+                                  )
+                                  TodayMetric(
+                                      modifier = Modifier.weight(1f),
+                                      value = todayCount,
+                                      label = "مستحقة اليوم",
+                                      emphasized = false,
+                                  )
+                              }
+                          }
+                      }
+                      Text(
+                          text = "$overdueCount متأخرة · $todayCount مستحقة اليوم",
+                          style = MaterialTheme.typography.bodyMedium,
+                          color = MaterialTheme.colorScheme.onPrimaryContainer,
+                      )
+                      if (state.installmentItems.isNotEmpty()) {
+                          Text(
+                              text = "منها ${state.installmentItems.size} أقساط لم يكتمل سدادها.",
+                              style = MaterialTheme.typography.bodySmall,
+                              color = MaterialTheme.colorScheme.onPrimaryContainer,
+                          )
+                      }
+                      if (state.promiseItems.isNotEmpty()) {
+                          Text(
+                              text = "ومنها ${state.promiseItems.size} وعود سداد تحتاج متابعة.",
+                              style = MaterialTheme.typography.bodySmall,
+                              color = MaterialTheme.colorScheme.onPrimaryContainer,
+                          )
+                      }
+                      if (state.claimItems.isNotEmpty()) {
+                          Text(
+                              text = "ومنها ${state.claimItems.size} مطالبات «طالبني» تحتاج متابعة.",
+                              style = MaterialTheme.typography.bodySmall,
+                              color = MaterialTheme.colorScheme.onPrimaryContainer,
+                          )
+                      }
+                  }
+              }
+          }'''
+          screen = replace_section(
+              screen,
+              '@Composable\nprivate fun TodaySummaryCard',
+              '@Composable\nprivate fun TodayMetric',
+              summary,
+          )
+
+          section_heading = r'''@Composable
+          private fun TodaySectionHeading(
+              title: String,
+              subtitle: String,
+              count: Int,
+              overdue: Boolean,
+          ) {
+              BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                  if (shouldStackDenseRows(maxWidth)) {
+                      Column(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("today-section-heading-stacked-$title"),
+                          verticalArrangement = Arrangement.spacedBy(8.dp),
+                      ) {
+                          TodaySectionHeadingText(title = title, subtitle = subtitle)
+                          TodayCountPill(count = count, overdue = overdue)
+                      }
+                  } else {
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("today-section-heading-inline-$title"),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.CenterVertically,
+                      ) {
+                          TodaySectionHeadingText(
+                              title = title,
+                              subtitle = subtitle,
+                              modifier = Modifier.weight(1f),
+                          )
+                          TodayCountPill(count = count, overdue = overdue)
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          private fun TodaySectionHeadingText(
+              title: String,
+              subtitle: String,
+              modifier: Modifier = Modifier,
+          ) {
+              Column(
+                  modifier = modifier,
+                  verticalArrangement = Arrangement.spacedBy(2.dp),
+              ) {
+                  Text(
+                      text = title,
+                      style = MaterialTheme.typography.titleLarge,
+                      fontWeight = FontWeight.Bold,
+                  )
+                  Text(
+                      text = subtitle,
+                      style = MaterialTheme.typography.bodyMedium,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+              }
+          }
+
+          @Composable
+          private fun TodayCountPill(count: Int, overdue: Boolean) {
+              Surface(
+                  shape = CircleShape,
+                  color = if (overdue) {
+                      MaterialTheme.colorScheme.errorContainer
+                  } else {
+                      MaterialTheme.colorScheme.primaryContainer
+                  },
+              ) {
+                  Text(
+                      text = count.toString(),
+                      modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                      style = MaterialTheme.typography.labelLarge,
+                      color = if (overdue) {
+                          MaterialTheme.colorScheme.onErrorContainer
+                      } else {
+                          MaterialTheme.colorScheme.onPrimaryContainer
+                      },
+                  )
+              }
+          }'''
+          screen = replace_section(
+              screen,
+              '@Composable\nprivate fun TodaySectionHeading',
+              '@Composable\nprivate fun TodayAccountCard',
+              section_heading,
+          )
+
+          account_card = r'''@Composable
+          private fun TodayAccountCard(
+              item: TodayItem,
+              notificationsAvailable: Boolean,
+              isReminderActionRunning: Boolean,
+              onOpenAccount: () -> Unit,
+              onResolveNotificationPermission: () -> Unit,
+              onRetryReminders: () -> Unit,
+          ) {
+              val account = item.account
+              val reminder = account.dueReminder
+              val overdue = item.dueState == DueState.OVERDUE
+              val debtId = account.ledger.header.id.value
+              Card(
+                  modifier = Modifier
+                      .fillMaxWidth()
+                      .testTag("today-account-$debtId"),
+                  colors = CardDefaults.cardColors(
+                      containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                  ),
+                  elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+              ) {
+                  Column(
+                      modifier = Modifier.padding(18.dp),
+                      verticalArrangement = Arrangement.spacedBy(12.dp),
+                  ) {
+                      TodayAccountHeader(
+                          personName = account.person.displayName,
+                          direction = account.ledger.header.direction,
+                          subtitle = account.ledger.header.description,
+                      )
+                      TodayAmountStatusRow(
+                          label = "المتبقي",
+                          amount = formatMoney(account.ledger.balance),
+                          statusText = when (item.dueState) {
+                              DueState.DUE_TODAY -> "مستحق اليوم"
+                              DueState.OVERDUE -> overdueLabel(item.daysOverdue)
+                              else -> error("Unsupported Today due state.")
+                          },
+                          overdue = overdue,
+                          testTag = "today-amount-status-$debtId",
+                      )
+                      HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                      Text(
+                          text = reminderStatusText(reminder?.status),
+                          style = MaterialTheme.typography.bodyMedium,
+                          color = if (reminder?.status == ReminderStatus.BLOCKED_PERMISSION ||
+                              reminder?.status == ReminderStatus.FAILED
+                          ) {
+                              MaterialTheme.colorScheme.error
+                          } else {
+                              MaterialTheme.colorScheme.onSurfaceVariant
+                          },
+                      )
+                      TodayReminderActions(
+                          debtId = debtId,
+                          reminderStatus = reminder?.status,
+                          notificationsAvailable = notificationsAvailable,
+                          isReminderActionRunning = isReminderActionRunning,
+                          onOpenAccount = onOpenAccount,
+                          onResolveNotificationPermission = onResolveNotificationPermission,
+                          onRetryReminders = onRetryReminders,
+                      )
+                  }
+              }
+          }
+
+          @Composable
+          private fun TodayReminderActions(
+              debtId: String,
+              reminderStatus: ReminderStatus?,
+              notificationsAvailable: Boolean,
+              isReminderActionRunning: Boolean,
+              onOpenAccount: () -> Unit,
+              onResolveNotificationPermission: () -> Unit,
+              onRetryReminders: () -> Unit,
+          ) {
+              BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                  if (shouldStackDenseRows(maxWidth)) {
+                      Column(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("today-actions-stacked-$debtId"),
+                          verticalArrangement = Arrangement.spacedBy(8.dp),
+                      ) {
+                          Button(
+                              onClick = onOpenAccount,
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .testTag("today-open-$debtId"),
+                          ) { Text("فتح الحساب") }
+                          TodayReminderSecondaryAction(
+                              modifier = Modifier.fillMaxWidth(),
+                              debtId = debtId,
+                              reminderStatus = reminderStatus,
+                              notificationsAvailable = notificationsAvailable,
+                              isReminderActionRunning = isReminderActionRunning,
+                              onResolveNotificationPermission = onResolveNotificationPermission,
+                              onRetryReminders = onRetryReminders,
+                          )
+                      }
+                  } else {
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("today-actions-inline-$debtId"),
+                          horizontalArrangement = Arrangement.spacedBy(8.dp),
+                      ) {
+                          Button(
+                              onClick = onOpenAccount,
+                              modifier = Modifier
+                                  .weight(1f)
+                                  .testTag("today-open-$debtId"),
+                          ) { Text("فتح الحساب") }
+                          TodayReminderSecondaryAction(
+                              modifier = Modifier.weight(1f),
+                              debtId = debtId,
+                              reminderStatus = reminderStatus,
+                              notificationsAvailable = notificationsAvailable,
+                              isReminderActionRunning = isReminderActionRunning,
+                              onResolveNotificationPermission = onResolveNotificationPermission,
+                              onRetryReminders = onRetryReminders,
+                          )
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          private fun TodayReminderSecondaryAction(
+              modifier: Modifier,
+              debtId: String,
+              reminderStatus: ReminderStatus?,
+              notificationsAvailable: Boolean,
+              isReminderActionRunning: Boolean,
+              onResolveNotificationPermission: () -> Unit,
+              onRetryReminders: () -> Unit,
+          ) {
+              when (reminderStatus) {
+                  ReminderStatus.BLOCKED_PERMISSION -> OutlinedButton(
+                      onClick = if (notificationsAvailable) {
+                          onRetryReminders
+                      } else {
+                          onResolveNotificationPermission
+                      },
+                      enabled = !isReminderActionRunning,
+                      modifier = modifier.testTag("today-enable-notifications-$debtId"),
+                  ) {
+                      Text(if (notificationsAvailable) "إعادة التفعيل" else "السماح بالإشعارات")
+                  }
+
+                  ReminderStatus.FAILED -> OutlinedButton(
+                      onClick = onRetryReminders,
+                      enabled = !isReminderActionRunning,
+                      modifier = modifier.testTag("today-retry-reminder-$debtId"),
+                  ) {
+                      Text("إعادة المحاولة")
+                  }
+
+                  ReminderStatus.SCHEDULED,
+                  ReminderStatus.DELIVERED,
+                  ReminderStatus.CANCELLED,
+                  null -> Unit
+              }
+          }'''
+          screen = replace_section(
+              screen,
+              '@Composable\nprivate fun TodayAccountCard',
+              '@Composable\nprivate fun TodayInstallmentCard',
+              account_card,
+          )
+
+          # Replace the three duplicated amount/status Rows with the shared adaptive component.
+          installment_old = r'''            Row(
+                          modifier = Modifier.fillMaxWidth(),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.Bottom,
+                      ) {
+                          Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                              Text(
+                                  text = if (installment.isPartiallyPaid) "المتبقي في القسط" else "قيمة القسط",
+                                  style = MaterialTheme.typography.labelLarge,
+                                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                              )
+                              Text(
+                                  text = formatMoney(installment.remainingAmount),
+                                  style = MaterialTheme.typography.titleLarge,
+                                  fontWeight = FontWeight.ExtraBold,
+                                  textAlign = TextAlign.Start,
+                              )
+                          }
+                          TodayStatusPill(
+                              text = if (item.isOverdue) {
+                                  overdueLabel(item.daysOverdue)
+                              } else {
+                                  "قسط اليوم"
+                              },
+                              overdue = item.isOverdue,
+                          )
+                      }'''
+          installment_new = r'''            TodayAmountStatusRow(
+                          label = if (installment.isPartiallyPaid) "المتبقي في القسط" else "قيمة القسط",
+                          amount = formatMoney(installment.remainingAmount),
+                          statusText = if (item.isOverdue) {
+                              overdueLabel(item.daysOverdue)
+                          } else {
+                              "قسط اليوم"
+                          },
+                          overdue = item.isOverdue,
+                          testTag = "today-amount-status-installment-${installment.id}",
+                      )'''
+          screen = replace_once(screen, installment_old, installment_new)
+
+          promise_old = r'''            Row(
+                          modifier = Modifier.fillMaxWidth(),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.Bottom,
+                      ) {
+                          Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                              Text(
+                                  text = "المتبقي في الحساب",
+                                  style = MaterialTheme.typography.labelLarge,
+                                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                              )
+                              Text(
+                                  text = formatMoney(account.ledger.balance),
+                                  style = MaterialTheme.typography.titleMedium,
+                                  fontWeight = FontWeight.ExtraBold,
+                                  textAlign = TextAlign.Start,
+                              )
+                          }
+                          TodayStatusPill(
+                              text = if (item.isOverdue) {
+                                  "الوعد ${overdueLabel(item.daysOverdue)}"
+                              } else {
+                                  "وعد اليوم"
+                              },
+                              overdue = item.isOverdue,
+                          )
+                      }'''
+          promise_new = r'''            TodayAmountStatusRow(
+                          label = "المتبقي في الحساب",
+                          amount = formatMoney(account.ledger.balance),
+                          statusText = if (item.isOverdue) {
+                              "الوعد ${overdueLabel(item.daysOverdue)}"
+                          } else {
+                              "وعد اليوم"
+                          },
+                          overdue = item.isOverdue,
+                          testTag = "today-amount-status-promise-${promise.id}",
+                      )'''
+          screen = replace_once(screen, promise_old, promise_new)
+
+          claim_old = r'''            Row(
+                          modifier = Modifier.fillMaxWidth(),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.Bottom,
+                      ) {
+                          Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                              Text(
+                                  text = "المتبقي في الحساب",
+                                  style = MaterialTheme.typography.labelLarge,
+                                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                              )
+                              Text(
+                                  text = formatMoney(account.ledger.balance),
+                                  style = MaterialTheme.typography.titleMedium,
+                                  fontWeight = FontWeight.ExtraBold,
+                                  textAlign = TextAlign.Start,
+                              )
+                          }
+                          TodayStatusPill(
+                              text = if (item.isOverdue) {
+                                  "المطالبة ${overdueLabel(item.daysOverdue)}"
+                              } else {
+                                  "متابعة اليوم"
+                              },
+                              overdue = item.isOverdue,
+                          )
+                      }'''
+          claim_new = r'''            TodayAmountStatusRow(
+                          label = "المتبقي في الحساب",
+                          amount = formatMoney(account.ledger.balance),
+                          statusText = if (item.isOverdue) {
+                              "المطالبة ${overdueLabel(item.daysOverdue)}"
+                          } else {
+                              "متابعة اليوم"
+                          },
+                          overdue = item.isOverdue,
+                          testTag = "today-amount-status-claim-${claim.id}",
+                      )'''
+          screen = replace_once(screen, claim_old, claim_new)
+
+          header = r'''@Composable
+          private fun TodayAccountHeader(
+              personName: String,
+              direction: DebtDirection,
+              subtitle: String?,
+          ) {
+              BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                  if (shouldStackDenseRows(maxWidth)) {
+                      Column(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("today-account-header-stacked"),
+                          verticalArrangement = Arrangement.spacedBy(8.dp),
+                      ) {
+                          Row(
+                              modifier = Modifier.fillMaxWidth(),
+                              horizontalArrangement = Arrangement.spacedBy(12.dp),
+                              verticalAlignment = Alignment.CenterVertically,
+                          ) {
+                              TodayPersonAvatar(personName)
+                              TodayAccountHeaderText(
+                                  personName = personName,
+                                  subtitle = subtitle,
+                                  modifier = Modifier.weight(1f),
+                              )
+                          }
+                          TodayDirectionPill(direction)
+                      }
+                  } else {
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("today-account-header-inline"),
+                          horizontalArrangement = Arrangement.spacedBy(12.dp),
+                          verticalAlignment = Alignment.CenterVertically,
+                      ) {
+                          TodayPersonAvatar(personName)
+                          TodayAccountHeaderText(
+                              personName = personName,
+                              subtitle = subtitle,
+                              modifier = Modifier.weight(1f),
+                          )
+                          TodayDirectionPill(direction)
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          private fun TodayAccountHeaderText(
+              personName: String,
+              subtitle: String?,
+              modifier: Modifier = Modifier,
+          ) {
+              Column(
+                  modifier = modifier,
+                  verticalArrangement = Arrangement.spacedBy(3.dp),
+              ) {
+                  Text(
+                      text = personName,
+                      style = MaterialTheme.typography.titleMedium,
+                      fontWeight = FontWeight.Bold,
+                  )
+                  subtitle?.let {
+                      Text(
+                          text = it,
+                          style = MaterialTheme.typography.bodyMedium,
+                          color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      )
+                  }
+              }
+          }
+
+          @Composable
+          private fun TodayAmountStatusRow(
+              label: String,
+              amount: String,
+              statusText: String,
+              overdue: Boolean,
+              testTag: String,
+          ) {
+              BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                  if (shouldStackDenseRows(maxWidth)) {
+                      Column(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("$testTag-stacked"),
+                          verticalArrangement = Arrangement.spacedBy(8.dp),
+                      ) {
+                          TodayAmountText(label = label, amount = amount)
+                          TodayStatusPill(text = statusText, overdue = overdue)
+                      }
+                  } else {
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("$testTag-inline"),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.Bottom,
+                      ) {
+                          TodayAmountText(
+                              label = label,
+                              amount = amount,
+                              modifier = Modifier.weight(1f),
+                          )
+                          TodayStatusPill(text = statusText, overdue = overdue)
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          private fun TodayAmountText(
+              label: String,
+              amount: String,
+              modifier: Modifier = Modifier,
+          ) {
+              Column(
+                  modifier = modifier,
+                  verticalArrangement = Arrangement.spacedBy(3.dp),
+              ) {
+                  Text(
+                      text = label,
+                      style = MaterialTheme.typography.labelLarge,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                  Text(
+                      text = amount,
+                      style = MaterialTheme.typography.titleLarge,
+                      fontWeight = FontWeight.ExtraBold,
+                      textAlign = TextAlign.Start,
+                  )
+              }
+          }'''
+          screen = replace_section(
+              screen,
+              '@Composable\nprivate fun TodayAccountHeader',
+              '@Composable\nprivate fun TodayStatusPill',
+              header,
+          )
+
+          # Add an explicit large-font regression test for the adaptive Today rows.
+          test = replace_once(
+              test,
+              'import android.content.Context\n',
+              'import android.content.Context\nimport androidx.compose.runtime.CompositionLocalProvider\nimport androidx.compose.ui.platform.LocalDensity\n',
+          )
+          test = replace_once(
+              test,
+              'import androidx.compose.ui.test.performScrollToNode\n',
+              'import androidx.compose.ui.test.performScrollToNode\nimport androidx.compose.ui.unit.Density\n',
+          )
+          new_test = r'''
+              @Test
+              fun largeFontStacksDenseTodayRowsAndKeepsReminderActionReachable() {
+                  val blocked = uiItem("large-font", ReminderStatus.BLOCKED_PERMISSION)
+
+                  composeRule.setContent {
+                      val density = LocalDensity.current
+                      CompositionLocalProvider(
+                          LocalDensity provides Density(density.density, fontScale = 2f),
+                      ) {
+                          TodayScreen(
+                              state = TodayUiState(
+                                  today = LocalDate.parse("2026-08-14"),
+                                  isLoading = false,
+                                  items = listOf(blocked),
+                              ),
+                              notificationsAvailable = false,
+                              onOpenHome = {},
+                              onOpenSearch = {},
+                              onOpenAccount = {},
+                              onRefreshDate = {},
+                              onRetryLoad = {},
+                              onResolveNotificationPermission = {},
+                              onRetryReminders = {},
+                              onNoticeShown = {},
+                          )
+                      }
+                  }
+
+                  composeRule.onNodeWithTag("today-summary-metrics-stacked").assertIsDisplayed()
+                  scrollToTag("today-section-heading-stacked-مستحقة اليوم")
+                  composeRule.onNodeWithTag("today-section-heading-stacked-مستحقة اليوم").assertIsDisplayed()
+                  scrollToTag("today-amount-status-debt-large-font-stacked")
+                  composeRule.onNodeWithTag("today-amount-status-debt-large-font-stacked").assertIsDisplayed()
+                  scrollToTag("today-actions-stacked-debt-large-font")
+                  composeRule.onNodeWithTag("today-actions-stacked-debt-large-font").assertIsDisplayed()
+                  composeRule.onNodeWithTag("today-enable-notifications-debt-large-font").assertIsDisplayed()
+              }
+          '''
+          test = replace_once(
+              test,
+              '    private fun command(\n',
+              new_test + '\n    private fun command(\n',
+          )
+
+          screen_path.write_text(screen)
+          test_path.write_text(test)
+          PY
+
+          git diff --check
+          grep -F 'today-summary-metrics-stacked' app/src/main/java/com/wasl/app/TodayScreen.kt
+          grep -F 'today-actions-stacked-' app/src/main/java/com/wasl/app/TodayScreen.kt
+          grep -F 'largeFontStacksDenseTodayRowsAndKeepsReminderActionReachable' app/src/androidTest/java/com/wasl/app/TodayUiInstrumentedTest.kt
+
+      - name: Commit patch and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/patch-adaptive-today.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/wasl/app/TodayScreen.kt \
+            app/src/androidTest/java/com/wasl/app/TodayUiInstrumentedTest.kt \
+            .github/workflows/patch-adaptive-today.yml
+          git commit -m "feat: harden adaptive Today layout"
+          git push origin HEAD:agent/bootstrap-wasl-foundation

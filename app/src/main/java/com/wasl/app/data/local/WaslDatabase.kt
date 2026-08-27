@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
+import com.wasl.app.data.local.dao.AttachmentDao
 import com.wasl.app.data.local.dao.AuditEventDao
 import com.wasl.app.data.local.dao.DebtDao
 import com.wasl.app.data.local.dao.DocumentIdentityDao
@@ -15,6 +16,7 @@ import com.wasl.app.data.local.dao.PaymentClaimDao
 import com.wasl.app.data.local.dao.PaymentPromiseDao
 import com.wasl.app.data.local.dao.PersonDao
 import com.wasl.app.data.local.dao.ReminderDao
+import com.wasl.app.data.local.entity.AttachmentEntity
 import com.wasl.app.data.local.entity.AuditEventEntity
 import com.wasl.app.data.local.entity.DebtEntity
 import com.wasl.app.data.local.entity.DocumentIdentityEntity
@@ -41,9 +43,10 @@ import com.wasl.app.data.local.entity.ReminderEntity
         InstallmentPlanEntity::class,
         InstallmentEntity::class,
         PaymentClaimEntity::class,
+        AttachmentEntity::class,
     ],
     views = [PaymentIssuedDocumentView::class],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class WaslDatabase : RoomDatabase() {
@@ -57,6 +60,7 @@ abstract class WaslDatabase : RoomDatabase() {
     abstract fun paymentPromiseDao(): PaymentPromiseDao
     abstract fun installmentPlanDao(): InstallmentPlanDao
     abstract fun paymentClaimDao(): PaymentClaimDao
+    abstract fun attachmentDao(): AttachmentDao
 
     companion object {
         const val DATABASE_NAME = "wasl.db"
@@ -341,6 +345,33 @@ abstract class WaslDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `attachments` (
+                        `id` TEXT NOT NULL,
+                        `debt_id` TEXT NOT NULL,
+                        `ledger_entry_id` TEXT,
+                        `display_name` TEXT NOT NULL,
+                        `mime_type` TEXT NOT NULL,
+                        `size_bytes` INTEGER NOT NULL,
+                        `relative_path` TEXT NOT NULL,
+                        `sha256` TEXT NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        `note` TEXT,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`debt_id`) REFERENCES `debts`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT,
+                        FOREIGN KEY(`ledger_entry_id`) REFERENCES `ledger_entries`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_attachments_debt_id_created_at` ON `attachments` (`debt_id`, `created_at`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_attachments_ledger_entry_id` ON `attachments` (`ledger_entry_id`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_attachments_relative_path` ON `attachments` (`relative_path`)")
+            }
+        }
+
         val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -349,6 +380,7 @@ abstract class WaslDatabase : RoomDatabase() {
             MIGRATION_5_6,
             MIGRATION_6_7,
             MIGRATION_7_8,
+            MIGRATION_8_9,
         )
 
         private fun createIssuedDocumentIndexes(

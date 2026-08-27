@@ -104,7 +104,7 @@ class AttachmentFileAccessInstrumentedTest {
     private class CapturingContext(base: Context) : ContextWrapper(base) {
         var startedIntent: Intent? = null
 
-        override fun startActivity(intent: Intent?) {
+        override fun startActivity(intent: Intent) {
             startedIntent = intent
         }
     }

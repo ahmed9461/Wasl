@@ -11,6 +11,7 @@ import com.wasl.app.data.local.dao.DocumentIdentityDao
 import com.wasl.app.data.local.dao.InstallmentPlanDao
 import com.wasl.app.data.local.dao.IssuedDocumentDao
 import com.wasl.app.data.local.dao.LedgerDao
+import com.wasl.app.data.local.dao.PaymentClaimDao
 import com.wasl.app.data.local.dao.PaymentPromiseDao
 import com.wasl.app.data.local.dao.PersonDao
 import com.wasl.app.data.local.dao.ReminderDao
@@ -21,6 +22,7 @@ import com.wasl.app.data.local.entity.InstallmentEntity
 import com.wasl.app.data.local.entity.InstallmentPlanEntity
 import com.wasl.app.data.local.entity.IssuedDocumentEntity
 import com.wasl.app.data.local.entity.LedgerEntryEntity
+import com.wasl.app.data.local.entity.PaymentClaimEntity
 import com.wasl.app.data.local.entity.PaymentIssuedDocumentView
 import com.wasl.app.data.local.entity.PaymentPromiseEntity
 import com.wasl.app.data.local.entity.PersonEntity
@@ -38,9 +40,10 @@ import com.wasl.app.data.local.entity.ReminderEntity
         PaymentPromiseEntity::class,
         InstallmentPlanEntity::class,
         InstallmentEntity::class,
+        PaymentClaimEntity::class,
     ],
     views = [PaymentIssuedDocumentView::class],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class WaslDatabase : RoomDatabase() {
@@ -53,6 +56,7 @@ abstract class WaslDatabase : RoomDatabase() {
     abstract fun issuedDocumentDao(): IssuedDocumentDao
     abstract fun paymentPromiseDao(): PaymentPromiseDao
     abstract fun installmentPlanDao(): InstallmentPlanDao
+    abstract fun paymentClaimDao(): PaymentClaimDao
 
     companion object {
         const val DATABASE_NAME = "wasl.db"
@@ -306,6 +310,37 @@ abstract class WaslDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `payment_claims` (
+                        `id` TEXT NOT NULL,
+                        `create_command_id` TEXT NOT NULL,
+                        `debt_id` TEXT NOT NULL,
+                        `claimed_at` INTEGER NOT NULL,
+                        `follow_up_kind` TEXT NOT NULL,
+                        `follow_up_date_epoch_day` INTEGER,
+                        `note` TEXT,
+                        `status` TEXT NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        `resolution_command_id` TEXT,
+                        `resolved_at` INTEGER,
+                        `resolution_note` TEXT,
+                        `updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`debt_id`) REFERENCES `debts`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_payment_claims_create_command_id` ON `payment_claims` (`create_command_id`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_payment_claims_resolution_command_id` ON `payment_claims` (`resolution_command_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_payment_claims_debt_id_claimed_at` ON `payment_claims` (`debt_id`, `claimed_at`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_payment_claims_debt_id_status` ON `payment_claims` (`debt_id`, `status`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_payment_claims_status_follow_up_date_epoch_day` ON `payment_claims` (`status`, `follow_up_date_epoch_day`)")
+            }
+        }
+
         val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -313,6 +348,7 @@ abstract class WaslDatabase : RoomDatabase() {
             MIGRATION_4_5,
             MIGRATION_5_6,
             MIGRATION_6_7,
+            MIGRATION_7_8,
         )
 
         private fun createIssuedDocumentIndexes(

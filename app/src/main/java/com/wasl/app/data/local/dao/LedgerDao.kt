@@ -11,6 +11,9 @@ interface LedgerDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(entry: LedgerEntryEntity)
 
+    @Query("SELECT * FROM ledger_entries WHERE id = :id LIMIT 1")
+    suspend fun findById(id: String): LedgerEntryEntity?
+
     @Query("SELECT * FROM ledger_entries WHERE command_id = :commandId")
     suspend fun findByCommandId(commandId: String): LedgerEntryEntity?
 

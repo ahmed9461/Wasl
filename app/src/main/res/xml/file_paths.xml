@@ -3,4 +3,7 @@
     <files-path
         name="issued_documents"
         path="documents/" />
+    <files-path
+        name="attachments"
+        path="attachments/" />
 </paths>

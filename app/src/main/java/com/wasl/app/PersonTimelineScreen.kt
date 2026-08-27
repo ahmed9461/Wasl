@@ -36,9 +36,6 @@ import com.wasl.app.data.AccountOverview
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtId
 import com.wasl.domain.Money
-import com.wasl.domain.MoneyInputParser
-import java.math.BigDecimal
-import java.text.NumberFormat
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -133,7 +130,7 @@ internal fun PersonTimelineScreen(
                                     verticalArrangement = Arrangement.spacedBy(5.dp),
                                 ) {
                                     Text(
-                                        "${directionLabel(group.direction)} • ${group.currency.value}",
+                                        "${directionLabel(group.direction)} • ${ltrIsolate(group.currency.value)}",
                                         fontWeight = FontWeight.Bold,
                                     )
                                     Text("${group.accountCount} حساب")
@@ -176,7 +173,7 @@ internal fun PersonTimelineScreen(
                                     ) {
                                         PersonTimelineEventHeader(event)
                                         Text(
-                                            "${directionLabel(event.direction)} • ${event.currency.value}",
+                                            "${directionLabel(event.direction)} • ${ltrIsolate(event.currency.value)}",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
@@ -248,8 +245,8 @@ private fun PersonContactCard(state: PersonTimelineUiState) {
         ) {
             Text(person.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
             Text("${state.accounts.size} حساب مرتبط")
-            person.phone?.takeIf { it.isNotBlank() }?.let { Text("الهاتف: $it") }
-            person.email?.takeIf { it.isNotBlank() }?.let { Text("البريد: $it") }
+            person.phone?.takeIf { it.isNotBlank() }?.let { Text("الهاتف: ${ltrIsolate(it)}") }
+            person.email?.takeIf { it.isNotBlank() }?.let { Text("البريد: ${ltrIsolate(it)}") }
             person.notes?.takeIf { it.isNotBlank() }?.let { Text("ملاحظات: $it") }
             if (state.balanceGroups.map { it.currency }.distinct().size > 1) {
                 Text(
@@ -275,16 +272,16 @@ private fun PersonAccountCard(
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             Text(
-                "${directionLabel(header.direction)} • ${header.originalAmount.currency.value}",
+                "${directionLabel(header.direction)} • ${ltrIsolate(header.originalAmount.currency.value)}",
                 fontWeight = FontWeight.Bold,
             )
             Text("الأصل: ${formatPersonMoney(header.originalAmount)}")
             Text("المتبقي: ${formatPersonMoney(account.ledger.balance)}")
-            Text("فتح في ${header.openedAt.atZone(ZoneId.systemDefault()).toLocalDate()}")
-            header.dueDate?.let { Text("الاستحقاق: $it") }
+            Text("فتح في ${ltrIsolate(header.openedAt.atZone(ZoneId.systemDefault()).toLocalDate().toString())}")
+            header.dueDate?.let { Text("الاستحقاق: ${ltrIsolate(it.toString())}") }
             header.description?.let { Text(it) }
             Text(
-                "الحالة: ${account.lifecycleState.name}",
+                "الحالة: ${ltrIsolate(account.lifecycleState.name)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -298,18 +295,9 @@ private fun directionLabel(direction: DebtDirection): String = when (direction) 
     DebtDirection.PAYABLE -> "عليّ له"
 }
 
-private fun formatPersonMoney(money: Money): String {
-    val fractionDigits = MoneyInputParser.fractionDigits(money.currency)
-    val major = BigDecimal.valueOf(money.minorUnits, fractionDigits)
-    val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
-        isGroupingUsed = true
-        minimumFractionDigits = fractionDigits
-        maximumFractionDigits = fractionDigits
-    }
-    return "${formatter.format(major)} ${money.currency.value}"
-}
+private fun formatPersonMoney(money: Money): String = formatMoney(money)
 
 private val personTimelineFormatter = DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm", Locale.US)
 
 private fun formatPersonTimelineInstant(instant: java.time.Instant): String =
-    personTimelineFormatter.format(instant.atZone(ZoneId.systemDefault()))
+    ltrIsolate(personTimelineFormatter.format(instant.atZone(ZoneId.systemDefault())))

@@ -1403,7 +1403,7 @@ internal fun formatMoney(money: Money): String {
         minimumFractionDigits = fractionDigits
         maximumFractionDigits = fractionDigits
     }
-    return "\u2066${formatter.format(major)} ${money.currency.value}\u2069"
+    return ltrIsolate("${formatter.format(major)} ${money.currency.value}")
 }
 
 @Preview(showBackground = true, locale = "ar")

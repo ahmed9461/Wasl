@@ -57,9 +57,6 @@ import com.wasl.app.document.PaymentReceiptService
 import com.wasl.app.document.ReceiptFileAccess
 import com.wasl.domain.DebtId
 import com.wasl.domain.Money
-import com.wasl.domain.MoneyInputParser
-import java.math.BigDecimal
-import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
@@ -364,7 +361,7 @@ internal fun DocumentsHubRoute(
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Text("${document.type.arabicLabel()} جاهز", fontWeight = FontWeight.Bold)
-                            Text(document.documentNumber)
+                            Text(ltrIsolate(document.documentNumber))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button(onClick = {
                                     runCatching { ReceiptFileAccess.open(context, document) }
@@ -447,7 +444,7 @@ private fun AttachmentRow(
     ) {
         Text(attachment.displayName, fontWeight = FontWeight.SemiBold)
         Text(
-            "${formatFileSize(attachment.sizeBytes)} • ${attachment.mimeType}",
+            "${ltrIsolate(formatFileSize(attachment.sizeBytes))} • ${ltrIsolate(attachment.mimeType)}",
             style = MaterialTheme.typography.bodySmall,
         )
         val integrityText = when (attachment.integrity) {
@@ -511,13 +508,4 @@ private fun DocumentType.arabicLabel(): String = when (this) {
     DocumentType.ACCOUNT_STATEMENT -> "كشف الحساب الكامل"
 }
 
-private fun formatDocumentsMoney(money: Money): String {
-    val fractionDigits = MoneyInputParser.fractionDigits(money.currency)
-    val major = BigDecimal.valueOf(money.minorUnits, fractionDigits)
-    val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
-        isGroupingUsed = true
-        minimumFractionDigits = fractionDigits
-        maximumFractionDigits = fractionDigits
-    }
-    return "${formatter.format(major)} ${money.currency.value}"
-}
+private fun formatDocumentsMoney(money: Money): String = formatMoney(money)

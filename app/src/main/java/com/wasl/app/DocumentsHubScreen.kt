@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -232,30 +233,12 @@ internal fun DocumentsHubRoute(
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            item("header") {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    OutlinedButton(onClick = onBack) { Text("رجوع") }
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(
-                            if (initialDebtId == null) "تصدير وتقارير PDF" else "مستندات وإثباتات الحساب",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                        )
-                        Text(
-                            if (initialDebtId == null) {
-                                "اختر حسابًا ثم صدّر مستنداته."
-                            } else {
-                                "مستندات PDF ومرفقات هذا الحساب فقط."
-                            },
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
+item("header") {
+    DocumentsHubHeader(
+        isAccountScoped = initialDebtId != null,
+        onBack = onBack,
+    )
+}
 
             if (initialDebtId != null) {
                 item("attachments") {
@@ -362,16 +345,20 @@ internal fun DocumentsHubRoute(
                         ) {
                             Text("${document.type.arabicLabel()} جاهز", fontWeight = FontWeight.Bold)
                             Text(ltrIsolate(document.documentNumber))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(onClick = {
-                                    runCatching { ReceiptFileAccess.open(context, document) }
-                                        .onFailure { showMessage("تعذر فتح ملف PDF.") }
-                                }) { Text("فتح PDF") }
-                                OutlinedButton(onClick = {
-                                    runCatching { ReceiptFileAccess.share(context, document) }
-                                        .onFailure { showMessage("تعذرت مشاركة ملف PDF.") }
-                                }) { Text("مشاركة") }
-                            }
+DocumentDualActionButtons(
+    testTagPrefix = "ready-document",
+    primaryLabel = "فتح PDF",
+    secondaryLabel = "مشاركة",
+    primaryFilled = true,
+    onPrimary = {
+        runCatching { ReceiptFileAccess.open(context, document) }
+            .onFailure { showMessage("تعذر فتح ملف PDF.") }
+    },
+    onSecondary = {
+        runCatching { ReceiptFileAccess.share(context, document) }
+            .onFailure { showMessage("تعذرت مشاركة ملف PDF.") }
+    },
+)
                         }
                     }
                 }
@@ -431,6 +418,141 @@ internal fun DocumentsHubRoute(
 }
 
 @Composable
+internal fun DocumentsHubHeader(
+    isAccountScoped: Boolean,
+    onBack: () -> Unit,
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("documents-header-stacked"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(onClick = onBack) { Text("رجوع") }
+                DocumentsHubHeaderText(isAccountScoped = isAccountScoped)
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("documents-header-inline"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                OutlinedButton(onClick = onBack) { Text("رجوع") }
+                DocumentsHubHeaderText(isAccountScoped = isAccountScoped)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DocumentsHubHeaderText(isAccountScoped: Boolean) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(
+            if (isAccountScoped) "مستندات وإثباتات الحساب" else "تصدير وتقارير PDF",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.ExtraBold,
+        )
+        Text(
+            if (isAccountScoped) {
+                "مستندات PDF ومرفقات هذا الحساب فقط."
+            } else {
+                "اختر حسابًا ثم صدّر مستنداته."
+            },
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+internal fun DocumentDualActionButtons(
+    testTagPrefix: String,
+    primaryLabel: String,
+    secondaryLabel: String,
+    enabled: Boolean = true,
+    primaryFilled: Boolean = false,
+    onPrimary: () -> Unit,
+    onSecondary: () -> Unit,
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("$testTagPrefix-actions-stacked"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                DocumentPrimaryAction(
+                    modifier = Modifier.fillMaxWidth(),
+                    label = primaryLabel,
+                    enabled = enabled,
+                    filled = primaryFilled,
+                    testTag = "$testTagPrefix-primary",
+                    onClick = onPrimary,
+                )
+                OutlinedButton(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("$testTagPrefix-secondary"),
+                    enabled = enabled,
+                    onClick = onSecondary,
+                ) { Text(secondaryLabel) }
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("$testTagPrefix-actions-inline"),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                DocumentPrimaryAction(
+                    modifier = Modifier.weight(1f),
+                    label = primaryLabel,
+                    enabled = enabled,
+                    filled = primaryFilled,
+                    testTag = "$testTagPrefix-primary",
+                    onClick = onPrimary,
+                )
+                OutlinedButton(
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("$testTagPrefix-secondary"),
+                    enabled = enabled,
+                    onClick = onSecondary,
+                ) { Text(secondaryLabel) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DocumentPrimaryAction(
+    modifier: Modifier,
+    label: String,
+    enabled: Boolean,
+    filled: Boolean,
+    testTag: String,
+    onClick: () -> Unit,
+) {
+    if (filled) {
+        Button(
+            modifier = modifier.testTag(testTag),
+            enabled = enabled,
+            onClick = onClick,
+        ) { Text(label) }
+    } else {
+        OutlinedButton(
+            modifier = modifier.testTag(testTag),
+            enabled = enabled,
+            onClick = onClick,
+        ) { Text(label) }
+    }
+}
+
+@Composable
 private fun AttachmentRow(
     attachment: AttachmentRecord,
     onOpen: () -> Unit,
@@ -461,16 +583,14 @@ private fun AttachmentRow(
             },
             style = MaterialTheme.typography.bodySmall,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                enabled = attachment.integrity == AttachmentIntegrity.OK,
-                onClick = onOpen,
-            ) { Text("فتح") }
-            OutlinedButton(
-                enabled = attachment.integrity == AttachmentIntegrity.OK,
-                onClick = onShare,
-            ) { Text("مشاركة") }
-        }
+DocumentDualActionButtons(
+    testTagPrefix = "attachment-${attachment.id}",
+    primaryLabel = "فتح",
+    secondaryLabel = "مشاركة",
+    enabled = attachment.integrity == AttachmentIntegrity.OK,
+    onPrimary = onOpen,
+    onSecondary = onShare,
+)
     }
 }
 

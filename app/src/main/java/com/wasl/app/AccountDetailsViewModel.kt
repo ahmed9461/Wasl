@@ -34,6 +34,7 @@ import com.wasl.domain.PaymentRecorded
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -59,6 +60,7 @@ data class DueScheduleForm(
     val dueDate: LocalDate? = null,
     val remindOnDueDate: Boolean = false,
     val strongAlarmEnabled: Boolean = false,
+    val strongAlarmTime: LocalTime = ReminderTime.defaultDueTime,
 )
 
 data class ReceiptIdentityForm(
@@ -731,6 +733,10 @@ class AccountDetailsViewModel(
         val account = _uiState.value.account ?: return
         if (account.ledger.balance.isZero) return
         pendingDueScheduleCommand = null
+        val zoneId = zoneIdProvider()
+        val activeStrongAlarm = account.strongAlarm?.takeIf {
+            it.status != ReminderStatus.CANCELLED
+        }
         _uiState.update {
             it.copy(
                 isDueScheduleDialogOpen = true,
@@ -740,10 +746,14 @@ class AccountDetailsViewModel(
                         ?.status
                         ?.let { it != ReminderStatus.CANCELLED }
                         ?: false,
-                    strongAlarmEnabled = account.strongAlarm
-                        ?.status
-                        ?.let { it != ReminderStatus.CANCELLED }
-                        ?: false,
+                    strongAlarmEnabled = activeStrongAlarm != null,
+                    strongAlarmTime = activeStrongAlarm
+                        ?.triggerAt
+                        ?.atZone(zoneId)
+                        ?.toLocalTime()
+                        ?.withSecond(0)
+                        ?.withNano(0)
+                        ?: ReminderTime.defaultDueTime,
                 ),
                 dueScheduleError = null,
                 notice = null,
@@ -809,6 +819,18 @@ class AccountDetailsViewModel(
         }
     }
 
+    fun updateDueScheduleStrongAlarmTime(value: LocalTime) {
+    pendingDueScheduleCommand = null
+    _uiState.update {
+        it.copy(
+            dueScheduleForm = it.dueScheduleForm.copy(
+                strongAlarmTime = value.withSecond(0).withNano(0),
+            ),
+            dueScheduleError = null,
+        )
+    }
+    }
+
     fun confirmDueSchedule() {
         val state = _uiState.value
         if (state.isUpdatingDueSchedule) return
@@ -839,10 +861,19 @@ class AccountDetailsViewModel(
             ?.status
             ?.let { it != ReminderStatus.CANCELLED }
             ?: false
+        val currentStrongAlarmTime = account.strongAlarm
+            ?.takeIf { it.status != ReminderStatus.CANCELLED }
+            ?.triggerAt
+            ?.atZone(zoneId)
+            ?.toLocalTime()
+            ?.withSecond(0)
+            ?.withNano(0)
+            ?: ReminderTime.defaultDueTime
         if (pendingDueScheduleCommand == null &&
             form.dueDate == account.ledger.header.dueDate &&
             form.remindOnDueDate == currentReminderEnabled &&
-            form.strongAlarmEnabled == currentStrongAlarmEnabled
+            form.strongAlarmEnabled == currentStrongAlarmEnabled &&
+            (!form.strongAlarmEnabled || form.strongAlarmTime == currentStrongAlarmTime)
         ) {
             _uiState.update { it.copy(dueScheduleError = "لم تغيّر الموعد أو المتابعة أو المنبه.") }
             return
@@ -877,6 +908,7 @@ class AccountDetailsViewModel(
                         dueDate = requireNotNull(form.dueDate),
                         now = now,
                         zoneId = zoneId,
+                        time = form.strongAlarmTime,
                     ),
                     zoneId = zoneId,
                 )

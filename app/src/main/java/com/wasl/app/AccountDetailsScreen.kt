@@ -37,7 +37,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -69,6 +71,7 @@ import com.wasl.domain.PaymentRecorded
 import com.wasl.domain.PaymentReversed
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -107,6 +110,7 @@ internal fun AccountDetailsScreen(
     onDueScheduleDateChange: (LocalDate?) -> Unit,
     onDueScheduleReminderChange: (Boolean) -> Unit,
     onDueScheduleStrongAlarmChange: (Boolean) -> Unit,
+    onDueScheduleStrongAlarmTimeChange: (LocalTime) -> Unit,
     onRequestExactAlarmAccess: () -> Unit,
     onConfirmDueSchedule: () -> Unit,
     onOpenPaymentPromise: () -> Unit,
@@ -293,6 +297,7 @@ internal fun AccountDetailsScreen(
             onDueDateChange = onDueScheduleDateChange,
             onReminderChange = onDueScheduleReminderChange,
             onStrongAlarmChange = onDueScheduleStrongAlarmChange,
+            onStrongAlarmTimeChange = onDueScheduleStrongAlarmTimeChange,
             onRequestExactAlarmAccess = onRequestExactAlarmAccess,
             onConfirm = onConfirmDueSchedule,
         )
@@ -698,10 +703,12 @@ private fun DueScheduleDialog(
     onDueDateChange: (LocalDate?) -> Unit,
     onReminderChange: (Boolean) -> Unit,
     onStrongAlarmChange: (Boolean) -> Unit,
+    onStrongAlarmTimeChange: (LocalTime) -> Unit,
     onRequestExactAlarmAccess: () -> Unit,
     onConfirm: () -> Unit,
 ) {
     var showDatePicker by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showStrongAlarmTimePicker by remember { androidx.compose.runtime.mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("الموعد والمتابعة") },
@@ -775,7 +782,7 @@ private fun DueScheduleDialog(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("منبه قوي إضافي", fontWeight = FontWeight.SemiBold)
                         Text(
-                            "منبه دقيق قرابة 09:00 يوم الاستحقاق. المتابعة الذكية تبقى كبديل آمن.",
+                            "منبه دقيق في الوقت الذي تختاره يوم الاستحقاق. المتابعة الذكية تبقى كبديل آمن.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -787,6 +794,17 @@ private fun DueScheduleDialog(
                         modifier = Modifier.testTag("edit-strong-alarm"),
                     )
                 }
+            if (form.strongAlarmEnabled) {
+        OutlinedButton(
+            onClick = { showStrongAlarmTimePicker = true },
+            enabled = !isSaving,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("edit-strong-alarm-time"),
+        ) {
+            Text("وقت المنبه: ${formatLocalTime(form.strongAlarmTime)}")
+        }
+    }
                 if (form.strongAlarmEnabled && !exactAlarmAccessGranted) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
@@ -841,6 +859,33 @@ private fun DueScheduleDialog(
             }
         },
     )
+
+if (showStrongAlarmTimePicker) {
+val timePickerState = rememberTimePickerState(
+    initialHour = form.strongAlarmTime.hour,
+    initialMinute = form.strongAlarmTime.minute,
+    is24Hour = true,
+)
+AlertDialog(
+    onDismissRequest = { showStrongAlarmTimePicker = false },
+    title = { Text("وقت المنبه القوي") },
+    text = { TimePicker(state = timePickerState) },
+    confirmButton = {
+        TextButton(
+            onClick = {
+                onStrongAlarmTimeChange(
+                    LocalTime.of(timePickerState.hour, timePickerState.minute),
+                )
+                showStrongAlarmTimePicker = false
+            },
+            modifier = Modifier.testTag("confirm-strong-alarm-time"),
+        ) { Text("اختيار") }
+    },
+    dismissButton = {
+        TextButton(onClick = { showStrongAlarmTimePicker = false }) { Text("إلغاء") }
+    },
+)
+}
 
     if (showDatePicker) {
         val initialSelection = form.dueDate
@@ -1506,6 +1551,9 @@ private fun formatInstant(instant: Instant): String {
     val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy - HH:mm", Locale.US)
     return "\u2066${formatter.format(instant.atZone(ZoneId.systemDefault()))}\u2069"
 }
+
+private fun formatLocalTime(time: LocalTime): String =
+    "%02d:%02d".format(Locale.US, time.hour, time.minute)
 
 private fun formatDate(date: LocalDate): String = "\u2066$date\u2069"
 

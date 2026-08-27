@@ -416,6 +416,7 @@ fun WaslApp(
                                         }
                                     },
                                     onDueScheduleStrongAlarmChange = detailsViewModel::updateDueScheduleStrongAlarm,
+                                    onDueScheduleStrongAlarmTimeChange = detailsViewModel::updateDueScheduleStrongAlarmTime,
                                     onRequestExactAlarmAccess = ::requestExactAlarmAccess,
                                     onConfirmDueSchedule = detailsViewModel::confirmDueSchedule,
                                     onOpenPaymentPromise = detailsViewModel::openPaymentPromiseDialog,

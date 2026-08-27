@@ -1,0 +1,62 @@
+name: Retry accessibility patch
+
+on:
+  push:
+    branches:
+      - agent/bootstrap-wasl-foundation
+    paths:
+      - .github/workflows/retry-accessibility-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/bootstrap-wasl-foundation
+
+      - name: Reuse deterministic patch script
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+
+          workflow = Path('.github/workflows/patch-accessibility-security-settings.yml').read_text()
+          start_marker = "          python3 - <<'PY'\n"
+          end_marker = "\n          PY\n"
+          if start_marker not in workflow or end_marker not in workflow:
+              raise SystemExit('Unable to locate deterministic Python patch block.')
+          script = workflow.split(start_marker, 1)[1].split(end_marker, 1)[0]
+          exec(compile(dedent(script), '<accessibility-patch>', 'exec'))
+          PY
+
+          sed -i 's/[[:space:]]\+$//' \
+            app/src/main/java/com/wasl/app/SecurityHubScreen.kt \
+            app/src/main/java/com/wasl/app/SettingsHubScreen.kt \
+            app/src/androidTest/java/com/wasl/app/SecurityUiInstrumentedTest.kt \
+            app/src/androidTest/java/com/wasl/app/SettingsUiInstrumentedTest.kt
+          git diff --check
+          grep -F 'security-header-stacked' app/src/main/java/com/wasl/app/SecurityHubScreen.kt
+          grep -F 'app-lock-toggle-stacked' app/src/main/java/com/wasl/app/SecurityHubScreen.kt
+          grep -F 'settings-header-stacked' app/src/main/java/com/wasl/app/SettingsHubScreen.kt
+          grep -F 'privacy-hide-notification-details-row-stacked' app/src/androidTest/java/com/wasl/app/SettingsUiInstrumentedTest.kt
+
+      - name: Commit patch and remove temporary workflows
+        shell: bash
+        run: |
+          rm .github/workflows/patch-accessibility-security-settings.yml
+          rm .github/workflows/retry-accessibility-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/wasl/app/SecurityHubScreen.kt \
+            app/src/main/java/com/wasl/app/SettingsHubScreen.kt \
+            app/src/androidTest/java/com/wasl/app/SecurityUiInstrumentedTest.kt \
+            app/src/androidTest/java/com/wasl/app/SettingsUiInstrumentedTest.kt \
+            .github/workflows/patch-accessibility-security-settings.yml \
+            .github/workflows/retry-accessibility-patch.yml
+          git commit -m "feat: harden security and settings large-font layouts"
+          git push origin HEAD:agent/bootstrap-wasl-foundation

@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onNodeWithTag
@@ -84,7 +85,7 @@ class PaymentClaimAccountVisibilityInstrumentedTest {
         }
 
         waitForTag("account-remaining")
-        composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag("record-payment"))
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText("وعود السداد"))
         composeRule.onNodeWithTag("add-payment-claim").assertDoesNotExist()
     }
 

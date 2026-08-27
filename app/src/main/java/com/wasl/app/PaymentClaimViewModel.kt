@@ -121,7 +121,7 @@ class PaymentClaimViewModel(
         val state = _uiState.value
         if (state.isSaving) return
         val now = clock.instant()
-        val today = LocalDate.ofInstant(now, zoneIdProvider())
+        val today = now.atZone(zoneIdProvider()).toLocalDate()
         val followUpDate = try {
             PaymentClaimFollowUpResolver.resolve(
                 kind = state.form.followUpKind,

@@ -63,6 +63,7 @@ internal fun SettingsHubRoute(
     privacyPreferences: PrivacyPreferences,
     onBack: () -> Unit,
     onOpenDocuments: () -> Unit,
+    onOpenStatistics: () -> Unit,
     onRestored: () -> Unit,
     onSecureScreenChanged: () -> Unit,
 ) {
@@ -187,6 +188,25 @@ internal fun SettingsHubRoute(
                         CircularProgressIndicator()
                         Text(message, fontWeight = FontWeight.Medium)
                     }
+                }
+            }
+
+            SettingsSectionCard(
+                title = "الإحصاءات",
+                subtitle = "مؤشرات موضوعية من سجل الحسابات ووعود السداد.",
+            ) {
+                Text(
+                    text = "لا توجد تقييمات للأشخاص، ولا يتم جمع مبالغ العملات المختلفة.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("open-objective-statistics"),
+                    onClick = onOpenStatistics,
+                ) {
+                    Text("فتح الإحصاءات")
                 }
             }
 

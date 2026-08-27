@@ -178,6 +178,11 @@ class MainActivity : FragmentActivity() {
                                     documentsDebtId = null
                                     documentsOpen = true
                                 },
+                                onOpenStatistics = {
+                                    startActivity(
+                                        Intent(this@MainActivity, StatisticsActivity::class.java),
+                                    )
+                                },
                                 onRestored = {
                                     runCatching { waslApplication.reminderScheduler.requestRecovery() }
                                     runCatching { waslApplication.generalReminderService.requestRecovery() }

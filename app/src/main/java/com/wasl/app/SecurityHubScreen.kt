@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -48,24 +49,46 @@ internal fun SecuritySettingsEntryButton(
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        FilledTonalButton(
-            modifier = Modifier.testTag("open-security-hub"),
-            onClick = onClick,
-        ) {
-            Text("الأمان")
-        }
-        OutlinedButton(
-            modifier = Modifier.testTag("open-general-reminders-hub"),
-            onClick = {
-                context.startActivity(Intent(context, GeneralRemindersHubActivity::class.java))
-            },
-        ) {
-            Text("التذكيرات")
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("security-entry-actions-stacked"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilledTonalButton(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("open-security-hub"),
+                    onClick = onClick,
+                ) { Text("الأمان") }
+                OutlinedButton(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("open-general-reminders-hub"),
+                    onClick = {
+                        context.startActivity(Intent(context, GeneralRemindersHubActivity::class.java))
+                    },
+                ) { Text("التذكيرات") }
+            }
+        } else {
+            Row(
+                modifier = Modifier.testTag("security-entry-actions-inline"),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FilledTonalButton(
+                    modifier = Modifier.testTag("open-security-hub"),
+                    onClick = onClick,
+                ) { Text("الأمان") }
+                OutlinedButton(
+                    modifier = Modifier.testTag("open-general-reminders-hub"),
+                    onClick = {
+                        context.startActivity(Intent(context, GeneralRemindersHubActivity::class.java))
+                    },
+                ) { Text("التذكيرات") }
+            }
         }
     }
 }
@@ -98,33 +121,12 @@ internal fun SecurityHubRoute(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
-                    .widthIn(max = 720.dp)
+                    .widthIn(max = WaslMaxContentWidth)
                     .verticalScroll(rememberScrollState())
                     .padding(PaddingValues(horizontal = 20.dp, vertical = 20.dp)),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    OutlinedButton(onClick = onBack) {
-                        Text("رجوع")
-                    }
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            modifier = Modifier.semantics { heading() },
-                            text = "الأمان وقفل وَصل",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                        )
-                        Text(
-                            text = "حماية محلية تعتمد على مصادقة Android النظامية.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                SecurityHubHeader(onBack = onBack)
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -147,36 +149,11 @@ internal fun SecurityHubRoute(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(2.dp),
-                            ) {
-                                Text(
-                                    text = if (appLockEnabled) "قفل وَصل مفعّل" else "تفعيل قفل وَصل",
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    text = if (authenticationAvailable) {
-                                        "المصادقة النظامية متاحة على هذا الجهاز."
-                                    } else {
-                                        "لا توجد وسيلة مصادقة نظامية متاحة حاليًا."
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Switch(
-                                modifier = Modifier.testTag("app-lock-enabled"),
-                                checked = appLockEnabled,
-                                enabled = appLockEnabled || authenticationAvailable,
-                                onCheckedChange = onAppLockEnabledChange,
-                            )
-                        }
+                        AppLockToggleRow(
+                            appLockEnabled = appLockEnabled,
+                            authenticationAvailable = authenticationAvailable,
+                            onAppLockEnabledChange = onAppLockEnabledChange,
+                        )
 
                         if (!authenticationAvailable) {
                             Surface(
@@ -264,6 +241,120 @@ internal fun SecurityHubRoute(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SecurityHubHeader(onBack: () -> Unit) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("security-header-stacked"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(onClick = onBack) { Text("رجوع") }
+                SecurityHubHeaderText()
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("security-header-inline"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                OutlinedButton(onClick = onBack) { Text("رجوع") }
+                SecurityHubHeaderText()
+            }
+        }
+    }
+}
+
+@Composable
+private fun SecurityHubHeaderText() {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            modifier = Modifier.semantics { heading() },
+            text = "الأمان وقفل وَصل",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.ExtraBold,
+        )
+        Text(
+            text = "حماية محلية تعتمد على مصادقة Android النظامية.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun AppLockToggleRow(
+    appLockEnabled: Boolean,
+    authenticationAvailable: Boolean,
+    onAppLockEnabledChange: (Boolean) -> Unit,
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("app-lock-toggle-stacked"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AppLockToggleText(appLockEnabled, authenticationAvailable)
+                Switch(
+                    modifier = Modifier.testTag("app-lock-enabled"),
+                    checked = appLockEnabled,
+                    enabled = appLockEnabled || authenticationAvailable,
+                    onCheckedChange = onAppLockEnabledChange,
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("app-lock-toggle-inline"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                AppLockToggleText(
+                    appLockEnabled,
+                    authenticationAvailable,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    modifier = Modifier.testTag("app-lock-enabled"),
+                    checked = appLockEnabled,
+                    enabled = appLockEnabled || authenticationAvailable,
+                    onCheckedChange = onAppLockEnabledChange,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppLockToggleText(
+    appLockEnabled: Boolean,
+    authenticationAvailable: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = if (appLockEnabled) "قفل وَصل مفعّل" else "تفعيل قفل وَصل",
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = if (authenticationAvailable) {
+                "المصادقة النظامية متاحة على هذا الجهاز."
+            } else {
+                "لا توجد وسيلة مصادقة نظامية متاحة حاليًا."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

@@ -52,7 +52,10 @@ class SecurityUiInstrumentedTest {
             }
         }
 
+        composeRule.onNodeWithTag("security-header-stacked").assertIsDisplayed()
         composeRule.onNodeWithText("الأمان وقفل وَصل").assertIsDisplayed()
+        scrollToTag("app-lock-toggle-stacked")
+        composeRule.onNodeWithTag("app-lock-toggle-stacked").assertIsDisplayed()
         scrollToTag("app-lock-timeout-5_minutes")
         composeRule.onNodeWithTag("app-lock-timeout-5_minutes").performClick()
         composeRule.runOnIdle {
@@ -87,6 +90,24 @@ class SecurityUiInstrumentedTest {
         composeRule.runOnIdle {
             assertEquals(1, recoveryRequests)
         }
+    }
+
+    @Test
+    fun largeFontStacksSecurityEntryActions() {
+        composeRule.setContent {
+            val baseDensity = LocalDensity.current
+            CompositionLocalProvider(
+                LocalDensity provides Density(baseDensity.density, fontScale = 2f),
+            ) {
+                WaslTheme {
+                    SecuritySettingsEntryButton(onClick = {})
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("security-entry-actions-stacked").assertIsDisplayed()
+        composeRule.onNodeWithTag("open-security-hub").assertIsDisplayed()
+        composeRule.onNodeWithTag("open-general-reminders-hub").assertIsDisplayed()
     }
 
     @Test

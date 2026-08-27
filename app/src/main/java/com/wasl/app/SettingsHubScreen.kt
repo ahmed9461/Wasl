@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -152,27 +153,7 @@ internal fun SettingsHubRoute(
                 .padding(PaddingValues(horizontal = 20.dp, vertical = 20.dp)),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                OutlinedButton(onClick = onBack) {
-                    Text("رجوع")
-                }
-                Column {
-                    Text(
-                        text = "الإعدادات والخصوصية",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                    )
-                    Text(
-                        text = "حماية بيانات وَصل والنسخ الاحتياطي المحلي",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            SettingsHubHeader(onBack = onBack)
 
             busyMessage?.let { message ->
                 Surface(
@@ -372,6 +353,50 @@ internal fun SettingsHubRoute(
 }
 
 @Composable
+private fun SettingsHubHeader(onBack: () -> Unit) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("settings-header-stacked"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(onClick = onBack) { Text("رجوع") }
+                SettingsHubHeaderText()
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("settings-header-inline"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                OutlinedButton(onClick = onBack) { Text("رجوع") }
+                SettingsHubHeaderText()
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsHubHeaderText() {
+    Column {
+        Text(
+            text = "الإعدادات والخصوصية",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.ExtraBold,
+        )
+        Text(
+            text = "حماية بيانات وَصل والنسخ الاحتياطي المحلي",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
 private fun SettingsSectionCard(
     title: String,
     subtitle: String,
@@ -404,23 +429,52 @@ private fun PrivacySwitchRow(
     testTag: String,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontWeight = FontWeight.SemiBold)
-            Text(
-                description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("$testTag-row-stacked"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PrivacySwitchText(title, description)
+                Switch(
+                    modifier = Modifier.testTag(testTag),
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("$testTag-row-inline"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                PrivacySwitchText(title, description, Modifier.weight(1f))
+                Switch(
+                    modifier = Modifier.testTag(testTag),
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                )
+            }
         }
-        Switch(
-            modifier = Modifier.testTag(testTag),
-            checked = checked,
-            onCheckedChange = onCheckedChange,
+    }
+}
+
+@Composable
+private fun PrivacySwitchText(
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(title, fontWeight = FontWeight.SemiBold)
+        Text(
+            description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

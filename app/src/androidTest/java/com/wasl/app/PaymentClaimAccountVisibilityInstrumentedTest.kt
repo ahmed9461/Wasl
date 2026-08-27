@@ -1,14 +1,11 @@
 package com.wasl.app
 
 import android.content.Context
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNode
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performScrollToNode
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -86,7 +83,7 @@ class PaymentClaimAccountVisibilityInstrumentedTest {
 
         waitForTag("account-remaining")
         composeRule.onNode(hasScrollAction()).performScrollToNode(hasText("وعود السداد"))
-        composeRule.onNodeWithTag("add-payment-claim").assertDoesNotExist()
+        check(composeRule.onAllNodes(hasTestTag("add-payment-claim")).fetchSemanticsNodes().isEmpty())
     }
 
     private suspend fun createDebt(

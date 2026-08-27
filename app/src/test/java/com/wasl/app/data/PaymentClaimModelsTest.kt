@@ -4,28 +4,28 @@ import com.wasl.domain.DebtId
 import java.time.Instant
 import java.time.LocalDate
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
-import kotlin.test.assertEquals
 
 class PaymentClaimModelsTest {
     private val debtId = DebtId("debt-claim-test")
-    private val requestedAt = Instant.parse("2026-08-27T06:00:00Z")
+    private val claimedAt = Instant.parse("2026-08-27T06:00:00Z")
 
     @Test
-    fun `open claim preserves follow up without mutating financial concepts`() {
+    fun `active claim preserves follow up without mutating financial concepts`() {
         val record = PaymentClaimRecord(
             id = "claim-1",
             debtId = debtId,
-            requestedAt = requestedAt,
+            claimedAt = claimedAt,
             followUpKind = PaymentClaimFollowUpKind.TOMORROW,
             followUpDate = LocalDate.parse("2026-08-28"),
             note = "طلب السداد عبر رسالة",
-            status = PaymentClaimStatus.OPEN,
-            createdAt = requestedAt,
+            status = PaymentClaimStatus.ACTIVE,
+            createdAt = claimedAt,
         )
 
-        assertEquals(PaymentClaimStatus.OPEN, record.status)
+        assertEquals(PaymentClaimStatus.ACTIVE, record.status)
         assertEquals(PaymentClaimFollowUpKind.TOMORROW, record.followUpKind)
         assertNull(record.resolvedAt)
     }
@@ -36,40 +36,70 @@ class PaymentClaimModelsTest {
             PaymentClaimRecord(
                 id = "claim-2",
                 debtId = debtId,
-                requestedAt = requestedAt,
+                claimedAt = claimedAt,
                 followUpKind = PaymentClaimFollowUpKind.TODAY,
                 followUpDate = LocalDate.parse("2026-08-27"),
-                status = PaymentClaimStatus.COMPLETED,
-                createdAt = requestedAt,
+                status = PaymentClaimStatus.RESOLVED,
+                createdAt = claimedAt,
                 resolvedAt = null,
             )
         }
     }
 
     @Test
-    fun `resolution command cannot keep claim open`() {
+    fun `resolution command cannot keep claim active`() {
         assertFailsWith<IllegalArgumentException> {
             ResolvePaymentClaimCommand(
                 commandId = "resolve-1",
                 claimId = "claim-1",
                 debtId = debtId,
-                status = PaymentClaimStatus.OPEN,
-                resolvedAt = requestedAt.plusSeconds(60),
+                status = PaymentClaimStatus.ACTIVE,
+                resolvedAt = claimedAt.plusSeconds(60),
             )
         }
     }
 
     @Test
-    fun `create command cannot predate request`() {
+    fun `create command cannot predate claim`() {
         assertFailsWith<IllegalArgumentException> {
             CreatePaymentClaimCommand(
                 commandId = "create-1",
                 claimId = "claim-1",
                 debtId = debtId,
-                requestedAt = requestedAt,
+                claimedAt = claimedAt,
                 followUpKind = PaymentClaimFollowUpKind.TODAY,
                 followUpDate = LocalDate.parse("2026-08-27"),
-                createdAt = requestedAt.minusSeconds(1),
+                createdAt = claimedAt.minusSeconds(1),
+            )
+        }
+    }
+
+    @Test
+    fun `salary follow up does not invent a date`() {
+        val record = PaymentClaimRecord(
+            id = "claim-salary",
+            debtId = debtId,
+            claimedAt = claimedAt,
+            followUpKind = PaymentClaimFollowUpKind.SALARY,
+            followUpDate = null,
+            status = PaymentClaimStatus.ACTIVE,
+            createdAt = claimedAt,
+        )
+
+        assertNull(record.followUpDate)
+    }
+
+    @Test
+    fun `custom follow up requires explicit date`() {
+        assertFailsWith<IllegalArgumentException> {
+            CreatePaymentClaimCommand(
+                commandId = "create-custom",
+                claimId = "claim-custom",
+                debtId = debtId,
+                claimedAt = claimedAt,
+                followUpKind = PaymentClaimFollowUpKind.CUSTOM,
+                followUpDate = null,
+                createdAt = claimedAt,
             )
         }
     }

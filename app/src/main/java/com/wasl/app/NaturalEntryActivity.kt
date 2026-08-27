@@ -351,7 +351,7 @@ private fun amountLabel(minorUnits: Long?, currency: CurrencyCode?): String {
     val value = BigDecimal.valueOf(minorUnits, digits)
         .stripTrailingZeros()
         .toPlainString()
-    return "$value ${currency.name}"
+    return "$value ${currency.value}"
 }
 
 private fun missingFieldLabel(field: NaturalDraftField): String = when (field) {

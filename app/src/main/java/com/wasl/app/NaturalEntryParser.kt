@@ -122,7 +122,7 @@ internal class NaturalEntryParser(
             "عشرة" to 10L,
             "عشر" to 10L,
         )
-        val thousands = Regex("([\\p{L}]+)\\s+(?:الاف|الاف|آلاف|الف|ألف)").find(text)
+        val thousands = Regex("([\\p{L}]+)\\s+(?:الاف|الف)").find(text)
         val word = thousands?.groupValues?.getOrNull(1)?.let(::stripArabicDiacritics)
         return unit[word]?.times(1_000L)
     }
@@ -154,11 +154,7 @@ internal class NaturalEntryParser(
             "الاحد" to DayOfWeek.SUNDAY,
         )
         val mentioned = weekdays.entries.firstOrNull { (name, _) -> text.contains(name) } ?: return null
-        var candidate = reference.with(TemporalAdjusters.nextOrSame(mentioned.value))
-        if (candidate == reference && !text.contains("اليوم")) {
-            candidate = reference.with(TemporalAdjusters.next(mentioned.value))
-        }
-        return candidate
+        return reference.with(TemporalAdjusters.next(mentioned.value))
     }
 
     private fun normalizeArabicText(value: String): String = stripArabicDiacritics(value)

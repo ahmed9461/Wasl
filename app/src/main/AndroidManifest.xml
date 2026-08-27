@@ -25,6 +25,10 @@
             android:noHistory="true" />
 
         <activity
+            android:name=".PersonTimelineActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop">

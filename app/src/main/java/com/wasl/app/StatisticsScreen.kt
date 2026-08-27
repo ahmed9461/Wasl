@@ -1,14 +1,18 @@
 package com.wasl.app
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -60,82 +64,116 @@ internal fun StatisticsScreen(
             }
             else -> {
                 val stats = state.statistics
-                LazyColumn(
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(padding)
-                        .testTag("objective-statistics-screen"),
-                    contentPadding = PaddingValues(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                        .padding(padding),
+                    contentAlignment = Alignment.TopCenter,
                 ) {
-                    item("header") {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            OutlinedButton(onClick = onBack) { Text("رجوع") }
-                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text(
-                                    "الإحصاءات",
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.ExtraBold,
-                                )
-                                Text(
-                                    "أرقام موضوعية من سجل وَصل فقط، بدون تقييم الأشخاص.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .widthIn(max = WaslMaxContentWidth)
+                            .fillMaxWidth()
+                            .testTag("objective-statistics-screen"),
+                        contentPadding = PaddingValues(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        item("header") {
+                            StatisticsHeader(onBack = onBack)
+                        }
+
+                        item("debt-summary") {
+                            StatisticsCard("الحسابات") {
+                                StatisticRow("إجمالي الحسابات", stats.totalAccounts.toString())
+                                StatisticRow("المسددة", stats.settledAccounts.toString())
+                                StatisticRow("المفتوحة", stats.openAccounts.toString())
+                                StatisticRow(
+                                    "متوسط مدة السداد",
+                                    stats.averageSettlementDays.formatDaysOrUnavailable(),
                                 )
                             }
                         }
-                    }
 
-                    item("debt-summary") {
-                        StatisticsCard("الحسابات") {
-                            StatisticRow("إجمالي الحسابات", stats.totalAccounts.toString())
-                            StatisticRow("المسددة", stats.settledAccounts.toString())
-                            StatisticRow("المفتوحة", stats.openAccounts.toString())
-                            StatisticRow(
-                                "متوسط مدة السداد",
-                                stats.averageSettlementDays.formatDaysOrUnavailable(),
+                        item("delay-summary") {
+                            StatisticsCard("الاستحقاق والتأخير") {
+                                StatisticRow(
+                                    "حسابات مسددة لها استحقاق",
+                                    stats.settledAccountsWithDueDate.toString(),
+                                )
+                                StatisticRow("المسددة بعد الاستحقاق", stats.lateSettledAccounts.toString())
+                                StatisticRow(
+                                    "متوسط التأخير للحالات المتأخرة",
+                                    stats.averageLateDays.formatDaysOrUnavailable(),
+                                )
+                            }
+                        }
+
+                        item("promise-summary") {
+                            StatisticsCard("وعود السداد") {
+                                StatisticRow("تم الوفاء بها", stats.keptPromises.toString())
+                                StatisticRow("لم يتم الوفاء بها", stats.missedPromises.toString())
+                                StatisticRow("قيد الانتظار", stats.pendingPromises.toString())
+                                StatisticRow("ملغاة", stats.cancelledPromises.toString())
+                            }
+                        }
+
+                        item("method-note") {
+                            Text(
+                                "لا تُجمع مبالغ العملات المختلفة في هذه الصفحة. مدة السداد تُحسب من فتح الحساب حتى إغلاقه، ومتوسط التأخير يشمل فقط الحسابات المسددة بعد تاريخ الاستحقاق.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.testTag("statistics-method-note"),
                             )
                         }
-                    }
-
-                    item("delay-summary") {
-                        StatisticsCard("الاستحقاق والتأخير") {
-                            StatisticRow(
-                                "حسابات مسددة لها استحقاق",
-                                stats.settledAccountsWithDueDate.toString(),
-                            )
-                            StatisticRow("المسددة بعد الاستحقاق", stats.lateSettledAccounts.toString())
-                            StatisticRow(
-                                "متوسط التأخير للحالات المتأخرة",
-                                stats.averageLateDays.formatDaysOrUnavailable(),
-                            )
-                        }
-                    }
-
-                    item("promise-summary") {
-                        StatisticsCard("وعود السداد") {
-                            StatisticRow("تم الوفاء بها", stats.keptPromises.toString())
-                            StatisticRow("لم يتم الوفاء بها", stats.missedPromises.toString())
-                            StatisticRow("قيد الانتظار", stats.pendingPromises.toString())
-                            StatisticRow("ملغاة", stats.cancelledPromises.toString())
-                        }
-                    }
-
-                    item("method-note") {
-                        Text(
-                            "لا تُجمع مبالغ العملات المختلفة في هذه الصفحة. مدة السداد تُحسب من فتح الحساب حتى إغلاقه، ومتوسط التأخير يشمل فقط الحسابات المسددة بعد تاريخ الاستحقاق.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.testTag("statistics-method-note"),
-                        )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun StatisticsHeader(onBack: () -> Unit) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("statistics-header-stacked"),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedButton(onClick = onBack) { Text("رجوع") }
+                StatisticsHeaderText()
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("statistics-header-inline"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                OutlinedButton(onClick = onBack) { Text("رجوع") }
+                StatisticsHeaderText()
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatisticsHeaderText() {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(
+            "الإحصاءات",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.ExtraBold,
+        )
+        Text(
+            "أرقام موضوعية من سجل وَصل فقط، بدون تقييم الأشخاص.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -157,13 +195,29 @@ private fun StatisticsCard(
 
 @Composable
 private fun StatisticRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, modifier = Modifier.weight(1f))
-        Text(value, fontWeight = FontWeight.Bold)
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("statistic-row-stacked-$label"),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(label)
+                Text(value, fontWeight = FontWeight.Bold)
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("statistic-row-inline-$label"),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(label, modifier = Modifier.weight(1f))
+                Text(value, fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 

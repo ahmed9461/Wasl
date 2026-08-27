@@ -1,14 +1,18 @@
 package com.wasl.app
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -98,95 +102,132 @@ internal fun PersonTimelineScreen(
                 }
             }
             else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(padding).testTag("person-timeline-screen"),
-                    contentPadding = PaddingValues(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.TopCenter,
                 ) {
-                    item("person-contact") {
-                        PersonContactCard(state)
-                    }
-                    item("balance-title") {
-                        Text("الملخص حسب العملة والاتجاه", fontWeight = FontWeight.ExtraBold)
-                    }
-                    items(
-                        state.balanceGroups,
-                        key = { "${it.currency.value}:${it.direction.name}" },
-                    ) { group ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(5.dp),
-                            ) {
-                                Text(
-                                    "${directionLabel(group.direction)} • ${group.currency.value}",
-                                    fontWeight = FontWeight.Bold,
-                                )
-                                Text("${group.accountCount} حساب")
-                                Text("الأصل: ${formatPersonMoney(group.originalAmount)}")
-                                Text("المسدد: ${formatPersonMoney(group.paidAmount)}")
-                                Text(
-                                    "المتبقي: ${formatPersonMoney(group.balance)}",
-                                    fontWeight = FontWeight.Bold,
-                                )
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .widthIn(max = WaslMaxContentWidth)
+                            .fillMaxWidth()
+                            .testTag("person-timeline-screen"),
+                        contentPadding = PaddingValues(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        item("person-contact") {
+                            PersonContactCard(state)
+                        }
+                        item("balance-title") {
+                            Text("الملخص حسب العملة والاتجاه", fontWeight = FontWeight.ExtraBold)
+                        }
+                        items(
+                            state.balanceGroups,
+                            key = { "${it.currency.value}:${it.direction.name}" },
+                        ) { group ->
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                                ) {
+                                    Text(
+                                        "${directionLabel(group.direction)} • ${group.currency.value}",
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    Text("${group.accountCount} حساب")
+                                    Text("الأصل: ${formatPersonMoney(group.originalAmount)}")
+                                    Text("المسدد: ${formatPersonMoney(group.paidAmount)}")
+                                    Text(
+                                        "المتبقي: ${formatPersonMoney(group.balance)}",
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
                             }
                         }
-                    }
-                    item("accounts-title") {
-                        Text("الحسابات", fontWeight = FontWeight.ExtraBold)
-                    }
-                    items(state.accounts, key = { it.ledger.header.id.value }) { account ->
-                        PersonAccountCard(account, onOpenAccount)
-                    }
-                    item("timeline-title") {
-                        Text("السجل الزمني", fontWeight = FontWeight.ExtraBold)
-                    }
-                    if (state.timeline.isEmpty()) {
-                        item("timeline-empty") {
-                            Text(
-                                "لا توجد أحداث إضافية بعد.",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                        item("accounts-title") {
+                            Text("الحسابات", fontWeight = FontWeight.ExtraBold)
                         }
-                    } else {
-                        items(state.timeline, key = { it.id }) { event ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth().testTag("person-timeline-${event.id}"),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                ),
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(15.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                        items(state.accounts, key = { it.ledger.header.id.value }) { account ->
+                            PersonAccountCard(account, onOpenAccount)
+                        }
+                        item("timeline-title") {
+                            Text("السجل الزمني", fontWeight = FontWeight.ExtraBold)
+                        }
+                        if (state.timeline.isEmpty()) {
+                            item("timeline-empty") {
+                                Text(
+                                    "لا توجد أحداث إضافية بعد.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        } else {
+                            items(state.timeline, key = { it.id }) { event ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().testTag("person-timeline-${event.id}"),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                    ),
                                 ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                    Column(
+                                        modifier = Modifier.padding(15.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
                                     ) {
-                                        Text(event.title, fontWeight = FontWeight.Bold)
+                                        PersonTimelineEventHeader(event)
                                         Text(
-                                            formatPersonTimelineInstant(event.occurredAt),
+                                            "${directionLabel(event.direction)} • ${event.currency.value}",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
-                                    }
-                                    Text(
-                                        "${directionLabel(event.direction)} • ${event.currency.value}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                    event.detail?.takeIf { it.isNotBlank() }?.let {
-                                        Text(it, style = MaterialTheme.typography.bodyMedium)
-                                    }
-                                    OutlinedButton(onClick = { onOpenAccount(event.debtId) }) {
-                                        Text("فتح الحساب المرتبط")
+                                        event.detail?.takeIf { it.isNotBlank() }?.let {
+                                            Text(it, style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                        OutlinedButton(onClick = { onOpenAccount(event.debtId) }) {
+                                            Text("فتح الحساب المرتبط")
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PersonTimelineEventHeader(event: PersonTimelineEvent) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("person-timeline-header-stacked-${event.id}"),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(event.title, fontWeight = FontWeight.Bold)
+                Text(
+                    formatPersonTimelineInstant(event.occurredAt),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("person-timeline-header-inline-${event.id}"),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(event.title, fontWeight = FontWeight.Bold)
+                Text(
+                    formatPersonTimelineInstant(event.occurredAt),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

@@ -46,7 +46,7 @@ class StatisticsScreenUiInstrumentedTest {
     }
 
     @Test
-    fun largeFontKeepsStatisticsReachable() {
+    fun largeFontStacksStatisticsRowsAndKeepsContentReachable() {
         composeRule.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(
@@ -66,6 +66,8 @@ class StatisticsScreenUiInstrumentedTest {
         }
 
         composeRule.onNodeWithTag("objective-statistics-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("statistics-header-stacked").assertIsDisplayed()
+        composeRule.onNodeWithTag("statistic-row-stacked-إجمالي الحسابات").assertIsDisplayed()
         scrollToTag("statistics-method-note")
         composeRule.onNodeWithTag("statistics-method-note").assertIsDisplayed()
     }

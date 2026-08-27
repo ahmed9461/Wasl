@@ -78,7 +78,7 @@ class PersonTimelineUiInstrumentedTest {
     }
 
     @Test
-    fun largeFontScaleKeepsPersonHeaderAndTimelineReachable() {
+    fun largeFontScaleStacksTimelineHeaderAndKeepsContentReachable() {
         val person = PersonRecord(
             id = PersonId("person-large-font"),
             displayName = "اسم شخص طويل لاختبار تكبير الخط والوصول",
@@ -121,6 +121,8 @@ class PersonTimelineUiInstrumentedTest {
         composeRule.onNodeWithTag("person-account-large-font-debt").assertIsDisplayed()
         scrollToTag("person-timeline-opened:large-font-debt")
         composeRule.onNodeWithTag("person-timeline-opened:large-font-debt").assertIsDisplayed()
+        composeRule.onNodeWithTag("person-timeline-header-stacked-opened:large-font-debt")
+            .assertIsDisplayed()
     }
 
     private fun scrollToTag(tag: String) {

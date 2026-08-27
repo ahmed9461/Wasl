@@ -8,12 +8,13 @@ import com.wasl.app.data.PaymentPromiseStore
 import com.wasl.app.data.WaslRepository
 import java.time.ZoneId
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
@@ -30,6 +31,7 @@ class StatisticsViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(StatisticsUiState())
     val uiState: StateFlow<StatisticsUiState> = _uiState.asStateFlow()
+    private var observationJob: Job? = null
 
     init {
         observe()
@@ -38,22 +40,10 @@ class StatisticsViewModel(
     fun retry() = observe()
 
     private fun observe() {
-        viewModelScope.launch {
-            _uiState.value = StatisticsUiState(isLoading = true)
+        observationJob?.cancel()
+        _uiState.value = StatisticsUiState(isLoading = true)
+        observationJob = viewModelScope.launch {
             repository.observeAccounts()
-                .flatMapLatest { accounts ->
-                    if (accounts.isEmpty()) {
-                        flowOf(accounts to emptyList<PaymentPromiseRecord>())
-                    } else {
-                        combine(
-                            accounts.map { account ->
-                                promiseStore.observePaymentPromises(account.ledger.header.id)
-                            },
-                        ) { promiseLists ->
-                            accounts to promiseLists.flatMap { it }
-                        }
-                    }
-                }
                 .catch { error ->
                     if (error is CancellationException) throw error
                     _uiState.value = StatisticsUiState(
@@ -61,11 +51,32 @@ class StatisticsViewModel(
                         errorMessage = "تعذر قراءة الإحصاءات من البيانات المحلية.",
                     )
                 }
-                .collect { (accounts, promises) ->
-                    _uiState.value = StatisticsUiState(
-                        isLoading = false,
-                        statistics = ObjectiveStatisticsBuilder.build(accounts, promises, zoneId),
-                    )
+                .collectLatest { accounts ->
+                    if (accounts.isEmpty()) {
+                        _uiState.value = StatisticsUiState(
+                            isLoading = false,
+                            statistics = ObjectiveStatisticsBuilder.build(
+                                emptyList(),
+                                emptyList(),
+                                zoneId,
+                            ),
+                        )
+                        return@collectLatest
+                    }
+                    val promiseFlows = accounts.map { account ->
+                        promiseStore.observePaymentPromises(account.ledger.header.id)
+                    }
+                    val allPromises = if (promiseFlows.isEmpty()) {
+                        flowOf(emptyList<PaymentPromiseRecord>())
+                    } else {
+                        combine(promiseFlows) { lists -> lists.flatMap { it } }
+                    }
+                    allPromises.collect { promises ->
+                        _uiState.value = StatisticsUiState(
+                            isLoading = false,
+                            statistics = ObjectiveStatisticsBuilder.build(accounts, promises, zoneId),
+                        )
+                    }
                 }
         }
     }

@@ -3,6 +3,7 @@ package com.wasl.app
 import android.app.Application
 import com.wasl.app.backup.AndroidBackupService
 import com.wasl.app.backup.BackupService
+import com.wasl.app.data.AttachmentStore
 import com.wasl.app.data.GeneralReminderStore
 import com.wasl.app.data.InstallmentAwareWaslRepository
 import com.wasl.app.data.InstallmentPlanStore
@@ -12,6 +13,7 @@ import com.wasl.app.data.ReminderStore
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.data.local.RoomAccountDocumentStore
 import com.wasl.app.data.local.RoomAdvancedSearchStore
+import com.wasl.app.data.local.RoomAttachmentStore
 import com.wasl.app.data.local.RoomGeneralReminderStore
 import com.wasl.app.data.local.RoomInstallmentPlanStore
 import com.wasl.app.data.local.RoomPaymentClaimStore
@@ -88,6 +90,10 @@ class WaslApplication : Application() {
 
     val installmentPlanStore: InstallmentPlanStore
         get() = installmentAwareRepository
+
+    val attachmentStore: AttachmentStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        RoomAttachmentStore(this, database)
+    }
 
     val reminderScheduler: ReminderScheduler by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         HybridReminderScheduler(this)

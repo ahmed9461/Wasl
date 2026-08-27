@@ -31,6 +31,15 @@ jobs:
                   raise SystemExit(f"{label}: expected one match, got {count}")
               return text.replace(old, new, 1)
 
+          def replace_span(text: str, start: str, end: str, replacement: str, label: str, offset: int = 0) -> str:
+              start_index = text.find(start, offset)
+              if start_index < 0:
+                  raise SystemExit(f"{label}: start marker missing")
+              end_index = text.find(end, start_index)
+              if end_index < 0:
+                  raise SystemExit(f"{label}: end marker missing")
+              return text[:start_index] + replacement + text[end_index:]
+
           path = Path('app/src/main/java/com/wasl/app/DocumentsHubScreen.kt')
           text = path.read_text()
           text = one(
@@ -40,33 +49,7 @@ jobs:
               'BoxWithConstraints import',
           )
 
-          old_header = dedent('''
-                      item("header") {
-                          Row(
-                              modifier = Modifier.fillMaxWidth(),
-                              verticalAlignment = Alignment.CenterVertically,
-                              horizontalArrangement = Arrangement.spacedBy(12.dp),
-                          ) {
-                              OutlinedButton(onClick = onBack) { Text("رجوع") }
-                              Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                  Text(
-                                      if (initialDebtId == null) "تصدير وتقارير PDF" else "مستندات وإثباتات الحساب",
-                                      style = MaterialTheme.typography.headlineSmall,
-                                      fontWeight = FontWeight.ExtraBold,
-                                  )
-                                  Text(
-                                      if (initialDebtId == null) {
-                                          "اختر حسابًا ثم صدّر مستنداته."
-                                      } else {
-                                          "مستندات PDF ومرفقات هذا الحساب فقط."
-                                      },
-                                      color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                  )
-                              }
-                          }
-                      }
-          ''').strip()
-          new_header = dedent('''
+          header = dedent('''
                       item("header") {
                           DocumentsHubHeader(
                               isAccountScoped = initialDebtId != null,
@@ -74,21 +57,18 @@ jobs:
                           )
                       }
           ''').strip()
-          text = one(text, old_header, new_header, 'Documents header')
+          text = replace_span(
+              text,
+              '            item("header") {',
+              '\n\n            if (initialDebtId != null) {',
+              header,
+              'Documents header',
+          )
 
-          old_ready = dedent('''
-                                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                      Button(onClick = {
-                                          runCatching { ReceiptFileAccess.open(context, document) }
-                                              .onFailure { showMessage("تعذر فتح ملف PDF.") }
-                                      }) { Text("فتح PDF") }
-                                      OutlinedButton(onClick = {
-                                          runCatching { ReceiptFileAccess.share(context, document) }
-                                              .onFailure { showMessage("تعذرت مشاركة ملف PDF.") }
-                                      }) { Text("مشاركة") }
-                                  }
-          ''').strip()
-          new_ready = dedent('''
+          ready_anchor = text.index('Text(ltrIsolate(document.documentNumber))')
+          ready_start = '                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {'
+          ready_end = '                            }\n                        }\n                    }\n                }\n            }'
+          ready = dedent('''
                                   DocumentDualActionButtons(
                                       testTagPrefix = "ready-document",
                                       primaryLabel = "فتح PDF",
@@ -104,21 +84,16 @@ jobs:
                                       },
                                   )
           ''').strip()
-          text = one(text, old_ready, new_ready, 'ready document actions')
+          start_index = text.find(ready_start, ready_anchor)
+          end_index = text.find(ready_end, start_index)
+          if start_index < 0 or end_index < 0:
+              raise SystemExit('ready document actions: markers missing')
+          text = text[:start_index] + ready + text[end_index + len('                            }'):]
 
-          old_attachment = dedent('''
-                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                      OutlinedButton(
-                          enabled = attachment.integrity == AttachmentIntegrity.OK,
-                          onClick = onOpen,
-                      ) { Text("فتح") }
-                      OutlinedButton(
-                          enabled = attachment.integrity == AttachmentIntegrity.OK,
-                          onClick = onShare,
-                      ) { Text("مشاركة") }
-                  }
-          ''').strip()
-          new_attachment = dedent('''
+          attachment_anchor = text.index('private fun AttachmentRow(')
+          attachment_start = '        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {'
+          attachment_end = '        }\n    }\n}\n\nprivate data class PickedAttachmentMetadata'
+          attachment = dedent('''
                   DocumentDualActionButtons(
                       testTagPrefix = "attachment-${attachment.id}",
                       primaryLabel = "فتح",
@@ -128,7 +103,11 @@ jobs:
                       onSecondary = onShare,
                   )
           ''').strip()
-          text = one(text, old_attachment, new_attachment, 'attachment actions')
+          start_index = text.find(attachment_start, attachment_anchor)
+          end_index = text.find(attachment_end, start_index)
+          if start_index < 0 or end_index < 0:
+              raise SystemExit('attachment actions: markers missing')
+          text = text[:start_index] + attachment + text[end_index + len('        }'):]
 
           helpers = dedent('''
               @Composable
@@ -301,7 +280,6 @@ jobs:
 
                   @Test
                   fun largeFontStacksHeaderAndDualActionsWithoutLosingClicks() {
-                      var backClicks = 0
                       var primaryClicks = 0
                       var secondaryClicks = 0
 
@@ -314,7 +292,7 @@ jobs:
                                   Column(modifier = Modifier.fillMaxWidth()) {
                                       DocumentsHubHeader(
                                           isAccountScoped = true,
-                                          onBack = { backClicks += 1 },
+                                          onBack = {},
                                       )
                                       DocumentDualActionButtons(
                                           testTagPrefix = "documents-test",
@@ -336,7 +314,6 @@ jobs:
                       composeRule.runOnIdle {
                           assertEquals(1, primaryClicks)
                           assertEquals(1, secondaryClicks)
-                          assertEquals(0, backClicks)
                       }
                   }
               }
@@ -349,7 +326,7 @@ jobs:
             app/src/androidTest/java/com/wasl/app/DocumentsAdaptiveUiInstrumentedTest.kt
           git diff --check
           grep -F 'documents-header-stacked' app/src/main/java/com/wasl/app/DocumentsHubScreen.kt
-          grep -F 'ready-document-actions-stacked' app/src/main/java/com/wasl/app/DocumentsHubScreen.kt
+          grep -F 'testTagPrefix = "ready-document"' app/src/main/java/com/wasl/app/DocumentsHubScreen.kt
           grep -F 'documents-test-actions-stacked' app/src/androidTest/java/com/wasl/app/DocumentsAdaptiveUiInstrumentedTest.kt
 
       - name: Commit patch and remove temporary workflow

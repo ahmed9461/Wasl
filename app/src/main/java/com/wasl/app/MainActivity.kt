@@ -15,6 +15,8 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -152,6 +154,21 @@ class MainActivity : FragmentActivity() {
                                 requestedPaymentIntent.value = null
                             },
                         )
+                    }
+
+                    if (!installmentsOpen && !settingsOpen && !documentsOpen && !securityOpen) {
+                        OutlinedButton(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 20.dp, bottom = 88.dp),
+                            onClick = {
+                                startActivity(
+                                    Intent(this@MainActivity, NaturalEntryActivity::class.java),
+                                )
+                            },
+                        ) {
+                            Text("إدخال ذكي")
+                        }
                     }
 
                     if (installmentsOpen) {

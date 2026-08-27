@@ -125,7 +125,7 @@ class AdvancedSearchUiInstrumentedTest {
             .performScrollTo()
             .performClick()
 
-        waitForText("سجل العمليات")
+        waitForText("خالد")
         composeRule.onNodeWithText("خالد").assertIsDisplayed()
         composeRule.onNodeWithText("رجوع").performClick()
 

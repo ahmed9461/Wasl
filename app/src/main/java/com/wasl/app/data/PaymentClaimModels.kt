@@ -19,30 +19,33 @@ enum class PaymentClaimFollowUpKind {
 }
 
 enum class PaymentClaimStatus {
-    OPEN,
-    COMPLETED,
+    ACTIVE,
+    RESOLVED,
     CANCELLED,
 }
 
 data class PaymentClaimRecord(
     val id: String,
     val debtId: DebtId,
-    val requestedAt: Instant,
+    val claimedAt: Instant,
     val followUpKind: PaymentClaimFollowUpKind,
-    val followUpDate: LocalDate,
+    val followUpDate: LocalDate?,
     val note: String? = null,
-    val status: PaymentClaimStatus = PaymentClaimStatus.OPEN,
+    val status: PaymentClaimStatus = PaymentClaimStatus.ACTIVE,
     val createdAt: Instant,
     val resolvedAt: Instant? = null,
     val resolutionNote: String? = null,
 ) {
     init {
         require(id.isNotBlank()) { "Payment claim ID cannot be blank." }
-        require(!followUpDate.isBefore(requestedAt.atZone(java.time.ZoneOffset.UTC).toLocalDate()) ||
-            followUpKind == PaymentClaimFollowUpKind.TODAY
-        ) { "Payment claim follow-up cannot predate the request." }
-        require((status == PaymentClaimStatus.OPEN) == (resolvedAt == null)) {
-            "Only an open payment claim may have no resolution timestamp."
+        require((status == PaymentClaimStatus.ACTIVE) == (resolvedAt == null)) {
+            "Only an active payment claim may have no resolution timestamp."
+        }
+        require(followUpKind != PaymentClaimFollowUpKind.CUSTOM || followUpDate != null) {
+            "A custom payment claim follow-up requires an explicit date."
+        }
+        require(followUpKind != PaymentClaimFollowUpKind.SALARY || followUpDate == null) {
+            "Salary follow-up remains date-free until the user chooses a salary policy/date."
         }
         require(note == null || note.isNotBlank()) { "Payment claim note must be null or non-blank." }
         require(resolutionNote == null || resolutionNote.isNotBlank()) {
@@ -55,17 +58,23 @@ data class CreatePaymentClaimCommand(
     val commandId: String,
     val claimId: String,
     val debtId: DebtId,
-    val requestedAt: Instant,
+    val claimedAt: Instant,
     val followUpKind: PaymentClaimFollowUpKind,
-    val followUpDate: LocalDate,
+    val followUpDate: LocalDate?,
     val note: String? = null,
     val createdAt: Instant,
 ) {
     init {
         require(commandId.isNotBlank()) { "Payment claim command ID cannot be blank." }
         require(claimId.isNotBlank()) { "Payment claim ID cannot be blank." }
-        require(!createdAt.isBefore(requestedAt)) {
-            "Payment claim creation cannot predate the request timestamp."
+        require(!createdAt.isBefore(claimedAt)) {
+            "Payment claim creation cannot predate the claim timestamp."
+        }
+        require(followUpKind != PaymentClaimFollowUpKind.CUSTOM || followUpDate != null) {
+            "A custom payment claim follow-up requires an explicit date."
+        }
+        require(followUpKind != PaymentClaimFollowUpKind.SALARY || followUpDate == null) {
+            "Salary follow-up must not guess a date without an explicit user policy."
         }
         require(note == null || note.isNotBlank()) { "Payment claim note must be null or non-blank." }
     }
@@ -82,7 +91,7 @@ data class ResolvePaymentClaimCommand(
     init {
         require(commandId.isNotBlank()) { "Payment claim resolution command ID cannot be blank." }
         require(claimId.isNotBlank()) { "Payment claim ID cannot be blank." }
-        require(status != PaymentClaimStatus.OPEN) {
+        require(status != PaymentClaimStatus.ACTIVE) {
             "A payment claim resolution requires a terminal status."
         }
         require(note == null || note.isNotBlank()) {

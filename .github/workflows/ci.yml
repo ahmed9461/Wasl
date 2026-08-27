@@ -76,6 +76,12 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Download generated Room schema
+        uses: actions/download-artifact@v4
+        with:
+          name: Wasl-room-schema
+          path: app/schemas/com.wasl.app.data.local.WaslDatabase
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:

@@ -72,11 +72,13 @@ class AndroidBackupService(
     override suspend fun create(password: CharArray): BackupCreated = withContext(Dispatchers.IO) {
         requirePassword(password)
         val snapshot = exportSnapshot(database.openHelper.writableDatabase)
-        val files = exportReadyDocuments(snapshot.readyDocuments)
+        val documents = exportReadyDocuments(snapshot.readyDocuments)
+        val attachments = exportAttachments(snapshot.attachments)
         val payload = BackupPayload(
             schemaVersion = SCHEMA_VERSION,
             tables = snapshot.tables,
-            documentFiles = files,
+            documentFiles = documents,
+            attachmentFiles = attachments,
         )
         val createdAt = Instant.now(clock)
         val bytes = BackupEnvelope.seal(payload, createdAt, password)
@@ -84,7 +86,7 @@ class AndroidBackupService(
             bytes = bytes,
             createdAt = createdAt,
             rowCount = snapshot.tables.sumOf { it.rows.size },
-            documentCount = files.size,
+            documentCount = documents.size + attachments.size,
             schemaVersion = SCHEMA_VERSION,
         )
     }
@@ -103,11 +105,15 @@ class AndroidBackupService(
 
         val stagedRoot = File(filesDir, ".wasl-restore-${UUID.randomUUID()}")
         val stagedDocuments = File(stagedRoot, DOCUMENTS_DIRECTORY)
-        check(stagedDocuments.mkdirs()) { "تعذر تجهيز مساحة الاستعادة الآمنة." }
+        val stagedAttachments = File(stagedRoot, ATTACHMENTS_DIRECTORY)
+        check(stagedDocuments.mkdirs() && stagedAttachments.mkdirs()) {
+            "تعذر تجهيز مساحة الاستعادة الآمنة."
+        }
         try {
-            stageAndValidateDocuments(payload, stagedDocuments)
+            stageAndValidateDocuments(payload.documentFiles, stagedDocuments)
+            stageAndValidateAttachments(payload.attachmentFiles, stagedAttachments)
             validateInTemporaryDatabase(payload)
-            replaceDocumentsAndDatabase(payload, stagedDocuments)
+            replaceFilesAndDatabase(payload, stagedDocuments, stagedAttachments)
         } finally {
             stagedRoot.deleteRecursively()
         }
@@ -116,14 +122,15 @@ class AndroidBackupService(
             createdAt = opened.createdAt,
             restoredAt = Instant.now(clock),
             rowCount = payload.tables.sumOf { it.rows.size },
-            documentCount = payload.documentFiles.size,
+            documentCount = payload.documentFiles.size + payload.attachmentFiles.size,
             schemaVersion = payload.schemaVersion,
         )
     }
 
     private fun exportSnapshot(db: SupportSQLiteDatabase): SnapshotExport {
         val dumps = mutableListOf<TableDump>()
-        val readyDocuments = mutableListOf<ReadyDocumentRef>()
+        val readyDocuments = mutableListOf<VaultFileRef>()
+        val attachments = mutableListOf<VaultFileRef>()
         db.beginTransaction()
         try {
             TABLES.forEach { table ->
@@ -132,8 +139,10 @@ class AndroidBackupService(
                     val columns = cursor.columnNames.toList()
                     val rows = ArrayList<List<BackupCell>>(cursor.count)
                     val statusIndex = if (table == "issued_documents") columns.indexOf("status") else -1
-                    val pathIndex = if (table == "issued_documents") columns.indexOf("pdf_relative_path") else -1
-                    val hashIndex = if (table == "issued_documents") columns.indexOf("pdf_sha256") else -1
+                    val documentPathIndex = if (table == "issued_documents") columns.indexOf("pdf_relative_path") else -1
+                    val documentHashIndex = if (table == "issued_documents") columns.indexOf("pdf_sha256") else -1
+                    val attachmentPathIndex = if (table == "attachments") columns.indexOf("relative_path") else -1
+                    val attachmentHashIndex = if (table == "attachments") columns.indexOf("sha256") else -1
                     while (cursor.moveToNext()) {
                         val row = columns.indices.map { index -> cursor.backupCell(index) }
                         rows += row
@@ -142,12 +151,20 @@ class AndroidBackupService(
                             statusIndex >= 0 &&
                             cursor.getString(statusIndex) == READY_STATUS
                         ) {
-                            val relativePath = cursor.getString(pathIndex)
-                            val sha256 = cursor.getString(hashIndex)
+                            val relativePath = cursor.getString(documentPathIndex)
+                            val sha256 = cursor.getString(documentHashIndex)
                             require(!relativePath.isNullOrBlank() && !sha256.isNullOrBlank()) {
                                 "مستند READY يفتقد مسار الملف أو بصمة السلامة."
                             }
-                            readyDocuments += ReadyDocumentRef(relativePath, sha256)
+                            readyDocuments += VaultFileRef(relativePath, sha256)
+                        }
+                        if (table == "attachments") {
+                            val relativePath = cursor.getString(attachmentPathIndex)
+                            val sha256 = cursor.getString(attachmentHashIndex)
+                            require(!relativePath.isNullOrBlank() && !sha256.isNullOrBlank()) {
+                                "مرفق يفتقد مسار الملف أو بصمة السلامة."
+                            }
+                            attachments += VaultFileRef(relativePath, sha256)
                         }
                     }
                     dumps += TableDump(table, columns, rows)
@@ -157,23 +174,38 @@ class AndroidBackupService(
         } finally {
             db.endTransaction()
         }
-        return SnapshotExport(dumps, readyDocuments)
+        return SnapshotExport(dumps, readyDocuments, attachments)
     }
 
-    private fun exportReadyDocuments(references: List<ReadyDocumentRef>): List<BackupDocumentFile> =
+    private fun exportReadyDocuments(references: List<VaultFileRef>): List<BackupDocumentFile> =
         references.distinctBy { it.relativePath }.map { reference ->
             val file = ReceiptFileAccess.resolve(filesDir, reference.relativePath)
-            require(file.isFile) { "ملف مستند جاهز غير موجود: ${reference.relativePath}" }
-            val actualHash = file.sha256Hex()
-            require(actualHash.equals(reference.sha256, ignoreCase = true)) {
-                "فشل تحقق سلامة مستند قبل النسخ الاحتياطي."
-            }
-            BackupDocumentFile(
-                relativePath = reference.relativePath,
-                sha256 = actualHash,
-                contentBase64 = Base64.getEncoder().encodeToString(file.readBytes()),
-            )
+            exportVaultFile(reference, file, MAX_DOCUMENT_BYTES)
         }
+
+    private fun exportAttachments(references: List<VaultFileRef>): List<BackupDocumentFile> =
+        references.distinctBy { it.relativePath }.map { reference ->
+            val file = resolveLiveAttachment(reference.relativePath)
+            exportVaultFile(reference, file, MAX_ATTACHMENT_BYTES)
+        }
+
+    private fun exportVaultFile(
+        reference: VaultFileRef,
+        file: File,
+        maxBytes: Int,
+    ): BackupDocumentFile {
+        require(file.isFile) { "ملف محفوظ غير موجود: ${reference.relativePath}" }
+        require(file.length() in 1..maxBytes.toLong()) { "حجم ملف محفوظ غير صالح." }
+        val actualHash = file.sha256Hex()
+        require(actualHash.equals(reference.sha256, ignoreCase = true)) {
+            "فشل تحقق سلامة ملف قبل النسخ الاحتياطي."
+        }
+        return BackupDocumentFile(
+            relativePath = reference.relativePath,
+            sha256 = actualHash,
+            contentBase64 = Base64.getEncoder().encodeToString(file.readBytes()),
+        )
+    }
 
     private fun validatePayloadShape(payload: BackupPayload) {
         val byName = payload.tables.groupBy { it.name }
@@ -192,17 +224,29 @@ class AndroidBackupService(
             }
         }
 
-        val readyRefs = readyDocumentRefsFrom(payload)
-        val backupFiles = payload.documentFiles.associateBy { it.relativePath }
-        require(backupFiles.size == payload.documentFiles.size) {
-            "النسخة تحتوي ملفات مستندات مكررة."
-        }
-        require(backupFiles.keys == readyRefs.keys) {
-            "ملفات المستندات لا تطابق سجلات المستندات الجاهزة."
-        }
-        readyRefs.forEach { (path, hash) ->
+        validateVaultFileSet(
+            records = readyDocumentRefsFrom(payload),
+            files = payload.documentFiles,
+            label = "المستندات",
+        )
+        validateVaultFileSet(
+            records = attachmentRefsFrom(payload),
+            files = payload.attachmentFiles,
+            label = "المرفقات",
+        )
+    }
+
+    private fun validateVaultFileSet(
+        records: Map<String, String>,
+        files: List<BackupDocumentFile>,
+        label: String,
+    ) {
+        val backupFiles = files.associateBy { it.relativePath }
+        require(backupFiles.size == files.size) { "النسخة تحتوي ملفات $label مكررة." }
+        require(backupFiles.keys == records.keys) { "ملفات $label لا تطابق سجلاتها." }
+        records.forEach { (path, hash) ->
             require(backupFiles.getValue(path).sha256.equals(hash, ignoreCase = true)) {
-                "بصمة مستند في النسخة لا تطابق سجل المستند."
+                "بصمة ملف $label في النسخة لا تطابق السجل."
             }
         }
     }
@@ -230,36 +274,96 @@ class AndroidBackupService(
         }
     }
 
-    private fun stageAndValidateDocuments(payload: BackupPayload, stagedDocuments: File) {
-        payload.documentFiles.forEach { document ->
-            require(SHA256_REGEX.matches(document.sha256)) { "بصمة ملف مستند غير صالحة." }
-            val safeTarget = resolveStagedDocument(stagedDocuments, document.relativePath)
-            val bytes = try {
-                Base64.getDecoder().decode(document.contentBase64)
-            } catch (error: IllegalArgumentException) {
-                throw IllegalArgumentException("ترميز ملف مستند داخل النسخة غير صالح.", error)
-            }
-            require(bytes.size <= MAX_DOCUMENT_BYTES) { "أحد ملفات المستندات يتجاوز الحد الآمن." }
-            safeTarget.outputStream().buffered().use { it.write(bytes) }
-            require(safeTarget.sha256Hex().equals(document.sha256, ignoreCase = true)) {
-                "فشل تحقق سلامة ملف مستند داخل النسخة الاحتياطية."
+    private fun attachmentRefsFrom(payload: BackupPayload): Map<String, String> {
+        val table = payload.tables.single { it.name == "attachments" }
+        val pathIndex = table.columns.indexOf("relative_path")
+        val hashIndex = table.columns.indexOf("sha256")
+        require(pathIndex >= 0 && hashIndex >= 0) { "جدول المرفقات لا يحتوي الحقول المطلوبة." }
+        return buildMap {
+            table.rows.forEach { row ->
+                val path = requireNotNull(row[pathIndex].asText()).also {
+                    require(it.isNotBlank()) { "مسار مرفق فارغ." }
+                }
+                val hash = requireNotNull(row[hashIndex].asText()).also {
+                    require(SHA256_REGEX.matches(it)) { "بصمة مرفق غير صالحة." }
+                }
+                require(put(path, hash) == null) { "مسار مرفق مكرر." }
             }
         }
     }
 
+    private fun stageAndValidateDocuments(
+        files: List<BackupDocumentFile>,
+        stagedDocuments: File,
+    ) {
+        files.forEach { document ->
+            val safeTarget = resolveStagedDocument(stagedDocuments, document.relativePath)
+            stageFile(document, safeTarget, MAX_DOCUMENT_BYTES, "المستند")
+        }
+    }
+
+    private fun stageAndValidateAttachments(
+        files: List<BackupDocumentFile>,
+        stagedAttachments: File,
+    ) {
+        files.forEach { attachment ->
+            val safeTarget = resolveStagedAttachment(stagedAttachments, attachment.relativePath)
+            stageFile(attachment, safeTarget, MAX_ATTACHMENT_BYTES, "المرفق")
+        }
+    }
+
+    private fun stageFile(
+        source: BackupDocumentFile,
+        target: File,
+        maxBytes: Int,
+        label: String,
+    ) {
+        require(SHA256_REGEX.matches(source.sha256)) { "بصمة ملف $label غير صالحة." }
+        val bytes = try {
+            Base64.getDecoder().decode(source.contentBase64)
+        } catch (error: IllegalArgumentException) {
+            throw IllegalArgumentException("ترميز ملف $label داخل النسخة غير صالح.", error)
+        }
+        require(bytes.isNotEmpty() && bytes.size <= maxBytes) { "حجم ملف $label غير آمن." }
+        target.outputStream().buffered().use { it.write(bytes) }
+        require(target.sha256Hex().equals(source.sha256, ignoreCase = true)) {
+            "فشل تحقق سلامة ملف $label داخل النسخة الاحتياطية."
+        }
+    }
+
     private fun resolveStagedDocument(stagedDocuments: File, relativePath: String): File {
-        require(relativePath.isNotBlank() && !File(relativePath).isAbsolute) { "مسار مستند غير آمن." }
-        val normalized = relativePath.replace('\\', '/')
-        require(normalized.startsWith("$DOCUMENTS_DIRECTORY/") && normalized.count { it == '/' } == 1) {
-            "مسار مستند خارج مجلد المستندات غير مسموح."
-        }
-        val fileName = normalized.substringAfter('/')
-        require(fileName.isNotBlank() && fileName.endsWith(".pdf", ignoreCase = true)) {
-            "ملف المستند يجب أن يكون PDF."
-        }
+        val fileName = validateSingleChildPath(relativePath, DOCUMENTS_DIRECTORY, "مستند")
+        require(fileName.endsWith(".pdf", ignoreCase = true)) { "ملف المستند يجب أن يكون PDF." }
         val target = File(stagedDocuments, fileName).canonicalFile
         require(target.parentFile == stagedDocuments.canonicalFile) { "مسار مستند غير آمن." }
         return target
+    }
+
+    private fun resolveStagedAttachment(stagedAttachments: File, relativePath: String): File {
+        val fileName = validateSingleChildPath(relativePath, ATTACHMENTS_DIRECTORY, "مرفق")
+        require(fileName.endsWith(".blob", ignoreCase = true)) { "امتداد ملف المرفق غير مدعوم." }
+        val target = File(stagedAttachments, fileName).canonicalFile
+        require(target.parentFile == stagedAttachments.canonicalFile) { "مسار مرفق غير آمن." }
+        return target
+    }
+
+    private fun validateSingleChildPath(relativePath: String, directory: String, label: String): String {
+        require(relativePath.isNotBlank() && !File(relativePath).isAbsolute) { "مسار $label غير آمن." }
+        val normalized = relativePath.replace('\\', '/')
+        require(normalized.startsWith("$directory/") && normalized.count { it == '/' } == 1) {
+            "مسار $label خارج المجلد المسموح."
+        }
+        return normalized.substringAfter('/').also {
+            require(it.isNotBlank() && it != "." && it != "..") { "اسم ملف $label غير صالح." }
+        }
+    }
+
+    private fun resolveLiveAttachment(relativePath: String): File {
+        val fileName = validateSingleChildPath(relativePath, ATTACHMENTS_DIRECTORY, "مرفق")
+        val root = File(filesDir, ATTACHMENTS_DIRECTORY).canonicalFile
+        val file = File(root, fileName).canonicalFile
+        require(file.parentFile == root) { "مسار مرفق غير آمن." }
+        return file
     }
 
     private fun validateInTemporaryDatabase(payload: BackupPayload) {
@@ -274,30 +378,50 @@ class AndroidBackupService(
         }
     }
 
-    private fun replaceDocumentsAndDatabase(payload: BackupPayload, stagedDocuments: File) {
+    private fun replaceFilesAndDatabase(
+        payload: BackupPayload,
+        stagedDocuments: File,
+        stagedAttachments: File,
+    ) {
         val liveDocuments = File(filesDir, DOCUMENTS_DIRECTORY)
+        val liveAttachments = File(filesDir, ATTACHMENTS_DIRECTORY)
         val rollbackDocuments = File(filesDir, ".wasl-documents-rollback-${UUID.randomUUID()}")
-        var oldMoved = false
-        var newMoved = false
+        val rollbackAttachments = File(filesDir, ".wasl-attachments-rollback-${UUID.randomUUID()}")
+        var documentsMoved = false
+        var attachmentsMoved = false
+        var newDocumentsMoved = false
+        var newAttachmentsMoved = false
         try {
             if (liveDocuments.exists()) {
                 moveDirectory(liveDocuments, rollbackDocuments)
-                oldMoved = true
+                documentsMoved = true
+            }
+            if (liveAttachments.exists()) {
+                moveDirectory(liveAttachments, rollbackAttachments)
+                attachmentsMoved = true
             }
             moveDirectory(stagedDocuments, liveDocuments)
-            newMoved = true
+            newDocumentsMoved = true
+            moveDirectory(stagedAttachments, liveAttachments)
+            newAttachmentsMoved = true
 
             replaceDatabaseContents(database.openHelper.writableDatabase, payload)
 
-            if (oldMoved) rollbackDocuments.deleteRecursively()
+            if (documentsMoved) rollbackDocuments.deleteRecursively()
+            if (attachmentsMoved) rollbackAttachments.deleteRecursively()
         } catch (error: Exception) {
-            if (newMoved && liveDocuments.exists()) liveDocuments.deleteRecursively()
-            if (oldMoved && rollbackDocuments.exists()) {
+            if (newDocumentsMoved && liveDocuments.exists()) liveDocuments.deleteRecursively()
+            if (newAttachmentsMoved && liveAttachments.exists()) liveAttachments.deleteRecursively()
+            if (documentsMoved && rollbackDocuments.exists()) {
                 runCatching { moveDirectory(rollbackDocuments, liveDocuments) }
+            }
+            if (attachmentsMoved && rollbackAttachments.exists()) {
+                runCatching { moveDirectory(rollbackAttachments, liveAttachments) }
             }
             throw error
         } finally {
-            if (rollbackDocuments.exists()) rollbackDocuments.deleteRecursively()
+            rollbackDocuments.deleteRecursively()
+            rollbackAttachments.deleteRecursively()
         }
     }
 
@@ -319,11 +443,7 @@ class AndroidBackupService(
                     table.columns.forEachIndexed { index, column ->
                         values.putBackupCell(column, row[index])
                     }
-                    val result = db.insert(
-                        tableName,
-                        SQLiteDatabase.CONFLICT_ABORT,
-                        values,
-                    )
+                    val result = db.insert(tableName, SQLiteDatabase.CONFLICT_ABORT, values)
                     check(result != -1L) { "فشل إدراج سجل أثناء الاستعادة في $tableName." }
                 }
             }
@@ -360,6 +480,12 @@ class AndroidBackupService(
         require(singleLong(db, "SELECT COUNT(*) FROM installments WHERE amount_minor <= 0") == 0L) {
             "النسخة تحتوي مبلغ قسط غير صالح."
         }
+        require(singleLong(db, "SELECT COUNT(*) FROM attachments WHERE size_bytes <= 0") == 0L) {
+            "النسخة تحتوي مرفقًا بحجم غير صالح."
+        }
+        require(
+            singleLong(db, "SELECT COUNT(*) FROM attachments WHERE relative_path NOT LIKE 'attachments/%.blob'") == 0L,
+        ) { "النسخة تحتوي مسار مرفق غير صالح." }
         require(
             singleLong(
                 db,
@@ -386,6 +512,16 @@ class AndroidBackupService(
                 """.trimIndent(),
             ) == 0L,
         ) { "النسخة تحتوي قسطًا بعملة لا تطابق الدين." }
+        require(
+            singleLong(
+                db,
+                """
+                SELECT COUNT(*) FROM attachments a
+                JOIN ledger_entries l ON l.id = a.ledger_entry_id
+                WHERE a.ledger_entry_id IS NOT NULL AND l.debt_id != a.debt_id
+                """.trimIndent(),
+            ) == 0L,
+        ) { "النسخة تحتوي مرفقًا مرتبطًا بحركة من حساب آخر." }
         require(
             singleLong(
                 db,
@@ -428,11 +564,7 @@ class AndroidBackupService(
                 StandardCopyOption.REPLACE_EXISTING,
             )
         } catch (_: AtomicMoveNotSupportedException) {
-            Files.move(
-                source.toPath(),
-                target.toPath(),
-                StandardCopyOption.REPLACE_EXISTING,
-            )
+            Files.move(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
     }
 
@@ -444,21 +576,24 @@ class AndroidBackupService(
 
     private data class SnapshotExport(
         val tables: List<TableDump>,
-        val readyDocuments: List<ReadyDocumentRef>,
+        val readyDocuments: List<VaultFileRef>,
+        val attachments: List<VaultFileRef>,
     )
 
-    private data class ReadyDocumentRef(
+    private data class VaultFileRef(
         val relativePath: String,
         val sha256: String,
     )
 
     private companion object {
-        const val SCHEMA_VERSION = 8
+        const val SCHEMA_VERSION = 9
         const val MIN_PASSWORD_LENGTH = 8
         const val READY_STATUS = "READY"
         const val DOCUMENTS_DIRECTORY = "documents"
+        const val ATTACHMENTS_DIRECTORY = "attachments"
         const val MAX_ROWS = 1_000_000
         const val MAX_DOCUMENT_BYTES = 64 * 1024 * 1024
+        const val MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
         val SHA256_REGEX = Regex("^[0-9a-fA-F]{64}$")
 
         val TABLES = listOf(
@@ -473,6 +608,7 @@ class AndroidBackupService(
             "payment_claims",
             "installment_plans",
             "installments",
+            "attachments",
         )
 
         val CLEAR_ORDER = TABLES.asReversed()
@@ -489,6 +625,7 @@ class AndroidBackupService(
             "payment_claims" to "SELECT * FROM payment_claims ORDER BY claimed_at, created_at, id",
             "installment_plans" to "SELECT * FROM installment_plans ORDER BY debt_id, revision_number, id",
             "installments" to "SELECT * FROM installments ORDER BY plan_id, sequence_number, id",
+            "attachments" to "SELECT * FROM attachments ORDER BY debt_id, created_at, id",
         )
     }
 }
@@ -498,6 +635,7 @@ internal data class BackupPayload(
     val schemaVersion: Int,
     val tables: List<TableDump>,
     val documentFiles: List<BackupDocumentFile>,
+    val attachmentFiles: List<BackupDocumentFile> = emptyList(),
 )
 
 @Serializable

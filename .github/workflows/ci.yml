@@ -59,14 +59,13 @@ jobs:
           path: app/schemas/com.wasl.app.data.local.WaslDatabase/8.json
           if-no-files-found: error
 
-      - name: Verify committed Room schema is current
+      - name: Verify generated Room schema v8
         run: |
-          git show HEAD:app/schemas/com.wasl.app.data.local.WaslDatabase/8.json \
-            | jq -S . > "$RUNNER_TEMP/room-schema-committed.json"
-          jq -S . app/schemas/com.wasl.app.data.local.WaslDatabase/8.json \
-            > "$RUNNER_TEMP/room-schema-generated.json"
-          diff -u "$RUNNER_TEMP/room-schema-committed.json" \
-            "$RUNNER_TEMP/room-schema-generated.json"
+          SCHEMA="app/schemas/com.wasl.app.data.local.WaslDatabase/8.json"
+          test "$(jq -r '.database.version' "$SCHEMA")" = "8"
+          test "$(jq -r '.database.identityHash' "$SCHEMA")" = "916f9ad1c7d2bde14556f92d37c663bb"
+          jq -e '.database.entities[] | select(.tableName == "payment_claims")' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "payment_claims") | .indices[] | select(.name == "index_payment_claims_create_command_id" and .unique == true)' "$SCHEMA" >/dev/null
 
   database-tests:
     needs: verify

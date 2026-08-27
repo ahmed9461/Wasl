@@ -1,14 +1,10 @@
 package com.wasl.app
 
 import android.content.Context
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNode
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.room.Room
@@ -78,26 +74,10 @@ class TodayPaymentClaimUiInstrumentedTest {
                     description = "حساب طالبني",
                 ),
             )
-            createClaim(
-                id = "claim-overdue",
-                kind = PaymentClaimFollowUpKind.CUSTOM,
-                followUpDate = LocalDate.parse("2026-08-22"),
-            )
-            createClaim(
-                id = "claim-today",
-                kind = PaymentClaimFollowUpKind.TODAY,
-                followUpDate = LocalDate.parse("2026-08-24"),
-            )
-            createClaim(
-                id = "claim-future",
-                kind = PaymentClaimFollowUpKind.CUSTOM,
-                followUpDate = LocalDate.parse("2026-08-25"),
-            )
-            createClaim(
-                id = "claim-salary",
-                kind = PaymentClaimFollowUpKind.SALARY,
-                followUpDate = null,
-            )
+            createClaim("claim-overdue", PaymentClaimFollowUpKind.CUSTOM, LocalDate.parse("2026-08-22"))
+            createClaim("claim-today", PaymentClaimFollowUpKind.TODAY, LocalDate.parse("2026-08-24"))
+            createClaim("claim-future", PaymentClaimFollowUpKind.CUSTOM, LocalDate.parse("2026-08-25"))
+            createClaim("claim-salary", PaymentClaimFollowUpKind.SALARY, null)
         }
     }
 
@@ -113,10 +93,7 @@ class TodayPaymentClaimUiInstrumentedTest {
             WaslApp(
                 repository = repository,
                 instanceKey = "today-payment-claim-ui-test",
-                todayClock = Clock.fixed(
-                    Instant.parse("2026-08-24T10:00:00Z"),
-                    ZoneOffset.UTC,
-                ),
+                todayClock = Clock.fixed(Instant.parse("2026-08-24T10:00:00Z"), ZoneOffset.UTC),
                 todayZoneIdProvider = { ZoneOffset.UTC },
             )
         }
@@ -132,8 +109,8 @@ class TodayPaymentClaimUiInstrumentedTest {
         composeRule.onNodeWithTag("today-claim-claim-today").assertIsDisplayed()
         composeRule.onNodeWithText("مطالبات اليوم").assertIsDisplayed()
 
-        composeRule.onNodeWithTag("today-claim-claim-future").assertDoesNotExist()
-        composeRule.onNodeWithTag("today-claim-claim-salary").assertDoesNotExist()
+        check(composeRule.onAllNodes(hasTestTag("today-claim-claim-future")).fetchSemanticsNodes().isEmpty())
+        check(composeRule.onAllNodes(hasTestTag("today-claim-claim-salary")).fetchSemanticsNodes().isEmpty())
 
         scrollToTag("today-open-claim-claim-today")
         composeRule.onNodeWithTag("today-open-claim-claim-today").performClick()
@@ -141,11 +118,7 @@ class TodayPaymentClaimUiInstrumentedTest {
         composeRule.onNodeWithText("ناصر").assertIsDisplayed()
     }
 
-    private suspend fun createClaim(
-        id: String,
-        kind: PaymentClaimFollowUpKind,
-        followUpDate: LocalDate?,
-    ) {
+    private suspend fun createClaim(id: String, kind: PaymentClaimFollowUpKind, followUpDate: LocalDate?) {
         claimStore.createClaim(
             CreatePaymentClaimCommand(
                 commandId = "command-$id",

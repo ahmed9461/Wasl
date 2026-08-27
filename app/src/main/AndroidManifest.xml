@@ -20,6 +20,10 @@
         android:usesCleartextTraffic="false">
 
         <activity
+            android:name=".NaturalEntryActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".GeneralRemindersHubActivity"
             android:exported="false"
             android:noHistory="true" />

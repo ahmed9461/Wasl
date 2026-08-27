@@ -3,11 +3,15 @@ package com.wasl.app
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.wasl.app.data.AccountOverview
@@ -66,9 +70,8 @@ class PersonTimelineUiInstrumentedTest {
 
         composeRule.onNodeWithTag("person-profile-header").assertIsDisplayed()
         composeRule.onNodeWithTag("person-multi-currency-note").assertIsDisplayed()
-        composeRule.onNodeWithTag("person-account-debt-sar")
-            .performScrollTo()
-            .assertIsDisplayed()
+        scrollToTag("person-account-debt-sar")
+        composeRule.onNodeWithTag("person-account-debt-sar").assertIsDisplayed()
         composeRule.onAllNodesWithText("فتح الحساب")[1]
             .performScrollTo()
             .performClick()
@@ -115,12 +118,14 @@ class PersonTimelineUiInstrumentedTest {
         }
 
         composeRule.onNodeWithTag("person-profile-header").assertIsDisplayed()
-        composeRule.onNodeWithTag("person-account-large-font-debt")
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeRule.onNodeWithTag("person-timeline-opened:large-font-debt")
-            .performScrollTo()
-            .assertIsDisplayed()
+        scrollToTag("person-account-large-font-debt")
+        composeRule.onNodeWithTag("person-account-large-font-debt").assertIsDisplayed()
+        scrollToTag("person-timeline-opened:large-font-debt")
+        composeRule.onNodeWithTag("person-timeline-opened:large-font-debt").assertIsDisplayed()
+    }
+
+    private fun scrollToTag(tag: String) {
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(tag))
     }
 
     private fun account(

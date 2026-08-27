@@ -1,0 +1,298 @@
+name: Patch due alarm time
+
+on:
+  push:
+    branches:
+      - agent/bootstrap-wasl-foundation
+    paths:
+      - .github/due-alarm-patch-trigger.txt
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/bootstrap-wasl-foundation
+      - name: Apply focused due-alarm-time patch
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"expected block not found in {path}: {old[:80]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          vm = "app/src/main/java/com/wasl/app/AccountDetailsViewModel.kt"
+          replace(vm, "import java.time.LocalDate\nimport java.time.ZoneId", "import java.time.LocalDate\nimport java.time.LocalTime\nimport java.time.ZoneId")
+          replace(vm, '''data class DueScheduleForm(
+              val dueDate: LocalDate? = null,
+              val remindOnDueDate: Boolean = false,
+              val strongAlarmEnabled: Boolean = false,
+          )''', '''data class DueScheduleForm(
+              val dueDate: LocalDate? = null,
+              val remindOnDueDate: Boolean = false,
+              val strongAlarmEnabled: Boolean = false,
+              val strongAlarmTime: LocalTime = ReminderTime.defaultDueTime,
+          )''')
+          replace(vm, '''    fun openDueScheduleDialog() {
+              val account = _uiState.value.account ?: return
+              if (account.ledger.balance.isZero) return
+              pendingDueScheduleCommand = null
+              _uiState.update {
+                  it.copy(
+                      isDueScheduleDialogOpen = true,
+                      dueScheduleForm = DueScheduleForm(
+                          dueDate = account.ledger.header.dueDate,
+                          remindOnDueDate = account.dueReminder
+                              ?.status
+                              ?.let { it != ReminderStatus.CANCELLED }
+                              ?: false,
+                          strongAlarmEnabled = account.strongAlarm
+                              ?.status
+                              ?.let { it != ReminderStatus.CANCELLED }
+                              ?: false,
+                      ),''', '''    fun openDueScheduleDialog() {
+              val account = _uiState.value.account ?: return
+              if (account.ledger.balance.isZero) return
+              pendingDueScheduleCommand = null
+              val zoneId = zoneIdProvider()
+              val activeStrongAlarm = account.strongAlarm?.takeIf {
+                  it.status != ReminderStatus.CANCELLED
+              }
+              _uiState.update {
+                  it.copy(
+                      isDueScheduleDialogOpen = true,
+                      dueScheduleForm = DueScheduleForm(
+                          dueDate = account.ledger.header.dueDate,
+                          remindOnDueDate = account.dueReminder
+                              ?.status
+                              ?.let { it != ReminderStatus.CANCELLED }
+                              ?: false,
+                          strongAlarmEnabled = activeStrongAlarm != null,
+                          strongAlarmTime = activeStrongAlarm
+                              ?.triggerAt
+                              ?.atZone(zoneId)
+                              ?.toLocalTime()
+                              ?.withSecond(0)
+                              ?.withNano(0)
+                              ?: ReminderTime.defaultDueTime,
+                      ),''')
+          replace(vm, '''    fun updateDueScheduleStrongAlarm(value: Boolean) {
+              pendingDueScheduleCommand = null
+              _uiState.update {
+                  val enabled = value && it.dueScheduleForm.dueDate != null
+                  it.copy(
+                      dueScheduleForm = it.dueScheduleForm.copy(
+                          strongAlarmEnabled = enabled,
+                          remindOnDueDate = if (enabled) true else it.dueScheduleForm.remindOnDueDate,
+                      ),
+                      dueScheduleError = null,
+                  )
+              }
+          }
+
+          fun confirmDueSchedule() {''', '''    fun updateDueScheduleStrongAlarm(value: Boolean) {
+              pendingDueScheduleCommand = null
+              _uiState.update {
+                  val enabled = value && it.dueScheduleForm.dueDate != null
+                  it.copy(
+                      dueScheduleForm = it.dueScheduleForm.copy(
+                          strongAlarmEnabled = enabled,
+                          remindOnDueDate = if (enabled) true else it.dueScheduleForm.remindOnDueDate,
+                      ),
+                      dueScheduleError = null,
+                  )
+              }
+          }
+
+          fun updateDueScheduleStrongAlarmTime(value: LocalTime) {
+              pendingDueScheduleCommand = null
+              _uiState.update {
+                  it.copy(
+                      dueScheduleForm = it.dueScheduleForm.copy(
+                          strongAlarmTime = value.withSecond(0).withNano(0),
+                      ),
+                      dueScheduleError = null,
+                  )
+              }
+          }
+
+          fun confirmDueSchedule() {''')
+          replace(vm, '''        val currentStrongAlarmEnabled = account.strongAlarm
+              ?.status
+              ?.let { it != ReminderStatus.CANCELLED }
+              ?: false
+          if (pendingDueScheduleCommand == null &&
+              form.dueDate == account.ledger.header.dueDate &&
+              form.remindOnDueDate == currentReminderEnabled &&
+              form.strongAlarmEnabled == currentStrongAlarmEnabled
+          ) {''', '''        val currentStrongAlarmEnabled = account.strongAlarm
+              ?.status
+              ?.let { it != ReminderStatus.CANCELLED }
+              ?: false
+          val currentStrongAlarmTime = account.strongAlarm
+              ?.takeIf { it.status != ReminderStatus.CANCELLED }
+              ?.triggerAt
+              ?.atZone(zoneId)
+              ?.toLocalTime()
+              ?.withSecond(0)
+              ?.withNano(0)
+              ?: ReminderTime.defaultDueTime
+          if (pendingDueScheduleCommand == null &&
+              form.dueDate == account.ledger.header.dueDate &&
+              form.remindOnDueDate == currentReminderEnabled &&
+              form.strongAlarmEnabled == currentStrongAlarmEnabled &&
+              (!form.strongAlarmEnabled || form.strongAlarmTime == currentStrongAlarmTime)
+          ) {''')
+          replace(vm, '''                    triggerAt = ReminderTime.dueDateTrigger(
+                          dueDate = requireNotNull(form.dueDate),
+                          now = now,
+                          zoneId = zoneId,
+                      ),
+                      zoneId = zoneId,
+                  )
+              } else {
+                  null
+              }
+              val strongAlarm = if (form.strongAlarmEnabled) {
+                  StrongAlarmRequest(
+                      id = account.strongAlarm?.id ?: idFactory(),
+                      triggerAt = ReminderTime.dueDateTrigger(
+                          dueDate = requireNotNull(form.dueDate),
+                          now = now,
+                          zoneId = zoneId,
+                      ),''', '''                    triggerAt = ReminderTime.dueDateTrigger(
+                          dueDate = requireNotNull(form.dueDate),
+                          now = now,
+                          zoneId = zoneId,
+                      ),
+                      zoneId = zoneId,
+                  )
+              } else {
+                  null
+              }
+              val strongAlarm = if (form.strongAlarmEnabled) {
+                  StrongAlarmRequest(
+                      id = account.strongAlarm?.id ?: idFactory(),
+                      triggerAt = ReminderTime.dueDateTrigger(
+                          dueDate = requireNotNull(form.dueDate),
+                          now = now,
+                          zoneId = zoneId,
+                          time = form.strongAlarmTime,
+                      ),''')
+
+          screen = "app/src/main/java/com/wasl/app/AccountDetailsScreen.kt"
+          replace(screen, "import androidx.compose.material3.TextButton\nimport androidx.compose.material3.TopAppBar", "import androidx.compose.material3.TextButton\nimport androidx.compose.material3.TimePicker\nimport androidx.compose.material3.TopAppBar\nimport androidx.compose.material3.rememberTimePickerState")
+          replace(screen, "import java.time.LocalDate\nimport java.time.ZoneId", "import java.time.LocalDate\nimport java.time.LocalTime\nimport java.time.ZoneId")
+          replace(screen, '''    onDueScheduleReminderChange: (Boolean) -> Unit,
+              onDueScheduleStrongAlarmChange: (Boolean) -> Unit,
+              onRequestExactAlarmAccess: () -> Unit,''', '''    onDueScheduleReminderChange: (Boolean) -> Unit,
+              onDueScheduleStrongAlarmChange: (Boolean) -> Unit,
+              onDueScheduleStrongAlarmTimeChange: (LocalTime) -> Unit,
+              onRequestExactAlarmAccess: () -> Unit,''')
+          replace(screen, '''            onReminderChange = onDueScheduleReminderChange,
+              onStrongAlarmChange = onDueScheduleStrongAlarmChange,
+              onRequestExactAlarmAccess = onRequestExactAlarmAccess,''', '''            onReminderChange = onDueScheduleReminderChange,
+              onStrongAlarmChange = onDueScheduleStrongAlarmChange,
+              onStrongAlarmTimeChange = onDueScheduleStrongAlarmTimeChange,
+              onRequestExactAlarmAccess = onRequestExactAlarmAccess,''')
+          replace(screen, '''    onReminderChange: (Boolean) -> Unit,
+              onStrongAlarmChange: (Boolean) -> Unit,
+              onRequestExactAlarmAccess: () -> Unit,''', '''    onReminderChange: (Boolean) -> Unit,
+              onStrongAlarmChange: (Boolean) -> Unit,
+              onStrongAlarmTimeChange: (LocalTime) -> Unit,
+              onRequestExactAlarmAccess: () -> Unit,''')
+          replace(screen, '''    var showDatePicker by remember { androidx.compose.runtime.mutableStateOf(false) }
+              AlertDialog(''', '''    var showDatePicker by remember { androidx.compose.runtime.mutableStateOf(false) }
+              var showStrongAlarmTimePicker by remember { androidx.compose.runtime.mutableStateOf(false) }
+              AlertDialog(''')
+          replace(screen, '''                        Text(
+                              "منبه دقيق قرابة 09:00 يوم الاستحقاق. المتابعة الذكية تبقى كبديل آمن.",
+                              style = MaterialTheme.typography.bodySmall,
+                              color = MaterialTheme.colorScheme.onSurfaceVariant,
+                          )''', '''                        Text(
+                              "منبه دقيق في الوقت الذي تختاره يوم الاستحقاق. المتابعة الذكية تبقى كبديل آمن.",
+                              style = MaterialTheme.typography.bodySmall,
+                              color = MaterialTheme.colorScheme.onSurfaceVariant,
+                          )''')
+          replace(screen, '''                if (form.strongAlarmEnabled && !exactAlarmAccessGranted) {
+                      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {''', '''                if (form.strongAlarmEnabled) {
+                      OutlinedButton(
+                          onClick = { showStrongAlarmTimePicker = true },
+                          enabled = !isSaving,
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("edit-strong-alarm-time"),
+                      ) {
+                          Text("وقت المنبه: ${formatLocalTime(form.strongAlarmTime)}")
+                      }
+                  }
+                  if (form.strongAlarmEnabled && !exactAlarmAccessGranted) {
+                      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {''')
+          replace(screen, '''    if (showDatePicker) {
+              val initialSelection = form.dueDate''', '''    if (showStrongAlarmTimePicker) {
+              val timePickerState = rememberTimePickerState(
+                  initialHour = form.strongAlarmTime.hour,
+                  initialMinute = form.strongAlarmTime.minute,
+                  is24Hour = true,
+              )
+              AlertDialog(
+                  onDismissRequest = { showStrongAlarmTimePicker = false },
+                  title = { Text("وقت المنبه القوي") },
+                  text = { TimePicker(state = timePickerState) },
+                  confirmButton = {
+                      TextButton(
+                          onClick = {
+                              onStrongAlarmTimeChange(
+                                  LocalTime.of(timePickerState.hour, timePickerState.minute),
+                              )
+                              showStrongAlarmTimePicker = false
+                          },
+                          modifier = Modifier.testTag("confirm-strong-alarm-time"),
+                      ) { Text("اختيار") }
+                  },
+                  dismissButton = {
+                      TextButton(onClick = { showStrongAlarmTimePicker = false }) { Text("إلغاء") }
+                  },
+              )
+          }
+
+          if (showDatePicker) {
+              val initialSelection = form.dueDate''')
+          # Add formatter helper near existing formatDate helper if available.
+          marker = '''private fun formatDate(date: LocalDate): String ='''
+          p = Path(screen)
+          text = p.read_text()
+          idx = text.find(marker)
+          if idx < 0:
+              raise SystemExit("formatDate helper not found")
+          helper = '''private fun formatLocalTime(time: LocalTime): String =
+              "%02d:%02d".format(Locale.US, time.hour, time.minute)
+
+          '''
+          text = text[:idx] + helper + text[idx:]
+          p.write_text(text)
+
+          app = "app/src/main/java/com/wasl/app/WaslApp.kt"
+          replace(app, '''                                    onDueScheduleStrongAlarmChange = detailsViewModel::updateDueScheduleStrongAlarm,
+                                      onRequestExactAlarmAccess = ::requestExactAlarmAccess,''', '''                                    onDueScheduleStrongAlarmChange = detailsViewModel::updateDueScheduleStrongAlarm,
+                                      onDueScheduleStrongAlarmTimeChange = detailsViewModel::updateDueScheduleStrongAlarmTime,
+                                      onRequestExactAlarmAccess = ::requestExactAlarmAccess,''')
+          PY
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/wasl/app/AccountDetailsViewModel.kt app/src/main/java/com/wasl/app/AccountDetailsScreen.kt app/src/main/java/com/wasl/app/WaslApp.kt
+          git diff --cached --check
+          git commit -m "fix: preserve configurable strong alarm time when editing due schedule"
+          git push origin HEAD:agent/bootstrap-wasl-foundation

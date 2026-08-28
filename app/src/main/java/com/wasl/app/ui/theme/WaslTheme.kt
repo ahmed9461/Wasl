@@ -8,6 +8,8 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -15,6 +17,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wasl.app.privacy.AppAppearance
+
+private val LocalWaslAppearance = staticCompositionLocalOf { AppAppearance.SYSTEM }
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF087F72), onPrimary = Color.White,
@@ -72,25 +76,32 @@ private val WaslTypography = Typography(
 )
 
 private val WaslShapes = Shapes(
-    extraSmall = RoundedCornerShape(10.dp), small = RoundedCornerShape(14.dp),
-    medium = RoundedCornerShape(18.dp), large = RoundedCornerShape(24.dp),
+    extraSmall = RoundedCornerShape(10.dp),
+    small = RoundedCornerShape(14.dp),
+    medium = RoundedCornerShape(18.dp),
+    large = RoundedCornerShape(24.dp),
     extraLarge = RoundedCornerShape(30.dp),
 )
 
 @Composable
 fun WaslTheme(
-    appearance: AppAppearance = AppAppearance.SYSTEM,
-    darkTheme: Boolean = when (appearance) {
+    appearance: AppAppearance? = null,
+    content: @Composable () -> Unit,
+) {
+    val inheritedAppearance = LocalWaslAppearance.current
+    val resolvedAppearance = appearance ?: inheritedAppearance
+    val darkTheme = when (resolvedAppearance) {
         AppAppearance.SYSTEM -> isSystemInDarkTheme()
         AppAppearance.DARK -> true
         AppAppearance.LIGHT -> false
-    },
-    content: @Composable () -> Unit,
-) {
-    MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
-        typography = WaslTypography,
-        shapes = WaslShapes,
-        content = content,
-    )
+    }
+
+    CompositionLocalProvider(LocalWaslAppearance provides resolvedAppearance) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) DarkColors else LightColors,
+            typography = WaslTypography,
+            shapes = WaslShapes,
+            content = content,
+        )
+    }
 }

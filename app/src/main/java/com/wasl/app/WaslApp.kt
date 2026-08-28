@@ -258,6 +258,9 @@ fun WaslApp(
                                     onConfirmGroupExpense = homeViewModel::confirmGroupExpense,
                                     onPersonModeChange = homeViewModel::updatePersonMode,
                                     onPersonNameChange = homeViewModel::updatePersonName,
+                                    onPersonPhoneChange = homeViewModel::updatePersonPhone,
+                                    onPersonEmailChange = homeViewModel::updatePersonEmail,
+                                    onPersonNotesChange = homeViewModel::updatePersonNotes,
                                     onPeopleQueryChange = homeViewModel::updatePeopleQuery,
                                     onSelectPerson = homeViewModel::selectExistingPerson,
                                     onRetryPeople = homeViewModel::retryPeople,
@@ -488,6 +491,9 @@ private fun WaslHomeScreen(
     onConfirmGroupExpense: () -> Unit,
     onPersonModeChange: (DebtPersonMode) -> Unit,
     onPersonNameChange: (String) -> Unit,
+    onPersonPhoneChange: (String) -> Unit,
+    onPersonEmailChange: (String) -> Unit,
+    onPersonNotesChange: (String) -> Unit,
     onPeopleQueryChange: (String) -> Unit,
     onSelectPerson: (PersonId) -> Unit,
     onRetryPeople: () -> Unit,
@@ -720,6 +726,9 @@ private fun WaslHomeScreen(
             onDismiss = onDismissCreate,
             onPersonModeChange = onPersonModeChange,
             onPersonNameChange = onPersonNameChange,
+            onPersonPhoneChange = onPersonPhoneChange,
+            onPersonEmailChange = onPersonEmailChange,
+            onPersonNotesChange = onPersonNotesChange,
             onPeopleQueryChange = onPeopleQueryChange,
             onSelectPerson = onSelectPerson,
             onRetryPeople = onRetryPeople,
@@ -752,6 +761,9 @@ private fun CreateDebtDialog(
     onDismiss: () -> Unit,
     onPersonModeChange: (DebtPersonMode) -> Unit,
     onPersonNameChange: (String) -> Unit,
+    onPersonPhoneChange: (String) -> Unit,
+    onPersonEmailChange: (String) -> Unit,
+    onPersonNotesChange: (String) -> Unit,
     onPeopleQueryChange: (String) -> Unit,
     onSelectPerson: (PersonId) -> Unit,
     onRetryPeople: () -> Unit,
@@ -814,6 +826,42 @@ private fun CreateDebtDialog(
                             .testTag("create-person-name"),
                         label = { Text("اسم الشخص") },
                         singleLine = true,
+                        enabled = !isSaving,
+                        shape = MaterialTheme.shapes.medium,
+                    )
+                    OutlinedTextField(
+                        value = form.personPhone,
+                        onValueChange = onPersonPhoneChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("create-person-phone"),
+                        label = { Text("رقم الجوال — اختياري") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        singleLine = true,
+                        enabled = !isSaving,
+                        shape = MaterialTheme.shapes.medium,
+                    )
+                    OutlinedTextField(
+                        value = form.personEmail,
+                        onValueChange = onPersonEmailChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("create-person-email"),
+                        label = { Text("البريد الإلكتروني — اختياري") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        singleLine = true,
+                        enabled = !isSaving,
+                        shape = MaterialTheme.shapes.medium,
+                    )
+                    OutlinedTextField(
+                        value = form.personNotes,
+                        onValueChange = onPersonNotesChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("create-person-notes"),
+                        label = { Text("ملاحظات الشخص — اختياري") },
+                        minLines = 2,
+                        maxLines = 3,
                         enabled = !isSaving,
                         shape = MaterialTheme.shapes.medium,
                     )

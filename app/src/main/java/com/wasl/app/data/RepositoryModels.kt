@@ -459,6 +459,8 @@ data class CreatePersonWithDebtCommand(
     val personId: PersonId,
     val debtId: DebtId,
     val personName: String,
+    val personPhone: String? = null,
+    val personEmail: String? = null,
     val direction: DebtDirection,
     val originalAmount: Money,
     val openedAt: Instant,
@@ -472,6 +474,12 @@ data class CreatePersonWithDebtCommand(
 ) {
     init {
         require(personName.isNotBlank()) { "Person name cannot be blank." }
+        require(personPhone == null || personPhone.isNotBlank()) {
+            "Person phone must be null or non-blank."
+        }
+        require(personEmail == null || personEmail.isNotBlank()) {
+            "Person email must be null or non-blank."
+        }
         require(originalAmount.minorUnits > 0L) { "Original amount must be positive." }
         require(description == null || description.isNotBlank()) {
             "Description must be null or non-blank."

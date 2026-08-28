@@ -56,6 +56,9 @@ data class ExistingPersonSelection(
 data class CreateDebtForm(
     val personMode: DebtPersonMode = DebtPersonMode.NEW,
     val personName: String = "",
+    val personPhone: String = "",
+    val personEmail: String = "",
+    val personNotes: String = "",
     val selectedPerson: ExistingPersonSelection? = null,
     val amount: String = "",
     val currency: CurrencyCode = CurrencyCode.YER,
@@ -274,6 +277,12 @@ class HomeViewModel(
     }
 
     fun updatePersonName(value: String) = updateForm { copy(personName = value) }
+
+    fun updatePersonPhone(value: String) = updateForm { copy(personPhone = value) }
+
+    fun updatePersonEmail(value: String) = updateForm { copy(personEmail = value) }
+
+    fun updatePersonNotes(value: String) = updateForm { copy(personNotes = value) }
 
     fun updatePeopleQuery(value: String) {
         _uiState.update { it.copy(peopleQuery = value, peopleLoadError = null) }
@@ -586,6 +595,9 @@ class HomeViewModel(
                             personId = identity.personId,
                             debtId = identity.debtId,
                             personName = personName,
+                            personPhone = form.personPhone.trim().ifEmpty { null },
+                            personEmail = form.personEmail.trim().ifEmpty { null },
+                            personNotes = form.personNotes.trim().ifEmpty { null },
                             direction = form.direction,
                             originalAmount = amount,
                             openedAt = identity.timestamp,

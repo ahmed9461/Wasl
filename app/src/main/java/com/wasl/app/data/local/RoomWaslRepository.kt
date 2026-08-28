@@ -130,6 +130,9 @@ class RoomWaslRepository(
         }
 
         val normalizedName = command.personName.trim()
+        val normalizedPhone = command.personPhone?.trim()?.ifEmpty { null }
+        val normalizedEmail = command.personEmail?.trim()?.ifEmpty { null }
+        val normalizedPersonNotes = command.personNotes?.trim()?.ifEmpty { null }
         if (personDao.findById(command.personId.value) != null) {
             throw CommandConflictException(
                 "Person ID ${command.personId.value} is already used by another command.",
@@ -139,10 +142,10 @@ class RoomWaslRepository(
             PersonEntity(
                 id = command.personId.value,
                 displayName = normalizedName,
-                phone = null,
-                email = null,
+                phone = normalizedPhone,
+                email = normalizedEmail,
                 photoUri = null,
-                notes = command.personNotes?.trim(),
+                notes = normalizedPersonNotes,
                 createdAt = command.createdAt.toEpochMilli(),
                 updatedAt = command.createdAt.toEpochMilli(),
                 archivedAt = null,
@@ -865,9 +868,13 @@ class RoomWaslRepository(
         aggregate: DebtAggregate,
     ) {
         val persisted = toAccountOverview(aggregate)
-        val expectedPersonNotes = command.personNotes?.trim()
+        val expectedPhone = command.personPhone?.trim()?.ifEmpty { null }
+        val expectedEmail = command.personEmail?.trim()?.ifEmpty { null }
+        val expectedPersonNotes = command.personNotes?.trim()?.ifEmpty { null }
         val matches = debtCreationMatches(command.toDebtCreation(), aggregate, persisted) &&
             persisted.person.displayName == command.personName.trim() &&
+            persisted.person.phone == expectedPhone &&
+            persisted.person.email == expectedEmail &&
             persisted.person.notes == expectedPersonNotes &&
             persisted.person.createdAt == command.createdAt
         if (!matches) {

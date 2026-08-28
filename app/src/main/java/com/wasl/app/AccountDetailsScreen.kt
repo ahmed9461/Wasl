@@ -2,6 +2,7 @@ package com.wasl.app
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -413,35 +414,7 @@ private fun AccountDetailsContent(
         }
 
         item("timeline-heading") {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "سجل العمليات",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = "الأصل محفوظ، وكل دفعة أو عكس يظهر كسجل مستقل.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Surface(
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                ) {
-                    Text(
-                        text = "سجل موثق",
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            AccountTimelineHeading()
         }
 
         item("debt-created") {
@@ -530,44 +503,10 @@ private fun AccountSummaryCard(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Surface(
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-                ) {
-                    Text(
-                        text = if (receivable) "لي عنده" else "عليّ له",
-                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                Surface(
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = when (ledger.state) {
-                        DebtState.SETTLED -> MaterialTheme.colorScheme.surface.copy(alpha = 0.76f)
-                        DebtState.PARTIALLY_PAID -> MaterialTheme.colorScheme.tertiaryContainer
-                        DebtState.OPEN -> MaterialTheme.colorScheme.surface.copy(alpha = 0.56f)
-                    },
-                ) {
-                    Text(
-                        text = when (ledger.state) {
-                            DebtState.OPEN -> "مفتوح"
-                            DebtState.PARTIALLY_PAID -> "مسدد جزئيًا"
-                            DebtState.SETTLED -> "مسدد بالكامل"
-                        },
-                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            }
+            AccountHeroBadges(
+                receivable = receivable,
+                state = ledger.state,
+            )
 
             ledger.header.description?.let {
                 Text(
@@ -593,21 +532,10 @@ private fun AccountSummaryCard(
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                FinancialMetric(
-                    modifier = Modifier.weight(1f),
-                    label = "أصل الدين",
-                    money = ledger.header.originalAmount,
-                )
-                FinancialMetric(
-                    modifier = Modifier.weight(1f),
-                    label = "المدفوع",
-                    money = ledger.paidAmount,
-                )
-            }
+            AccountFinancialMetrics(
+                originalAmount = ledger.header.originalAmount,
+                paidAmount = ledger.paidAmount,
+            )
 
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -672,6 +600,186 @@ private fun AccountSummaryCard(
                         fontWeight = FontWeight.Bold,
                     )
                 }
+            }
+        }
+    }
+}
+
+
+@Composable
+internal fun AccountTimelineHeading() {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("account-timeline-heading-stacked"),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                AccountTimelineHeadingCopy()
+                AccountTimelineVerifiedBadge()
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("account-timeline-heading-inline"),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AccountTimelineHeadingCopy(modifier = Modifier.weight(1f))
+                AccountTimelineVerifiedBadge()
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountTimelineHeadingCopy(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = "سجل العمليات",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = "الأصل محفوظ، وكل دفعة أو عكس يظهر كسجل مستقل.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun AccountTimelineVerifiedBadge() {
+    Surface(
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Text(
+            text = "سجل موثق",
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+internal fun AccountHeroBadges(
+    receivable: Boolean,
+    state: DebtState,
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("account-summary-badges-stacked"),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                AccountDirectionSummaryBadge(receivable)
+                AccountStateSummaryBadge(state)
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("account-summary-badges-inline"),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AccountDirectionSummaryBadge(receivable)
+                AccountStateSummaryBadge(state)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountDirectionSummaryBadge(receivable: Boolean) {
+    Surface(
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+    ) {
+        Text(
+            text = if (receivable) "لي عنده" else "عليّ له",
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun AccountStateSummaryBadge(state: DebtState) {
+    Surface(
+        shape = MaterialTheme.shapes.extraLarge,
+        color = when (state) {
+            DebtState.SETTLED -> MaterialTheme.colorScheme.surface.copy(alpha = 0.76f)
+            DebtState.PARTIALLY_PAID -> MaterialTheme.colorScheme.tertiaryContainer
+            DebtState.OPEN -> MaterialTheme.colorScheme.surface.copy(alpha = 0.56f)
+        },
+    ) {
+        Text(
+            text = when (state) {
+                DebtState.OPEN -> "مفتوح"
+                DebtState.PARTIALLY_PAID -> "مسدد جزئيًا"
+                DebtState.SETTLED -> "مسدد بالكامل"
+            },
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+internal fun AccountFinancialMetrics(
+    originalAmount: Money,
+    paidAmount: Money,
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("account-summary-metrics-stacked"),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                FinancialMetric(
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "أصل الدين",
+                    money = originalAmount,
+                )
+                FinancialMetric(
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "المدفوع",
+                    money = paidAmount,
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("account-summary-metrics-inline"),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                FinancialMetric(
+                    modifier = Modifier.weight(1f),
+                    label = "أصل الدين",
+                    money = originalAmount,
+                )
+                FinancialMetric(
+                    modifier = Modifier.weight(1f),
+                    label = "المدفوع",
+                    money = paidAmount,
+                )
             }
         }
     }

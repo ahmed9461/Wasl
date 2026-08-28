@@ -8,6 +8,17 @@ plugins {
     alias(libs.plugins.room)
 }
 
+val releaseKeystorePath = providers.environmentVariable("WASL_KEYSTORE_PATH").orNull
+val releaseStorePassword = providers.environmentVariable("WASL_KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("WASL_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("WASL_KEY_PASSWORD").orNull
+val hasReleaseSigning = listOf(
+    releaseKeystorePath,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.wasl.app"
     compileSdk = 36
@@ -17,7 +28,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0-dev"
+        versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -25,10 +36,24 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(requireNotNull(releaseKeystorePath))
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

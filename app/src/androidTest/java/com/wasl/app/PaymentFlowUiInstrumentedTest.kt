@@ -137,8 +137,9 @@ class PaymentFlowUiInstrumentedTest {
                     ?.single()
             }
         } ?: error("Ready payment receipt was not found.")
-        scrollToText(document.documentNumber)
-        composeRule.onNodeWithText(document.documentNumber).assertIsDisplayed()
+        val displayedDocumentNumber = ltrIsolate(document.documentNumber)
+        scrollToText(displayedDocumentNumber)
+        composeRule.onNodeWithText(displayedDocumentNumber).assertIsDisplayed()
         scrollToTag("open-receipt-${document.id}")
         composeRule.onNodeWithTag("open-receipt-${document.id}").assertIsDisplayed()
 
@@ -159,8 +160,8 @@ class PaymentFlowUiInstrumentedTest {
         composeRule.onNodeWithText("دفعة مسجلة").assertIsDisplayed()
         scrollToTag("open-receipt-${document.id}")
         composeRule.onNodeWithTag("open-receipt-${document.id}").assertIsDisplayed()
-        scrollToText(document.documentNumber)
-        composeRule.onNodeWithText(document.documentNumber).assertIsDisplayed()
+        scrollToText(displayedDocumentNumber)
+        composeRule.onNodeWithText(displayedDocumentNumber).assertIsDisplayed()
     }
 
     @Test

@@ -50,40 +50,20 @@ internal fun CreateEntryTypeDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("create-entry-individual"),
+                CreateEntryOption(
+                    title = "حساب فردي",
+                    description = "دين أو حق مع شخص واحد",
+                    primary = true,
+                    testTag = "create-entry-individual",
                     onClick = onCreateIndividual,
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Text("حساب فردي", fontWeight = FontWeight.Bold)
-                        Text(
-                            text = "دين أو حق مع شخص واحد",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-                OutlinedButton(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("create-entry-group"),
+                )
+                CreateEntryOption(
+                    title = "عملية جماعية",
+                    description = "عملية واحدة بحصص موزعة على شخصين أو أكثر",
+                    primary = false,
+                    testTag = "create-entry-group",
                     onClick = onCreateGroupExpense,
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Text("عملية جماعية", fontWeight = FontWeight.Bold)
-                        Text(
-                            text = "عملية واحدة بحصص موزعة على شخصين أو أكثر",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
+                )
             }
         },
         confirmButton = {},

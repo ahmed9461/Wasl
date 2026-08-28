@@ -525,6 +525,7 @@ private fun WaslHomeScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
+                modifier = Modifier.testTag("home-add-entry"),
                 onClick = onOpenCreate,
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -546,30 +547,7 @@ private fun WaslHomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item("home-header") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Surface(
-                        shape = MaterialTheme.shapes.extraLarge,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                    ) {
-                        Text(
-                            text = "دفترك المالي الشخصي",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
-                    Text(
-                        text = "وَصل",
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                    Text(
-                        text = "كل حساب له وصل",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                HomeHeroCard(accountCount = state.accounts.size)
             }
 
             if (state.isLoading) {
@@ -585,18 +563,11 @@ private fun WaslHomeScreen(
                 }
             } else {
                 item("home-overview-heading") {
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(
-                            text = "ملخصك المالي",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            text = "نظرة سريعة على الحقوق والالتزامات حسب العملة.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    HomeSectionHeader(
+                        title = "ملخصك المالي",
+                        subtitle = "نظرة سريعة على الحقوق والالتزامات حسب العملة.",
+                        tagPrefix = "home-overview",
+                    )
                 }
                 item("home-receivable-summary") {
                     SummaryCard(
@@ -628,35 +599,12 @@ private fun WaslHomeScreen(
                     }
                 } else {
                     item("home-accounts-heading") {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(
-                                    text = "الحسابات",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                                Text(
-                                    text = "${state.accounts.size} حساب محفوظ",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Surface(
-                                shape = MaterialTheme.shapes.extraLarge,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            ) {
-                                Text(
-                                    text = state.accounts.size.toString(),
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                        }
+                        HomeSectionHeader(
+                            title = "الحسابات",
+                            subtitle = "${state.accounts.size} حساب محفوظ",
+                            count = state.accounts.size,
+                            tagPrefix = "home-accounts",
+                        )
                     }
                     items(
                         items = state.accounts,

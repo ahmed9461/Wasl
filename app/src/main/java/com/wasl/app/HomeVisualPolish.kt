@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -30,76 +30,35 @@ internal fun HomeHeroCard(
             .fillMaxWidth()
             .testTag("home-hero"),
         shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        tonalElevation = 2.dp,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 1.dp,
     ) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(horizontal = 18.dp, vertical = 16.dp),
         ) {
             val stacked = shouldStackDenseRows(maxWidth)
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Surface(
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+            if (stacked) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("home-hero-stacked"),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    Text(
-                        text = "دفترك المالي الشخصي",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    HomeBrandBlock()
+                    HomeHeroMetric(accountCount)
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(
-                        text = "وَصل",
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    Text(
-                        text = "كل حساب له وصل",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    Text(
-                        text = "حقوقك والتزاماتك محفوظة بوضوح، من أول تسجيل إلى آخر دفعة.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.14f))
-                if (stacked) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("home-hero-stacked"),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        HomeHeroMetric(accountCount)
-                        Text(
-                            text = "أضف حسابًا فرديًا أو عملية جماعية من زر الإضافة.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
-                } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("home-hero-inline"),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        HomeHeroMetric(accountCount)
-                        Text(
-                            text = "فردي أو جماعي — بنفس دفتر وَصل",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("home-hero-inline"),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    HomeBrandBlock(modifier = Modifier.weight(1f))
+                    HomeHeroMetric(accountCount)
                 }
             }
         }
@@ -107,20 +66,55 @@ internal fun HomeHeroCard(
 }
 
 @Composable
-private fun HomeHeroMetric(accountCount: Int) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+private fun HomeBrandBlock(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
         Text(
-            text = "الحسابات المحفوظة",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-        )
-        Text(
-            text = accountCount.toString(),
-            modifier = Modifier.testTag("home-hero-account-count"),
-            style = MaterialTheme.typography.headlineSmall,
+            text = "وَصل",
+            style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            color = MaterialTheme.colorScheme.primary,
         )
+        Text(
+            text = "كل حساب له وصل",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = "دفترك المالي الشخصي",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun HomeHeroMetric(accountCount: Int) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.primaryContainer,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            Text(
+                text = accountCount.toString(),
+                modifier = Modifier.testTag("home-hero-account-count"),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Text(
+                text = "حساب",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
     }
 }
 
@@ -161,7 +155,7 @@ internal fun HomeSectionHeader(
 
 @Composable
 private fun HomeSectionCopy(title: String, subtitle: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleLarge,
@@ -169,7 +163,7 @@ private fun HomeSectionCopy(title: String, subtitle: String) {
         )
         Text(
             text = subtitle,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -185,7 +179,7 @@ private fun HomeSectionCount(count: Int, tagPrefix: String) {
             text = count.toString(),
             modifier = Modifier
                 .testTag("$tagPrefix-count")
-                .padding(horizontal = 13.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 7.dp),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.ExtraBold,
         )
@@ -204,12 +198,12 @@ internal fun CreateEntryOption(
     val content: @Composable () -> Unit = {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.ExtraBold,
+                fontWeight = FontWeight.Bold,
             )
             Text(
                 text = description,
@@ -217,21 +211,32 @@ internal fun CreateEntryOption(
             )
         }
     }
+
     if (primary) {
         Button(
             modifier = modifier
                 .fillMaxWidth()
                 .testTag(testTag),
             onClick = onClick,
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
-        ) { content() }
+            shape = MaterialTheme.shapes.large,
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 15.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+        ) {
+            content()
+        }
     } else {
         OutlinedButton(
             modifier = modifier
                 .fillMaxWidth()
                 .testTag(testTag),
             onClick = onClick,
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
-        ) { content() }
+            shape = MaterialTheme.shapes.large,
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 15.dp),
+        ) {
+            content()
+        }
     }
 }

@@ -32,6 +32,7 @@ jobs:
 
       - name: Commit foundation and cleanup
         run: |
+          git checkout -- .github/workflows/ci.yml
           rm .github/scripts/patch_group_expense_v10.py
           rm .github/workflows/patch-group-expense-v10.yml
           git config user.name 'github-actions[bot]'

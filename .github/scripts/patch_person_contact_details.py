@@ -1,14 +1,19 @@
 from pathlib import Path
 
 
-def replace_once(path: str, old: str, new: str) -> None:
+def replace_n(path: str, old: str, new: str, expected_count: int) -> None:
     file = Path(path)
     text = file.read_text(encoding="utf-8")
-    if old not in text:
-        raise SystemExit(f"expected block not found in {path}: {old[:80]!r}")
-    if text.count(old) != 1:
-        raise SystemExit(f"expected exactly one block in {path}, found {text.count(old)}")
-    file.write_text(text.replace(old, new, 1), encoding="utf-8")
+    count = text.count(old)
+    if count != expected_count:
+        raise SystemExit(
+            f"expected exactly {expected_count} block(s) in {path}, found {count}: {old[:80]!r}"
+        )
+    file.write_text(text.replace(old, new), encoding="utf-8")
+
+
+def replace_once(path: str, old: str, new: str) -> None:
+    replace_n(path, old, new, 1)
 
 
 models = "app/src/main/java/com/wasl/app/data/RepositoryModels.kt"
@@ -63,20 +68,16 @@ replace_once(
     """                                    onPersonNameChange = homeViewModel::updatePersonName,\n                                    onPeopleQueryChange = homeViewModel::updatePeopleQuery,""",
     """                                    onPersonNameChange = homeViewModel::updatePersonName,\n                                    onPersonPhoneChange = homeViewModel::updatePersonPhone,\n                                    onPersonEmailChange = homeViewModel::updatePersonEmail,\n                                    onPersonNotesChange = homeViewModel::updatePersonNotes,\n                                    onPeopleQueryChange = homeViewModel::updatePeopleQuery,""",
 )
-replace_once(
+replace_n(
     app,
-    """    onPersonModeChange: (DebtPersonMode) -> Unit,\n    onPersonNameChange: (String) -> Unit,\n    onPeopleQueryChange: (String) -> Unit,""",
-    """    onPersonModeChange: (DebtPersonMode) -> Unit,\n    onPersonNameChange: (String) -> Unit,\n    onPersonPhoneChange: (String) -> Unit,\n    onPersonEmailChange: (String) -> Unit,\n    onPersonNotesChange: (String) -> Unit,\n    onPeopleQueryChange: (String) -> Unit,""",
+    """    onPersonModeChange: (DebtPersonMode) -> Unit,\n    onPersonNameChange: (String) -> Unit,\n    onPeopleQueryChange: (String) -> Unit,\n    onSelectPerson: (PersonId) -> Unit,""",
+    """    onPersonModeChange: (DebtPersonMode) -> Unit,\n    onPersonNameChange: (String) -> Unit,\n    onPersonPhoneChange: (String) -> Unit,\n    onPersonEmailChange: (String) -> Unit,\n    onPersonNotesChange: (String) -> Unit,\n    onPeopleQueryChange: (String) -> Unit,\n    onSelectPerson: (PersonId) -> Unit,""",
+    2,
 )
 replace_once(
     app,
     """            onPersonModeChange = onPersonModeChange,\n            onPersonNameChange = onPersonNameChange,\n            onPeopleQueryChange = onPeopleQueryChange,""",
     """            onPersonModeChange = onPersonModeChange,\n            onPersonNameChange = onPersonNameChange,\n            onPersonPhoneChange = onPersonPhoneChange,\n            onPersonEmailChange = onPersonEmailChange,\n            onPersonNotesChange = onPersonNotesChange,\n            onPeopleQueryChange = onPeopleQueryChange,""",
-)
-replace_once(
-    app,
-    """    onPersonModeChange: (DebtPersonMode) -> Unit,\n    onPersonNameChange: (String) -> Unit,\n    onPeopleQueryChange: (String) -> Unit,\n    onSelectPerson: (PersonId) -> Unit,""",
-    """    onPersonModeChange: (DebtPersonMode) -> Unit,\n    onPersonNameChange: (String) -> Unit,\n    onPersonPhoneChange: (String) -> Unit,\n    onPersonEmailChange: (String) -> Unit,\n    onPersonNotesChange: (String) -> Unit,\n    onPeopleQueryChange: (String) -> Unit,\n    onSelectPerson: (PersonId) -> Unit,""",
 )
 old_name_field = """                    OutlinedTextField(\n                        value = form.personName,\n                        onValueChange = onPersonNameChange,\n                        modifier = Modifier\n                            .fillMaxWidth()\n                            .testTag(\"create-person-name\"),\n                        label = { Text(\"اسم الشخص\") },\n                        singleLine = true,\n                        enabled = !isSaving,\n                        shape = MaterialTheme.shapes.medium,\n                    )\n"""
 new_name_fields = old_name_field + """                    OutlinedTextField(\n                        value = form.personPhone,\n                        onValueChange = onPersonPhoneChange,\n                        modifier = Modifier\n                            .fillMaxWidth()\n                            .testTag(\"create-person-phone\"),\n                        label = { Text(\"رقم الجوال — اختياري\") },\n                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),\n                        singleLine = true,\n                        enabled = !isSaving,\n                        shape = MaterialTheme.shapes.medium,\n                    )\n                    OutlinedTextField(\n                        value = form.personEmail,\n                        onValueChange = onPersonEmailChange,\n                        modifier = Modifier\n                            .fillMaxWidth()\n                            .testTag(\"create-person-email\"),\n                        label = { Text(\"البريد الإلكتروني — اختياري\") },\n                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),\n                        singleLine = true,\n                        enabled = !isSaving,\n                        shape = MaterialTheme.shapes.medium,\n                    )\n                    OutlinedTextField(\n                        value = form.personNotes,\n                        onValueChange = onPersonNotesChange,\n                        modifier = Modifier\n                            .fillMaxWidth()\n                            .testTag(\"create-person-notes\"),\n                        label = { Text(\"ملاحظات الشخص — اختياري\") },\n                        minLines = 2,\n                        maxLines = 3,\n                        enabled = !isSaving,\n                        shape = MaterialTheme.shapes.medium,\n                    )\n"""

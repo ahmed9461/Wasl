@@ -71,6 +71,7 @@ class ExistingPersonDebtUiInstrumentedTest {
             .assertIsDisplayed()
 
         composeRule.onNodeWithText("إضافة حساب").performClick()
+        composeRule.onNodeWithTag("create-entry-individual").performClick()
         composeRule.onNodeWithTag("create-person-mode-existing").performClick()
         waitForTag("existing-person-${firstAccount.person.id.value}")
         composeRule.onNodeWithTag("existing-person-${firstAccount.person.id.value}").performClick()
@@ -100,6 +101,7 @@ class ExistingPersonDebtUiInstrumentedTest {
 
     private fun createFirstDebt() {
         composeRule.onNodeWithText("إضافة حساب").performClick()
+        composeRule.onNodeWithTag("create-entry-individual").performClick()
         composeRule.onNodeWithTag("create-person-name").performTextInput("أحمد")
         composeRule.onNodeWithTag("create-debt-amount").performTextInput("100000")
         composeRule.onNodeWithTag("create-debt-save").performClick()

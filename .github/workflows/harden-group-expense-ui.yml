@@ -1,0 +1,37 @@
+name: Harden group expense UI
+
+on:
+  push:
+    branches:
+      - agent/group-expense-ui-hardening
+    paths:
+      - .github/workflows/harden-group-expense-ui.yml
+      - .github/scripts/harden_group_expense_ui.py
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/group-expense-ui-hardening
+          fetch-depth: 0
+      - name: Apply deterministic hardening
+        run: |
+          python .github/scripts/harden_group_expense_ui.py
+          git diff --check
+          grep -q 'إجمالي الحصص يتجاوز النطاق المالي المدعوم' app/src/main/java/com/wasl/app/HomeViewModel.kt
+          grep -q 'assertEquals(10, backup.schemaVersion)' app/src/androidTest/java/com/wasl/app/MvpAcceptanceInstrumentedTest.kt
+          grep -q 'performScrollTo' app/src/androidTest/java/com/wasl/app/GroupExpenseUiInstrumentedTest.kt
+      - name: Commit hardening and cleanup
+        run: |
+          rm .github/scripts/harden_group_expense_ui.py
+          rm .github/workflows/harden-group-expense-ui.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: harden group expense review boundaries'
+          git push origin HEAD:agent/group-expense-ui-hardening

@@ -1,0 +1,55 @@
+name: Fix legacy individual-flow UI tests
+
+on:
+  push:
+    branches:
+      - agent/group-expense-ui-hardening
+    paths:
+      - .github/workflows/fix-group-ui-legacy-tests.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/group-expense-ui-hardening
+          fetch-depth: 0
+
+      - name: Update legacy tests for create type picker
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          paths = [
+              Path("app/src/androidTest/java/com/wasl/app/ExistingPersonDebtUiInstrumentedTest.kt"),
+              Path("app/src/androidTest/java/com/wasl/app/PaymentFlowUiInstrumentedTest.kt"),
+          ]
+          needle = '        composeRule.onNodeWithText("إضافة حساب").performClick()\n'
+          replacement = needle + '        composeRule.onNodeWithTag("create-entry-individual").performClick()\n'
+
+          for path in paths:
+              text = path.read_text(encoding="utf-8")
+              count = text.count(needle)
+              if count != 2:
+                  raise SystemExit(f"{path}: expected exactly 2 legacy create clicks, found {count}")
+              updated = text.replace(needle, replacement)
+              if updated.count('create-entry-individual') < 2:
+                  raise SystemExit(f"{path}: individual path was not inserted twice")
+              path.write_text(updated, encoding="utf-8")
+          PY
+
+      - name: Commit test navigation fix and cleanup
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/fix-group-ui-legacy-tests.yml
+          git add app/src/androidTest/java/com/wasl/app/ExistingPersonDebtUiInstrumentedTest.kt
+          git add app/src/androidTest/java/com/wasl/app/PaymentFlowUiInstrumentedTest.kt
+          git commit -m "test: follow individual path through create picker"
+          git push origin HEAD:agent/group-expense-ui-hardening

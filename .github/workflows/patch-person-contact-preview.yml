@@ -1,0 +1,35 @@
+name: Patch person contact preview
+
+on:
+  push:
+    branches:
+      - agent/person-contact-details
+    paths:
+      - .github/scripts/patch_person_contact_preview.py
+      - .github/workflows/patch-person-contact-preview.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: agent/person-contact-details
+          fetch-depth: 0
+      - name: Apply preview wiring patch
+        run: python .github/scripts/patch_person_contact_preview.py
+      - name: Validate patch
+        run: |
+          git diff --check
+          grep -A6 'onPersonNameChange = {}' app/src/main/java/com/wasl/app/WaslApp.kt | grep -q 'onPersonPhoneChange = {}'
+      - name: Commit preview fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/com/wasl/app/WaslApp.kt
+          git commit -m 'fix: wire person contact callbacks in home preview'
+          git push origin HEAD:agent/person-contact-details

@@ -89,6 +89,7 @@ private val WaslShapes = Shapes(
 @Composable
 fun WaslTheme(
     appearance: AppAppearance? = null,
+    darkTheme: Boolean? = null,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -97,7 +98,7 @@ fun WaslTheme(
         PrivacyPreferences(context).appearance
     }
     val resolvedAppearance = appearance ?: inheritedAppearance ?: savedAppearance
-    val darkTheme = when (resolvedAppearance) {
+    val resolvedDarkTheme = darkTheme ?: when (resolvedAppearance) {
         AppAppearance.SYSTEM -> isSystemInDarkTheme()
         AppAppearance.DARK -> true
         AppAppearance.LIGHT -> false
@@ -105,7 +106,7 @@ fun WaslTheme(
 
     CompositionLocalProvider(LocalWaslAppearance provides resolvedAppearance) {
         MaterialTheme(
-            colorScheme = if (darkTheme) DarkColors else LightColors,
+            colorScheme = if (resolvedDarkTheme) DarkColors else LightColors,
             typography = WaslTypography,
             shapes = WaslShapes,
             content = content,

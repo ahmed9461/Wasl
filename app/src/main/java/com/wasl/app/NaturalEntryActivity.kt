@@ -1,13 +1,8 @@
 package com.wasl.app
 
-import android.app.Activity
-import android.content.Intent
 import android.os.Bundle
-import android.speech.RecognizerIntent
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -37,7 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -81,6 +75,7 @@ internal fun NaturalEntryScreen(
     parser: NaturalEntryParser,
     confirmationService: NaturalDebtConfirmationService,
     onBack: () -> Unit,
+    voiceBridge: VoiceDictationBridge? = null,
 ) {
     var text by remember { mutableStateOf("") }
     var draft by remember { mutableStateOf<NaturalEntryDraft?>(null) }
@@ -88,7 +83,7 @@ internal fun NaturalEntryScreen(
     var isSaving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
+    val activeVoiceBridge = voiceBridge ?: rememberAndroidVoiceDictationBridge()
 
     fun analyze(source: String = text) {
         draft = parser.parse(source)
@@ -131,22 +126,16 @@ internal fun NaturalEntryScreen(
         }
     }
 
-    val voiceLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult(),
-    ) { result ->
-        val accepted = result.resultCode == Activity.RESULT_OK
-        val recognized = recognizedSpeechText(
-            accepted = accepted,
-            candidates = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS),
-        )
-        when {
-            recognized != null -> {
-                text = recognized
-                analyze(recognized)
+    fun handleVoiceOutcome(outcome: VoiceDictationOutcome) {
+        when (outcome) {
+            is VoiceDictationOutcome.Recognized -> {
+                text = outcome.text
+                analyze(outcome.text)
             }
-            accepted -> {
+            VoiceDictationOutcome.Empty -> {
                 message = "لم يتم التعرف على كلام واضح. حاول مرة أخرى أو اكتب النص يدويًا."
             }
+            VoiceDictationOutcome.Cancelled -> Unit
         }
     }
 
@@ -218,22 +207,14 @@ internal fun NaturalEntryScreen(
                             .fillMaxWidth()
                             .testTag("natural-entry-voice"),
                         onClick = {
-                            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                putExtra(
-                                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
-                                )
-                                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar")
-                                putExtra(RecognizerIntent.EXTRA_PROMPT, "تحدث الآن")
-                                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                            }
-                            if (intent.resolveActivity(context.packageManager) == null) {
-                                message = "خدمة التعرف على الصوت غير متاحة على هذا الجهاز."
-                            } else {
-                                runCatching { voiceLauncher.launch(intent) }
-                                    .onFailure {
-                                        message = "تعذر فتح خدمة التعرف على الصوت. يمكنك الكتابة يدويًا."
-                                    }
+                            when (activeVoiceBridge.launch(::handleVoiceOutcome)) {
+                                VoiceDictationLaunchResult.LAUNCHED -> Unit
+                                VoiceDictationLaunchResult.UNAVAILABLE -> {
+                                    message = "خدمة التعرف على الصوت غير متاحة على هذا الجهاز."
+                                }
+                                VoiceDictationLaunchResult.FAILED -> {
+                                    message = "تعذر فتح خدمة التعرف على الصوت. يمكنك الكتابة يدويًا."
+                                }
                             }
                         },
                     ) {

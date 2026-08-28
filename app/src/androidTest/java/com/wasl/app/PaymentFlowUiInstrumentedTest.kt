@@ -83,6 +83,7 @@ class PaymentFlowUiInstrumentedTest {
         }
 
         composeRule.onNodeWithText("إضافة حساب").performClick()
+        composeRule.onNodeWithTag("create-entry-individual").performClick()
         composeRule.onNodeWithTag("create-person-name").performTextInput("أحمد")
         composeRule.onNodeWithTag("create-debt-amount").performTextInput("100000")
         composeRule.onNodeWithTag("create-debt-save").performClick()
@@ -183,6 +184,7 @@ class PaymentFlowUiInstrumentedTest {
         }
 
         composeRule.onNodeWithText("إضافة حساب").performClick()
+        composeRule.onNodeWithTag("create-entry-individual").performClick()
         composeRule.onNodeWithTag("create-person-name").performTextInput("عميل الإشعار")
         composeRule.onNodeWithTag("create-debt-amount").performTextInput("100000")
         composeRule.onNodeWithTag("create-debt-save").performClick()

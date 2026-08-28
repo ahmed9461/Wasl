@@ -238,11 +238,24 @@ fun WaslApp(
                                             backStack.add(SearchRoute)
                                         }
                                     },
-                                    onOpenCreate = homeViewModel::openCreateDialog,
+                                    onOpenCreate = homeViewModel::openCreateTypePicker,
+                                    onDismissCreateTypePicker = homeViewModel::dismissCreateTypePicker,
+                                    onCreateIndividual = homeViewModel::openCreateDialog,
+                                    onCreateGroupExpense = homeViewModel::openGroupExpenseDialog,
                                     onOpenAccount = { debtId ->
                                         backStack.add(AccountDetailsRoute(debtId.value))
                                     },
                                     onDismissCreate = homeViewModel::dismissCreateDialog,
+                                    onDismissGroupExpense = homeViewModel::dismissGroupExpenseDialog,
+                                    onToggleGroupParticipant = homeViewModel::toggleGroupParticipant,
+                                    onGroupParticipantAmountChange = homeViewModel::updateGroupParticipantAmount,
+                                    onGroupCurrencyChange = homeViewModel::updateGroupCurrency,
+                                    onGroupDirectionChange = homeViewModel::updateGroupDirection,
+                                    onGroupDescriptionChange = homeViewModel::updateGroupDescription,
+                                    onGroupNotesChange = homeViewModel::updateGroupNotes,
+                                    onReviewGroupExpense = homeViewModel::reviewGroupExpense,
+                                    onEditGroupExpenseReview = homeViewModel::editGroupExpenseReview,
+                                    onConfirmGroupExpense = homeViewModel::confirmGroupExpense,
                                     onPersonModeChange = homeViewModel::updatePersonMode,
                                     onPersonNameChange = homeViewModel::updatePersonName,
                                     onPeopleQueryChange = homeViewModel::updatePeopleQuery,
@@ -458,8 +471,21 @@ private fun WaslHomeScreen(
     onOpenToday: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenCreate: () -> Unit,
+    onDismissCreateTypePicker: () -> Unit,
+    onCreateIndividual: () -> Unit,
+    onCreateGroupExpense: () -> Unit,
     onOpenAccount: (com.wasl.domain.DebtId) -> Unit,
     onDismissCreate: () -> Unit,
+    onDismissGroupExpense: () -> Unit,
+    onToggleGroupParticipant: (PersonId) -> Unit,
+    onGroupParticipantAmountChange: (PersonId, String) -> Unit,
+    onGroupCurrencyChange: (CurrencyCode) -> Unit,
+    onGroupDirectionChange: (DebtDirection) -> Unit,
+    onGroupDescriptionChange: (String) -> Unit,
+    onGroupNotesChange: (String) -> Unit,
+    onReviewGroupExpense: () -> Unit,
+    onEditGroupExpenseReview: () -> Unit,
+    onConfirmGroupExpense: () -> Unit,
     onPersonModeChange: (DebtPersonMode) -> Unit,
     onPersonNameChange: (String) -> Unit,
     onPeopleQueryChange: (String) -> Unit,
@@ -644,6 +670,41 @@ private fun WaslHomeScreen(
                 }
             }
         }
+    }
+
+    if (state.isCreateTypePickerOpen) {
+        CreateEntryTypeDialog(
+            onDismiss = onDismissCreateTypePicker,
+            onCreateIndividual = onCreateIndividual,
+            onCreateGroupExpense = onCreateGroupExpense,
+        )
+    }
+
+    if (state.isGroupExpenseDialogOpen) {
+        GroupExpenseDialog(
+            form = state.groupExpenseForm,
+            step = state.groupExpenseStep,
+            preview = state.groupExpensePreview,
+            error = state.groupExpenseError,
+            isSaving = state.isSaving,
+            peopleQuery = state.peopleQuery,
+            selectablePeople = state.selectablePeople,
+            isPeopleLoading = state.isPeopleLoading,
+            peopleLoadError = state.peopleLoadError,
+            hasMorePeople = state.hasMorePeople,
+            onDismiss = onDismissGroupExpense,
+            onPeopleQueryChange = onPeopleQueryChange,
+            onToggleParticipant = onToggleGroupParticipant,
+            onParticipantAmountChange = onGroupParticipantAmountChange,
+            onCurrencyChange = onGroupCurrencyChange,
+            onDirectionChange = onGroupDirectionChange,
+            onDescriptionChange = onGroupDescriptionChange,
+            onNotesChange = onGroupNotesChange,
+            onRetryPeople = onRetryPeople,
+            onReview = onReviewGroupExpense,
+            onEditReview = onEditGroupExpenseReview,
+            onConfirm = onConfirmGroupExpense,
+        )
     }
 
     if (state.isCreateDialogOpen) {
@@ -1544,8 +1605,21 @@ private fun WaslHomeScreenPreview() {
                 onOpenToday = {},
                 onOpenSearch = {},
                 onOpenCreate = {},
+                onDismissCreateTypePicker = {},
+                onCreateIndividual = {},
+                onCreateGroupExpense = {},
                 onOpenAccount = {},
                 onDismissCreate = {},
+                onDismissGroupExpense = {},
+                onToggleGroupParticipant = {},
+                onGroupParticipantAmountChange = { _, _ -> },
+                onGroupCurrencyChange = {},
+                onGroupDirectionChange = {},
+                onGroupDescriptionChange = {},
+                onGroupNotesChange = {},
+                onReviewGroupExpense = {},
+                onEditGroupExpenseReview = {},
+                onConfirmGroupExpense = {},
                 onPersonModeChange = {},
                 onPersonNameChange = {},
                 onPeopleQueryChange = {},

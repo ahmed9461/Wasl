@@ -9,6 +9,7 @@ import com.wasl.app.data.local.dao.AttachmentDao
 import com.wasl.app.data.local.dao.AuditEventDao
 import com.wasl.app.data.local.dao.DebtDao
 import com.wasl.app.data.local.dao.DocumentIdentityDao
+import com.wasl.app.data.local.dao.GroupExpenseDao
 import com.wasl.app.data.local.dao.InstallmentPlanDao
 import com.wasl.app.data.local.dao.IssuedDocumentDao
 import com.wasl.app.data.local.dao.LedgerDao
@@ -20,6 +21,8 @@ import com.wasl.app.data.local.entity.AttachmentEntity
 import com.wasl.app.data.local.entity.AuditEventEntity
 import com.wasl.app.data.local.entity.DebtEntity
 import com.wasl.app.data.local.entity.DocumentIdentityEntity
+import com.wasl.app.data.local.entity.GroupExpenseEntity
+import com.wasl.app.data.local.entity.GroupExpenseShareEntity
 import com.wasl.app.data.local.entity.InstallmentEntity
 import com.wasl.app.data.local.entity.InstallmentPlanEntity
 import com.wasl.app.data.local.entity.IssuedDocumentEntity
@@ -44,9 +47,11 @@ import com.wasl.app.data.local.entity.ReminderEntity
         InstallmentEntity::class,
         PaymentClaimEntity::class,
         AttachmentEntity::class,
+        GroupExpenseEntity::class,
+        GroupExpenseShareEntity::class,
     ],
     views = [PaymentIssuedDocumentView::class],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 abstract class WaslDatabase : RoomDatabase() {
@@ -61,6 +66,7 @@ abstract class WaslDatabase : RoomDatabase() {
     abstract fun installmentPlanDao(): InstallmentPlanDao
     abstract fun paymentClaimDao(): PaymentClaimDao
     abstract fun attachmentDao(): AttachmentDao
+    abstract fun groupExpenseDao(): GroupExpenseDao
 
     companion object {
         const val DATABASE_NAME = "wasl.db"
@@ -372,6 +378,49 @@ abstract class WaslDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `group_expenses` (
+                        `id` TEXT NOT NULL,
+                        `command_id` TEXT NOT NULL,
+                        `direction` TEXT NOT NULL,
+                        `total_amount_minor` INTEGER NOT NULL,
+                        `currency_code` TEXT NOT NULL,
+                        `occurred_at` INTEGER NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `notes` TEXT,
+                        `created_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_group_expenses_command_id` ON `group_expenses` (`command_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_group_expenses_occurred_at` ON `group_expenses` (`occurred_at`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `group_expense_shares` (
+                        `id` TEXT NOT NULL,
+                        `group_expense_id` TEXT NOT NULL,
+                        `debt_id` TEXT NOT NULL,
+                        `person_id` TEXT NOT NULL,
+                        `amount_minor` INTEGER NOT NULL,
+                        `sequence_number` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`group_expense_id`) REFERENCES `group_expenses`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT,
+                        FOREIGN KEY(`debt_id`) REFERENCES `debts`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT,
+                        FOREIGN KEY(`person_id`) REFERENCES `persons`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_group_expense_shares_group_expense_id_sequence_number` ON `group_expense_shares` (`group_expense_id`, `sequence_number`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_group_expense_shares_group_expense_id_person_id` ON `group_expense_shares` (`group_expense_id`, `person_id`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_group_expense_shares_debt_id` ON `group_expense_shares` (`debt_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_group_expense_shares_person_id` ON `group_expense_shares` (`person_id`)")
+            }
+        }
+
         val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -381,6 +430,7 @@ abstract class WaslDatabase : RoomDatabase() {
             MIGRATION_6_7,
             MIGRATION_7_8,
             MIGRATION_8_9,
+            MIGRATION_9_10,
         )
 
         private fun createIssuedDocumentIndexes(

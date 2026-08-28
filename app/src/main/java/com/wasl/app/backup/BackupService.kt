@@ -488,12 +488,29 @@ class AndroidBackupService(
                 db,
                 """
                 SELECT COUNT(*) FROM group_expenses
-                WHERE direction NOT IN ('RECEIVABLE', 'PAYABLE')
+                WHERE trim(id) = ''
+                   OR trim(command_id) = ''
+                   OR direction NOT IN ('RECEIVABLE', 'PAYABLE')
+                   OR currency_code NOT GLOB '[A-Z][A-Z][A-Z]'
                    OR trim(description) = ''
+                   OR (notes IS NOT NULL AND trim(notes) = '')
                    OR created_at < occurred_at
                 """.trimIndent(),
             ) == 0L,
         ) { "النسخة تحتوي عملية جماعية ببيانات أساسية غير متسقة." }
+        require(
+            singleLong(
+                db,
+                """
+                SELECT COUNT(*) FROM group_expense_shares
+                WHERE trim(id) = ''
+                   OR trim(group_expense_id) = ''
+                   OR trim(debt_id) = ''
+                   OR trim(person_id) = ''
+                   OR sequence_number <= 0
+                """.trimIndent(),
+            ) == 0L,
+        ) { "النسخة تحتوي حصة جماعية ببيانات تعريف غير صالحة." }
         require(
             singleLong(
                 db,

@@ -56,13 +56,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Wasl-room-schema
-          path: app/schemas/com.wasl.app.data.local.WaslDatabase/10.json
+          path: app/schemas/com.wasl.app.data.local.WaslDatabase/11.json
           if-no-files-found: error
 
-      - name: Verify generated Room schema v10
+      - name: Verify generated Room schema v11
         run: |
-          SCHEMA="app/schemas/com.wasl.app.data.local.WaslDatabase/10.json"
-          test "$(jq -r '.database.version' "$SCHEMA")" = "10"
+          SCHEMA="app/schemas/com.wasl.app.data.local.WaslDatabase/11.json"
+          test "$(jq -r '.database.version' "$SCHEMA")" = "11"
           jq -e '.database.entities[] | select(.tableName == "payment_claims")' "$SCHEMA" >/dev/null
           jq -e '.database.entities[] | select(.tableName == "attachments")' "$SCHEMA" >/dev/null
           jq -e '.database.entities[] | select(.tableName == "attachments") | .indices[] | select(.name == "index_attachments_relative_path" and .unique == true)' "$SCHEMA" >/dev/null
@@ -72,6 +72,9 @@ jobs:
           jq -e '.database.entities[] | select(.tableName == "group_expense_shares") | .indices[] | select(.name == "index_group_expense_shares_group_expense_id_sequence_number" and .unique == true)' "$SCHEMA" >/dev/null
           jq -e '.database.entities[] | select(.tableName == "group_expense_shares") | .indices[] | select(.name == "index_group_expense_shares_group_expense_id_person_id" and .unique == true)' "$SCHEMA" >/dev/null
           jq -e '.database.entities[] | select(.tableName == "group_expense_shares") | .indices[] | select(.name == "index_group_expense_shares_debt_id" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "document_templates")' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "document_templates") | .indices[] | select(.name == "index_document_templates_is_default" and .unique == false)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "document_templates") | .indices[] | select(.name == "index_document_templates_style" and .unique == false)' "$SCHEMA" >/dev/null
 
   database-tests:
     needs: verify

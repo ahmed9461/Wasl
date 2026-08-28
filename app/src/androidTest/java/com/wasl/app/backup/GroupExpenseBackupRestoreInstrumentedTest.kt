@@ -105,7 +105,7 @@ class GroupExpenseBackupRestoreInstrumentedTest {
         } finally {
             password.fill('\u0000')
         }
-        assertEquals(10, backup.schemaVersion)
+        assertEquals(11, backup.schemaVersion)
 
         database.openHelper.writableDatabase.execSQL("DELETE FROM group_expense_shares")
         database.openHelper.writableDatabase.execSQL("DELETE FROM group_expenses")
@@ -117,7 +117,7 @@ class GroupExpenseBackupRestoreInstrumentedTest {
         } finally {
             restorePassword.fill('\u0000')
         }
-        assertEquals(10, restored.schemaVersion)
+        assertEquals(11, restored.schemaVersion)
 
         val after = assertNotNull(repository.getGroupExpense(GroupExpenseId("group-backup")))
         assertEquals(before, after)

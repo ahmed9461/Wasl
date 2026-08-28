@@ -7,6 +7,9 @@ import com.wasl.app.data.CommandConflictException
 import com.wasl.app.data.DebtLifecycleState
 import com.wasl.app.data.DebtReceiptSnapshot
 import com.wasl.app.data.DocumentIdentitySnapshot
+import com.wasl.app.data.DocumentTemplateCatalog
+import com.wasl.app.data.DocumentTemplateRecord
+import com.wasl.app.data.DocumentTemplateStyle
 import com.wasl.app.data.DocumentStatus
 import com.wasl.app.data.DocumentType
 import com.wasl.app.data.IssuedDocumentRecord
@@ -17,6 +20,7 @@ import com.wasl.app.data.StatementEntryType
 import com.wasl.app.data.StatementLedgerEntrySnapshot
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.data.local.entity.DocumentIdentityEntity
+import com.wasl.app.data.local.entity.DocumentTemplateEntity
 import com.wasl.app.data.local.entity.IssuedDocumentEntity
 import com.wasl.domain.DebtId
 import com.wasl.domain.PaymentRecorded
@@ -28,6 +32,7 @@ class RoomAccountDocumentStore(
     private val repository: WaslRepository,
 ) : AccountDocumentStore {
     private val identityDao = database.documentIdentityDao()
+    private val templateDao = database.documentTemplateDao()
     private val documentDao = database.issuedDocumentDao()
 
     override suspend fun prepareDebtReceipt(
@@ -52,6 +57,7 @@ class RoomAccountDocumentStore(
 
         val identity = command.toIdentitySnapshot()
         saveDefaultIdentity(command.identityId, command.issuedAt, identity)
+        val template = requireDocumentTemplate(command.templateId).toSnapshot()
         val issueYear = command.issuedAt.atZone(command.issueZoneId).year
         val sequence = documentDao.nextSequenceNumber(issueYear)
         val number = "DEBT-$issueYear-${sequence.toString().padStart(5, '0')}"
@@ -72,6 +78,7 @@ class RoomAccountDocumentStore(
             dueDate = account.ledger.header.dueDate,
             debtDescription = account.ledger.header.description,
             identity = identity,
+            template = template,
         )
         val entity = IssuedDocumentEntity(
             id = command.documentId,
@@ -121,6 +128,7 @@ class RoomAccountDocumentStore(
 
         val identity = command.toIdentitySnapshot()
         saveDefaultIdentity(command.identityId, command.issuedAt, identity)
+        val template = requireDocumentTemplate(command.templateId).toSnapshot()
         val issueYear = command.issuedAt.atZone(command.issueZoneId).year
         val sequence = documentDao.nextSequenceNumber(issueYear)
         val number = "STAT-$issueYear-${sequence.toString().padStart(5, '0')}"
@@ -160,6 +168,7 @@ class RoomAccountDocumentStore(
                 }
             },
             identity = identity,
+            template = template,
         )
         val entity = IssuedDocumentEntity(
             id = command.documentId,
@@ -300,6 +309,7 @@ class RoomAccountDocumentStore(
             persisted.identityId == command.identityId &&
             persisted.issuedAt == command.issuedAt.toEpochMilli() &&
             snapshot.issueZoneId == command.issueZoneId &&
+            snapshot.template.id == command.templateId &&
             snapshot.identity == command.toIdentitySnapshot()
         if (!matches) {
             throw CommandConflictException("Document command ID was reused with different debt receipt data.")
@@ -319,6 +329,7 @@ class RoomAccountDocumentStore(
             persisted.identityId == command.identityId &&
             persisted.issuedAt == command.issuedAt.toEpochMilli() &&
             snapshot.issueZoneId == command.issueZoneId &&
+            snapshot.template.id == command.templateId &&
             snapshot.identity == command.toIdentitySnapshot()
         if (!matches) {
             throw CommandConflictException("Document command ID was reused with different statement data.")
@@ -362,6 +373,46 @@ class RoomAccountDocumentStore(
         )
     }
 
+    private suspend fun ensureBuiltInDocumentTemplates() {
+        DocumentTemplateCatalog.builtIns.forEach { record ->
+            templateDao.insert(record.toEntity())
+        }
+    }
+
+    private suspend fun requireDocumentTemplate(id: String): DocumentTemplateRecord {
+        ensureBuiltInDocumentTemplates()
+        return templateDao.findById(id)?.toRecord()
+            ?: throw RecordNotFoundException("Document template $id was not found.")
+    }
+
+    private fun DocumentTemplateRecord.toEntity() = DocumentTemplateEntity(
+        id = id,
+        displayName = displayName,
+        style = style.name,
+        showPhone = showPhone,
+        showFooter = showFooter,
+        showBalance = showBalance,
+        showNotes = showNotes,
+        isDefault = isDefault,
+        isBuiltIn = isBuiltIn,
+        createdAt = createdAt.toEpochMilli(),
+        updatedAt = updatedAt.toEpochMilli(),
+    )
+
+    private fun DocumentTemplateEntity.toRecord() = DocumentTemplateRecord(
+        id = id,
+        displayName = displayName,
+        style = DocumentTemplateStyle.valueOf(style),
+        showPhone = showPhone,
+        showFooter = showFooter,
+        showBalance = showBalance,
+        showNotes = showNotes,
+        isDefault = isDefault,
+        isBuiltIn = isBuiltIn,
+        createdAt = Instant.ofEpochMilli(createdAt),
+        updatedAt = Instant.ofEpochMilli(updatedAt),
+    )
+
     private fun PrepareDebtReceiptCommand.toIdentitySnapshot() = DocumentIdentitySnapshot(
         displayName = issuerDisplayName.trim(),
         activityName = issuerActivityName.normalizedOptional(),
@@ -382,7 +433,7 @@ class RoomAccountDocumentStore(
     private fun String?.normalizedOptional(): String? = this?.trim()?.ifEmpty { null }
 
     private companion object {
-        const val DEBT_RECEIPT_SNAPSHOT_VERSION = 1
-        const val ACCOUNT_STATEMENT_SNAPSHOT_VERSION = 1
+        const val DEBT_RECEIPT_SNAPSHOT_VERSION = 2
+        const val ACCOUNT_STATEMENT_SNAPSHOT_VERSION = 2
     }
 }

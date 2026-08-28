@@ -86,7 +86,7 @@ class AttachmentBackupRestoreInstrumentedTest {
         assertEquals(AttachmentIntegrity.OK, before.integrity)
 
         val backup = createBackup("attachment-backup-secret")
-        assertEquals(10, backup.schemaVersion)
+        assertEquals(11, backup.schemaVersion)
         assertEquals(1, backup.documentCount)
 
         val liveFile = File(testFilesDir, before.relativePath)
@@ -96,7 +96,7 @@ class AttachmentBackupRestoreInstrumentedTest {
         assertEquals(null, attachmentStore.findById(before.id))
 
         val restored = restoreBackup(backup.bytes, "attachment-backup-secret")
-        assertEquals(10, restored.schemaVersion)
+        assertEquals(11, restored.schemaVersion)
         assertEquals(1, restored.documentCount)
 
         val after = assertNotNull(attachmentStore.findById(before.id))

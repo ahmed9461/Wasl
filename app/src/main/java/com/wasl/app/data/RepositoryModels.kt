@@ -94,6 +94,7 @@ sealed interface DocumentSnapshot {
     val personName: String
     val direction: DebtDirection
     val identity: DocumentIdentitySnapshot
+    val template: DocumentTemplateSnapshot
 }
 
 data class DebtReceiptSnapshot(
@@ -113,6 +114,7 @@ data class DebtReceiptSnapshot(
     val dueDate: LocalDate? = null,
     val debtDescription: String? = null,
     override val identity: DocumentIdentitySnapshot,
+    override val template: DocumentTemplateSnapshot = DocumentTemplateCatalog.defaultSnapshot,
 ) : DocumentSnapshot {
     init {
         require(version > 0) { "Snapshot version must be positive." }
@@ -147,6 +149,7 @@ data class PaymentReceiptSnapshot(
     val paymentNote: String? = null,
     val debtDescription: String? = null,
     override val identity: DocumentIdentitySnapshot,
+    override val template: DocumentTemplateSnapshot = DocumentTemplateCatalog.defaultSnapshot,
 ) : DocumentSnapshot {
     init {
         require(version > 0) { "Snapshot version must be positive." }
@@ -207,6 +210,7 @@ data class AccountStatementSnapshot(
     val debtDescription: String? = null,
     val entries: List<StatementLedgerEntrySnapshot>,
     override val identity: DocumentIdentitySnapshot,
+    override val template: DocumentTemplateSnapshot = DocumentTemplateCatalog.defaultSnapshot,
 ) : DocumentSnapshot {
     init {
         require(version > 0) { "Snapshot version must be positive." }
@@ -292,11 +296,13 @@ data class PrepareDebtReceiptCommand(
     val footerText: String? = null,
     val issuedAt: Instant,
     val issueZoneId: ZoneId,
+    val templateId: String = DocumentTemplateCatalog.DEFAULT_TEMPLATE_ID,
 ) {
     init {
         require(commandId.isNotBlank()) { "Document command ID cannot be blank." }
         require(documentId.isNotBlank()) { "Document ID cannot be blank." }
         require(identityId.isNotBlank()) { "Document identity ID cannot be blank." }
+        require(templateId.isNotBlank()) { "Document template ID cannot be blank." }
         require(issuerDisplayName.isNotBlank()) { "Issuer name cannot be blank." }
     }
 }
@@ -313,11 +319,13 @@ data class PreparePaymentReceiptCommand(
     val footerText: String? = null,
     val issuedAt: Instant,
     val issueZoneId: ZoneId,
+    val templateId: String = DocumentTemplateCatalog.DEFAULT_TEMPLATE_ID,
 ) {
     init {
         require(commandId.isNotBlank()) { "Document command ID cannot be blank." }
         require(documentId.isNotBlank()) { "Document ID cannot be blank." }
         require(identityId.isNotBlank()) { "Document identity ID cannot be blank." }
+        require(templateId.isNotBlank()) { "Document template ID cannot be blank." }
         require(issuerDisplayName.isNotBlank()) { "Issuer name cannot be blank." }
     }
 }
@@ -333,11 +341,13 @@ data class PrepareAccountStatementCommand(
     val footerText: String? = null,
     val issuedAt: Instant,
     val issueZoneId: ZoneId,
+    val templateId: String = DocumentTemplateCatalog.DEFAULT_TEMPLATE_ID,
 ) {
     init {
         require(commandId.isNotBlank()) { "Document command ID cannot be blank." }
         require(documentId.isNotBlank()) { "Document ID cannot be blank." }
         require(identityId.isNotBlank()) { "Document identity ID cannot be blank." }
+        require(templateId.isNotBlank()) { "Document template ID cannot be blank." }
         require(issuerDisplayName.isNotBlank()) { "Issuer name cannot be blank." }
     }
 }

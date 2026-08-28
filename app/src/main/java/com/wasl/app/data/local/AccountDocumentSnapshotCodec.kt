@@ -3,6 +3,9 @@ package com.wasl.app.data.local
 import com.wasl.app.data.AccountStatementSnapshot
 import com.wasl.app.data.DebtReceiptSnapshot
 import com.wasl.app.data.DocumentIdentitySnapshot
+import com.wasl.app.data.DocumentTemplateCatalog
+import com.wasl.app.data.DocumentTemplateSnapshot
+import com.wasl.app.data.DocumentTemplateStyle
 import com.wasl.app.data.DocumentSnapshot
 import com.wasl.app.data.DocumentType
 import com.wasl.app.data.StatementEntryType
@@ -61,6 +64,13 @@ internal object AccountDocumentSnapshotCodec {
         val issuerActivityName: String?,
         val issuerPhone: String?,
         val footerText: String?,
+        val templateId: String = DocumentTemplateCatalog.DEFAULT_TEMPLATE_ID,
+        val templateDisplayName: String = "عملي",
+        val templateStyle: String = DocumentTemplateStyle.BUSINESS.name,
+        val templateShowPhone: Boolean = true,
+        val templateShowFooter: Boolean = true,
+        val templateShowBalance: Boolean = true,
+        val templateShowNotes: Boolean = true,
     ) {
         fun toSnapshot(): DebtReceiptSnapshot {
             val currency = CurrencyCode.of(currencyCode)
@@ -81,6 +91,7 @@ internal object AccountDocumentSnapshotCodec {
                 dueDate = dueDate?.let(LocalDate::parse),
                 debtDescription = debtDescription,
                 identity = identity(),
+                template = template(),
             )
         }
 
@@ -89,6 +100,16 @@ internal object AccountDocumentSnapshotCodec {
             activityName = issuerActivityName,
             phone = issuerPhone,
             footerText = footerText,
+        )
+
+        private fun template() = DocumentTemplateSnapshot(
+            id = templateId,
+            displayName = templateDisplayName,
+            style = DocumentTemplateStyle.valueOf(templateStyle),
+            showPhone = templateShowPhone,
+            showFooter = templateShowFooter,
+            showBalance = templateShowBalance,
+            showNotes = templateShowNotes,
         )
 
         companion object {
@@ -113,6 +134,13 @@ internal object AccountDocumentSnapshotCodec {
                 issuerActivityName = snapshot.identity.activityName,
                 issuerPhone = snapshot.identity.phone,
                 footerText = snapshot.identity.footerText,
+                templateId = snapshot.template.id,
+                templateDisplayName = snapshot.template.displayName,
+                templateStyle = snapshot.template.style.name,
+                templateShowPhone = snapshot.template.showPhone,
+                templateShowFooter = snapshot.template.showFooter,
+                templateShowBalance = snapshot.template.showBalance,
+                templateShowNotes = snapshot.template.showNotes,
             )
         }
     }
@@ -140,6 +168,13 @@ internal object AccountDocumentSnapshotCodec {
         val issuerActivityName: String?,
         val issuerPhone: String?,
         val footerText: String?,
+        val templateId: String = DocumentTemplateCatalog.DEFAULT_TEMPLATE_ID,
+        val templateDisplayName: String = "عملي",
+        val templateStyle: String = DocumentTemplateStyle.BUSINESS.name,
+        val templateShowPhone: Boolean = true,
+        val templateShowFooter: Boolean = true,
+        val templateShowBalance: Boolean = true,
+        val templateShowNotes: Boolean = true,
     ) {
         fun toSnapshot(): AccountStatementSnapshot {
             val currency = CurrencyCode.of(currencyCode)
@@ -165,6 +200,15 @@ internal object AccountDocumentSnapshotCodec {
                     activityName = issuerActivityName,
                     phone = issuerPhone,
                     footerText = footerText,
+                ),
+                template = DocumentTemplateSnapshot(
+                    id = templateId,
+                    displayName = templateDisplayName,
+                    style = DocumentTemplateStyle.valueOf(templateStyle),
+                    showPhone = templateShowPhone,
+                    showFooter = templateShowFooter,
+                    showBalance = templateShowBalance,
+                    showNotes = templateShowNotes,
                 ),
             )
         }
@@ -192,6 +236,13 @@ internal object AccountDocumentSnapshotCodec {
                 issuerActivityName = snapshot.identity.activityName,
                 issuerPhone = snapshot.identity.phone,
                 footerText = snapshot.identity.footerText,
+                templateId = snapshot.template.id,
+                templateDisplayName = snapshot.template.displayName,
+                templateStyle = snapshot.template.style.name,
+                templateShowPhone = snapshot.template.showPhone,
+                templateShowFooter = snapshot.template.showFooter,
+                templateShowBalance = snapshot.template.showBalance,
+                templateShowNotes = snapshot.template.showNotes,
             )
         }
     }

@@ -666,7 +666,7 @@ class AndroidBackupService(
     )
 
     private companion object {
-        const val SCHEMA_VERSION = 10
+        const val SCHEMA_VERSION = 11
         const val MIN_PASSWORD_LENGTH = 8
         const val READY_STATUS = "READY"
         const val DOCUMENTS_DIRECTORY = "documents"
@@ -685,6 +685,7 @@ class AndroidBackupService(
             "reminders",
             "audit_events",
             "document_identities",
+            "document_templates",
             "issued_documents",
             "payment_promises",
             "payment_claims",
@@ -704,6 +705,7 @@ class AndroidBackupService(
             "reminders" to "SELECT * FROM reminders ORDER BY created_at, id",
             "audit_events" to "SELECT * FROM audit_events ORDER BY occurred_at, id",
             "document_identities" to "SELECT * FROM document_identities ORDER BY created_at, id",
+            "document_templates" to "SELECT * FROM document_templates ORDER BY is_default DESC, display_name, id",
             "issued_documents" to "SELECT * FROM issued_documents ORDER BY created_at, id",
             "payment_promises" to "SELECT * FROM payment_promises ORDER BY created_at, id",
             "payment_claims" to "SELECT * FROM payment_claims ORDER BY claimed_at, created_at, id",

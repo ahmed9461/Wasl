@@ -124,6 +124,9 @@ class MainActivity : FragmentActivity() {
                                 installmentsOpen = false; documentsOpen = false; documentsDebtId = null
                                 securityOpen = false; settingsOpen = true
                             },
+                            LocalOpenNaturalEntry provides {
+                                startActivity(Intent(this@MainActivity, NaturalEntryActivity::class.java))
+                            },
                             LocalOpenAccountDocuments provides { debtId ->
                                 installmentsOpen = false; settingsOpen = false; securityOpen = false
                                 documentsDebtId = debtId; documentsOpen = true

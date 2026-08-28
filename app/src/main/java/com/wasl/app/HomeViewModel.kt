@@ -357,29 +357,43 @@ class HomeViewModel(
             return
         }
 
-        val now = Instant.now(clock)
-        val shares = parsed.map { (participant, amount) ->
-            GroupExpenseShare(
-                id = GroupExpenseShareId(idFactory()),
-                debtId = DebtId(idFactory()),
-                personId = participant.person.id,
-                amount = amount,
+        val command = try {
+            val now = Instant.now(clock)
+            val shares = parsed.map { (participant, amount) ->
+                GroupExpenseShare(
+                    id = GroupExpenseShareId(idFactory()),
+                    debtId = DebtId(idFactory()),
+                    personId = participant.person.id,
+                    amount = amount,
+                )
+            }
+            val total = parsed.fold(Money.zero(form.currency)) { sum, (_, amount) ->
+                sum.plus(amount)
+            }
+            CreateGroupExpenseCommand(
+                commandId = idFactory(),
+                expense = GroupExpense(
+                    id = GroupExpenseId(idFactory()),
+                    direction = form.direction,
+                    totalAmount = total,
+                    occurredAt = now,
+                    description = description,
+                    notes = form.notes.trim().ifEmpty { null },
+                    shares = shares,
+                ),
+                createdAt = now,
             )
+        } catch (_: ArithmeticException) {
+            _uiState.update {
+                it.copy(groupExpenseError = "إجمالي الحصص يتجاوز النطاق المالي المدعوم.")
+            }
+            return
+        } catch (_: IllegalArgumentException) {
+            _uiState.update {
+                it.copy(groupExpenseError = "تعذر تجهيز العملية للمراجعة. راجع البيانات وأعد المحاولة.")
+            }
+            return
         }
-        val total = parsed.fold(Money.zero(form.currency)) { sum, (_, amount) -> sum.plus(amount) }
-        val command = CreateGroupExpenseCommand(
-            commandId = idFactory(),
-            expense = GroupExpense(
-                id = GroupExpenseId(idFactory()),
-                direction = form.direction,
-                totalAmount = total,
-                occurredAt = now,
-                description = description,
-                notes = form.notes.trim().ifEmpty { null },
-                shares = shares,
-            ),
-            createdAt = now,
-        )
         pendingGroupExpenseCommand = command
         _uiState.update {
             it.copy(

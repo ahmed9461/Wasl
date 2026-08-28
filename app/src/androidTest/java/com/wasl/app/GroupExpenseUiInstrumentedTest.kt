@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -71,8 +72,12 @@ class GroupExpenseUiInstrumentedTest {
         composeRule.onNodeWithTag("group-expense-editor").assertIsDisplayed()
         composeRule.onNodeWithTag("group-direction-stacked", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("group-currency-stacked", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithTag("group-participant-p1-stacked", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithTag("group-participant-p2-stacked", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("group-participant-p1-stacked", useUnmergedTree = true)
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag("group-participant-p2-stacked", useUnmergedTree = true)
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test
@@ -167,8 +172,12 @@ class GroupExpenseUiInstrumentedTest {
         }
 
         composeRule.onNodeWithTag("group-expense-review").assertIsDisplayed()
-        composeRule.onNodeWithTag("group-review-share-p1").assertIsDisplayed()
-        composeRule.onNodeWithTag("group-review-share-p2").assertIsDisplayed()
+        composeRule.onNodeWithTag("group-review-share-p1")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag("group-review-share-p2")
+            .performScrollTo()
+            .assertIsDisplayed()
         composeRule.runOnIdle {
             assertEquals(0, confirms)
             assertEquals(0, edits)

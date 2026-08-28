@@ -1,0 +1,42 @@
+name: Patch final home visual polish
+
+on:
+  push:
+    branches:
+      - agent/final-visual-polish-home-create
+    paths:
+      - '.github/scripts/patch_final_visual_home_create.py'
+      - '.github/workflows/patch-final-visual-home-create.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: agent/final-visual-polish-home-create
+          fetch-depth: 0
+
+      - name: Apply checked visual patch
+        run: python .github/scripts/patch_final_visual_home_create.py
+
+      - name: Validate patch
+        run: |
+          git diff --check
+          grep -q 'HomeHeroCard(accountCount = state.accounts.size)' app/src/main/java/com/wasl/app/WaslApp.kt
+          grep -q 'CreateEntryOption(' app/src/main/java/com/wasl/app/GroupExpenseDialogs.kt
+          grep -q 'home-add-entry' app/src/main/java/com/wasl/app/WaslApp.kt
+
+      - name: Commit visual polish and cleanup
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/scripts/patch_final_visual_home_create.py
+          rm -f .github/workflows/patch-final-visual-home-create.yml
+          git add -A
+          git commit -m 'feat: polish home and create entry hierarchy'
+          git push origin HEAD:agent/final-visual-polish-home-create

@@ -1,0 +1,41 @@
+name: Patch group expense v10 foundation
+
+on:
+  push:
+    branches:
+      - agent/group-expense-v10-foundation
+    paths:
+      - .github/workflows/patch-group-expense-v10.yml
+      - .github/scripts/patch_group_expense_v10.py
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/group-expense-v10-foundation
+          fetch-depth: 0
+
+      - name: Apply checked v10 patch
+        run: |
+          python .github/scripts/patch_group_expense_v10.py
+          git diff --check
+          grep -q 'version = 10' app/src/main/java/com/wasl/app/data/local/WaslDatabase.kt
+          grep -q 'MIGRATION_9_10' app/src/main/java/com/wasl/app/data/local/WaslDatabase.kt
+          grep -q 'createGroupExpense' app/src/main/java/com/wasl/app/data/local/RoomWaslRepository.kt
+          grep -q 'SCHEMA_VERSION = 10' app/src/main/java/com/wasl/app/backup/BackupService.kt
+          grep -q 'WaslDatabase/10.json' .github/workflows/ci.yml
+
+      - name: Commit foundation and cleanup
+        run: |
+          rm .github/scripts/patch_group_expense_v10.py
+          rm .github/workflows/patch-group-expense-v10.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: add atomic group expense foundation v10'
+          git push origin HEAD:agent/group-expense-v10-foundation

@@ -2,6 +2,7 @@ package com.wasl.app.document
 
 import android.content.Context
 import com.wasl.app.data.DocumentIdentityRecord
+import com.wasl.app.data.DocumentTemplateRecord
 import com.wasl.app.data.DocumentStatus
 import com.wasl.app.data.IssuedDocumentRecord
 import com.wasl.app.data.PaymentReceiptSnapshot
@@ -20,6 +21,10 @@ import kotlinx.coroutines.withContext
 
 interface PaymentReceiptService {
     suspend fun getDefaultIdentity(): DocumentIdentityRecord?
+
+    suspend fun getDocumentTemplates(): List<DocumentTemplateRecord> = emptyList()
+
+    suspend fun getDefaultTemplate(): DocumentTemplateRecord? = null
 
     suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord
 
@@ -67,6 +72,12 @@ class AndroidPaymentReceiptService(
 
     override suspend fun getDefaultIdentity(): DocumentIdentityRecord? =
         store.getDefaultDocumentIdentity()
+
+    override suspend fun getDocumentTemplates(): List<DocumentTemplateRecord> =
+        store.getDocumentTemplates()
+
+    override suspend fun getDefaultTemplate(): DocumentTemplateRecord? =
+        store.getDefaultDocumentTemplate()
 
     override suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord {
         val prepared = store.preparePaymentReceipt(command)

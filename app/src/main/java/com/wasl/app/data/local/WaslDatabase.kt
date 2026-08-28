@@ -9,6 +9,7 @@ import com.wasl.app.data.local.dao.AttachmentDao
 import com.wasl.app.data.local.dao.AuditEventDao
 import com.wasl.app.data.local.dao.DebtDao
 import com.wasl.app.data.local.dao.DocumentIdentityDao
+import com.wasl.app.data.local.dao.DocumentTemplateDao
 import com.wasl.app.data.local.dao.GroupExpenseDao
 import com.wasl.app.data.local.dao.InstallmentPlanDao
 import com.wasl.app.data.local.dao.IssuedDocumentDao
@@ -21,6 +22,7 @@ import com.wasl.app.data.local.entity.AttachmentEntity
 import com.wasl.app.data.local.entity.AuditEventEntity
 import com.wasl.app.data.local.entity.DebtEntity
 import com.wasl.app.data.local.entity.DocumentIdentityEntity
+import com.wasl.app.data.local.entity.DocumentTemplateEntity
 import com.wasl.app.data.local.entity.GroupExpenseEntity
 import com.wasl.app.data.local.entity.GroupExpenseShareEntity
 import com.wasl.app.data.local.entity.InstallmentEntity
@@ -41,6 +43,7 @@ import com.wasl.app.data.local.entity.ReminderEntity
         ReminderEntity::class,
         AuditEventEntity::class,
         DocumentIdentityEntity::class,
+        DocumentTemplateEntity::class,
         IssuedDocumentEntity::class,
         PaymentPromiseEntity::class,
         InstallmentPlanEntity::class,
@@ -51,7 +54,7 @@ import com.wasl.app.data.local.entity.ReminderEntity
         GroupExpenseShareEntity::class,
     ],
     views = [PaymentIssuedDocumentView::class],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 abstract class WaslDatabase : RoomDatabase() {
@@ -61,6 +64,7 @@ abstract class WaslDatabase : RoomDatabase() {
     abstract fun reminderDao(): ReminderDao
     abstract fun auditEventDao(): AuditEventDao
     abstract fun documentIdentityDao(): DocumentIdentityDao
+    abstract fun documentTemplateDao(): DocumentTemplateDao
     abstract fun issuedDocumentDao(): IssuedDocumentDao
     abstract fun paymentPromiseDao(): PaymentPromiseDao
     abstract fun installmentPlanDao(): InstallmentPlanDao
@@ -421,6 +425,37 @@ abstract class WaslDatabase : RoomDatabase() {
             }
         }
 
+
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `document_templates` (
+                        `id` TEXT NOT NULL,
+                        `display_name` TEXT NOT NULL,
+                        `style` TEXT NOT NULL,
+                        `show_phone` INTEGER NOT NULL,
+                        `show_footer` INTEGER NOT NULL,
+                        `show_balance` INTEGER NOT NULL,
+                        `show_notes` INTEGER NOT NULL,
+                        `is_default` INTEGER NOT NULL,
+                        `is_built_in` INTEGER NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        `updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_document_templates_is_default` ON `document_templates` (`is_default`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_document_templates_style` ON `document_templates` (`style`)")
+                db.execSQL("INSERT OR IGNORE INTO document_templates VALUES ('builtin-minimal','بسيط','MINIMAL',0,0,1,0,0,1,0,0)")
+                db.execSQL("INSERT OR IGNORE INTO document_templates VALUES ('builtin-business','عملي','BUSINESS',1,1,1,1,1,1,0,0)")
+                db.execSQL("INSERT OR IGNORE INTO document_templates VALUES ('builtin-classic','كلاسيكي','CLASSIC',1,1,1,1,0,1,0,0)")
+                db.execSQL("INSERT OR IGNORE INTO document_templates VALUES ('builtin-compact','مضغوط','COMPACT',0,0,1,0,0,1,0,0)")
+                db.execSQL("INSERT OR IGNORE INTO document_templates VALUES ('builtin-modern','حديث','MODERN',1,1,1,1,0,1,0,0)")
+            }
+        }
+
         val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -431,6 +466,7 @@ abstract class WaslDatabase : RoomDatabase() {
             MIGRATION_7_8,
             MIGRATION_8_9,
             MIGRATION_9_10,
+            MIGRATION_10_11,
         )
 
         private fun createIssuedDocumentIndexes(

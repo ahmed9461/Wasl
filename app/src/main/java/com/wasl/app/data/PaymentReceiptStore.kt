@@ -5,6 +5,10 @@ import java.time.Instant
 interface PaymentReceiptStore {
     suspend fun getDefaultDocumentIdentity(): DocumentIdentityRecord?
 
+    suspend fun getDocumentTemplates(): List<DocumentTemplateRecord> = emptyList()
+
+    suspend fun getDefaultDocumentTemplate(): DocumentTemplateRecord? = null
+
     suspend fun preparePaymentReceipt(
         command: PreparePaymentReceiptCommand,
     ): IssuedDocumentRecord

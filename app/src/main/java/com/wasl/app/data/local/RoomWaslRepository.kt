@@ -15,6 +15,10 @@ import com.wasl.app.data.LocalSearchQuery
 import com.wasl.app.data.PersonRecord
 import com.wasl.app.data.DocumentIdentityRecord
 import com.wasl.app.data.DocumentIdentitySnapshot
+import com.wasl.app.data.DocumentTemplateCatalog
+import com.wasl.app.data.DocumentTemplateRecord
+import com.wasl.app.data.DocumentTemplateSnapshot
+import com.wasl.app.data.DocumentTemplateStyle
 import com.wasl.app.data.DocumentStatus
 import com.wasl.app.data.DocumentType
 import com.wasl.app.data.IssuedDocumentRecord
@@ -42,6 +46,7 @@ import com.wasl.app.data.local.entity.LedgerEntryEntity
 import com.wasl.app.data.local.entity.PersonEntity
 import com.wasl.app.data.local.entity.ReminderEntity
 import com.wasl.app.data.local.entity.DocumentIdentityEntity
+import com.wasl.app.data.local.entity.DocumentTemplateEntity
 import com.wasl.app.data.local.entity.IssuedDocumentEntity
 import com.wasl.domain.CurrencyCode
 import com.wasl.domain.DebtDirection
@@ -75,6 +80,7 @@ class RoomWaslRepository(
     private val reminderDao = database.reminderDao()
     private val auditEventDao = database.auditEventDao()
     private val documentIdentityDao = database.documentIdentityDao()
+    private val documentTemplateDao = database.documentTemplateDao()
     private val issuedDocumentDao = database.issuedDocumentDao()
     private val groupExpenseDao = database.groupExpenseDao()
 
@@ -280,6 +286,16 @@ class RoomWaslRepository(
     override suspend fun getDefaultDocumentIdentity(): DocumentIdentityRecord? =
         documentIdentityDao.findDefault()?.toRecord()
 
+    override suspend fun getDocumentTemplates(): List<DocumentTemplateRecord> {
+        ensureBuiltInDocumentTemplates()
+        return documentTemplateDao.findAll().map { it.toRecord() }
+    }
+
+    override suspend fun getDefaultDocumentTemplate(): DocumentTemplateRecord? {
+        ensureBuiltInDocumentTemplates()
+        return documentTemplateDao.findDefault()?.toRecord()
+    }
+
     override suspend fun preparePaymentReceipt(
         command: PreparePaymentReceiptCommand,
     ): IssuedDocumentRecord = database.withTransaction {
@@ -323,6 +339,7 @@ class RoomWaslRepository(
             footerText = command.footerText.normalizedOptional(),
         )
         saveDefaultIdentity(command, normalizedIdentity)
+        val template = requireDocumentTemplate(command.templateId).toSnapshot()
 
         val issueYear = command.issuedAt.atZone(command.issueZoneId).year
         val sequenceNumber = issuedDocumentDao.nextSequenceNumber(issueYear)
@@ -354,6 +371,7 @@ class RoomWaslRepository(
             paymentNote = payment.note,
             debtDescription = account.ledger.header.description,
             identity = normalizedIdentity,
+            template = template,
         )
         val entity = IssuedDocumentEntity(
             id = command.documentId,
@@ -1087,6 +1105,7 @@ class RoomWaslRepository(
             persisted.identityId == command.identityId &&
             persisted.issuedAt == command.issuedAt.toEpochMilli() &&
             snapshot.issueZoneId == command.issueZoneId &&
+            snapshot.template.id == command.templateId &&
             snapshot.identity == DocumentIdentitySnapshot(
                 displayName = command.issuerDisplayName.trim(),
                 activityName = command.issuerActivityName.normalizedOptional(),
@@ -1130,6 +1149,46 @@ class RoomWaslRepository(
             updatedAt = Instant.ofEpochMilli(updatedAt),
         )
     }
+
+    private suspend fun ensureBuiltInDocumentTemplates() {
+        DocumentTemplateCatalog.builtIns.forEach { record ->
+            documentTemplateDao.insert(record.toEntity())
+        }
+    }
+
+    private suspend fun requireDocumentTemplate(id: String): DocumentTemplateRecord {
+        ensureBuiltInDocumentTemplates()
+        return documentTemplateDao.findById(id)?.toRecord()
+            ?: throw RecordNotFoundException("Document template $id was not found.")
+    }
+
+    private fun DocumentTemplateRecord.toEntity() = DocumentTemplateEntity(
+        id = id,
+        displayName = displayName,
+        style = style.name,
+        showPhone = showPhone,
+        showFooter = showFooter,
+        showBalance = showBalance,
+        showNotes = showNotes,
+        isDefault = isDefault,
+        isBuiltIn = isBuiltIn,
+        createdAt = createdAt.toEpochMilli(),
+        updatedAt = updatedAt.toEpochMilli(),
+    )
+
+    private fun DocumentTemplateEntity.toRecord() = DocumentTemplateRecord(
+        id = id,
+        displayName = displayName,
+        style = DocumentTemplateStyle.valueOf(style),
+        showPhone = showPhone,
+        showFooter = showFooter,
+        showBalance = showBalance,
+        showNotes = showNotes,
+        isDefault = isDefault,
+        isBuiltIn = isBuiltIn,
+        createdAt = Instant.ofEpochMilli(createdAt),
+        updatedAt = Instant.ofEpochMilli(updatedAt),
+    )
 
     private fun DocumentIdentityEntity.toRecord(): DocumentIdentityRecord =
         DocumentIdentityRecord(
@@ -1377,6 +1436,6 @@ class RoomWaslRepository(
 
     private companion object {
         const val FAILURE_NOTIFICATIONS_DISABLED = "NOTIFICATIONS_DISABLED"
-        const val PAYMENT_RECEIPT_SNAPSHOT_VERSION = 1
+        const val PAYMENT_RECEIPT_SNAPSHOT_VERSION = 2
     }
 }

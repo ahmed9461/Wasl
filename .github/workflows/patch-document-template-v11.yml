@@ -46,6 +46,10 @@ jobs:
           pos = text.index(needle, section)
           text = text[:pos] + text[pos:].replace('replace_once(p,', 'replace_first_of_two(p,', 1)
 
+          text = text.replace(
+              'val ALL_MIGRATIONS = arrayOf(',
+              'val ALL_MIGRATIONS: Array<Migration> = arrayOf(',
+          )
           path.write_text(text, encoding='utf-8')
           PY
           python .github/scripts/patch_document_template_v11.py

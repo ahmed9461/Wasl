@@ -1,74 +1,69 @@
 # سياق مشروع وَصل
 
-آخر تحديث: 2026-08-27
+آخر تحديث: 2026-08-28
 
 ## الهوية
 
-- الاسم العربي: وَصل
-- الاسم الإنجليزي: Wasl
-- الشعار: كل حساب له وصل
-- المستودع الرسمي: `ahmed9461/Wasl`
+- الاسم: **وَصل — Wasl**
+- الشعار: **كل حساب له وصل**
+- المستودع: `ahmed9461/Wasl`
 - Application ID: `com.wasl.app`
-- الفرع النشط: `agent/bootstrap-wasl-foundation`
-- Pull Request: `#1` إلى `main` وما زال Draft.
+- فرع التطوير الرئيسي: `agent/bootstrap-wasl-foundation`
+- PR #1 إلى `main`: Draft ومفتوح.
 
 ## الهدف
 
-وَصل مساعد مالي شخصي Local-first يتابع دورة الدين والحق والالتزام من الإنشاء حتى الإغلاق، مع الدفعات، الاستحقاقات، المتابعة، الأقساط، المستندات، المرفقات، النسخ الاحتياطي والحماية المحلية.
+وَصل مساعد مالي شخصي Local-first لإدارة الحقوق والالتزامات من الإنشاء حتى الإغلاق: حسابات الأشخاص، الدفعات، الاستحقاقات، المتابعة، الوعود، الأقساط، المطالبات، المستندات، المرفقات، النسخ الاحتياطي والحماية المحلية.
 
-المستخدم المستهدف شخص عادي يريد معرفة ما له وما عليه دون التعامل مع برنامج محاسبة معقد. العربية وRTL تجربة أساسية وليستا ترجمة جانبية.
-
-## حدود المنتج
-
-وَصل ليس بنكًا أو محفظة أو بوابة دفع أو ERP أو منصة تحصيل أو جهة توثيق قانوني. تسجيل السداد يوثق واقعة داخل التطبيق ولا ينفذ تحويل أموال. المستندات والمرفقات سجلات شخصية ولا تمثل ضمانًا قانونيًا تلقائيًا.
+وَصل ليس بنكًا أو محفظة أو بوابة دفع أو ERP. تسجيل السداد يوثق واقعة داخل التطبيق ولا يحول أموالًا، والمستندات سجلات شخصية وليست ضمانًا قانونيًا تلقائيًا.
 
 ## المرحلة الحالية
 
-المشروع تجاوز MVP المالي الأساسي ودخل مرحلة **Post-MVP feature completion + stabilization**.
+المشروع أغلق المراحل الوظيفية الرئيسية ودخل **Finishing / final polish**.
 
-الحالة الوظيفية الحالية تشمل:
+الرأس الموثق الحالي: `e09efee71cea4b1734afe50a025c2a3218ec2dd5`.
 
-- Android أصلي بـKotlin وJetpack Compose وMaterial 3 وNavigation 3.
-- وحدة `core:domain` مستقلة عن Android لمنطق المال والديون والأقساط.
-- `Money` بوحدات Minor Units من نوع `Long`؛ لا Floating Point في الحساب المالي.
+Android CI #967 / run `33137676461` على هذا الرأس:
+
+- Unit/Lint/Debug/Room v10 ✅
+- Android instrumentation **123/123** ✅
+- 0 failures / 0 errors / 0 skipped
+- PDF evidence للأنواع الثلاثة ✅
+
+## الوظائف الحالية
+
+- Android أصلي: Kotlin + Jetpack Compose + Material 3 + Navigation 3.
+- `core:domain` مستقل عن Android للمال والLedger والقواعد الأساسية.
+- `Money` بMinor Units من `Long` فقط.
 - Ledger append-only مع Payment وPayment Reversal وIdempotency.
-- إنشاء أشخاص وحسابات متعددة للشخص نفسه دون تكرار Person.
-- الاستحقاقات وتعديلها وإلغاؤها مع Audit.
-- Today للاستحقاقات والوعود والأقساط والمطالبات ذات المتابعة.
-- WorkManager وExact Alarm اختياري وتذكيرات متابعة عامة مستقلة عن `due_date`.
-- إجراءات إشعار آمنة: دفع جزء / تم السداد / ذكرني لاحقًا، دون Ledger write من Notification callback.
-- Payment Promises وخطط أقساط مع Revision history وتقدم مشتق من Ledger.
-- بحث محلي ومتقدم في الأشخاص والحسابات والعمليات والمستندات والمبالغ والتواريخ.
-- مستندات مالية `PAYMENT_RECEIPT`, `DEBT_RECEIPT`, `ACCOUNT_STATEMENT` من Snapshots ثابتة مع PDF وSHA-256.
-- Backup/Restore تطبيقي مشفر يشمل البيانات وملفات PDF والمرفقات.
-- App Lock عبر BiometricPrompt / Device Credential وسياسات Privacy و`FLAG_SECURE`.
-- «طالبني» / Payment Claims محفوظة تاريخيًا ومستقلة عن Ledger.
-- خزنة مرفقات محلية تربط الملفات بالدين وبحركة اختيارية مع SHA-256 وفحص سلامة.
-- صفحة شخص موحدة تجمع حساباته وتعرض Timeline دون خلط العملات.
-- قوالب رسائل سداد قابلة للنسخ/المشاركة دون إرسال تلقائي.
-- إحصاءات موضوعية دون تصنيف الأشخاص.
-- إدخال دين باللغة الطبيعية مع Parse → Draft → Preview/Confirmation → Save.
-- **إملاء صوتي أساسي منفذ** عبر Android `RecognizerIntent`: النتيجة تتحول إلى نص ثم تدخل نفس `NaturalEntryParser` وتعرض Preview قبل أي حفظ.
+- أشخاص وحسابات متعددة للشخص.
+- RECEIVABLE / PAYABLE مع YER/SAR/USD دون خلط العملات.
+- Due dates + Audit + Today.
+- WorkManager + Exact Alarm اختياري + General Reminders.
+- Payment Promises وInstallment Plans/Revisions وPayment Claims.
+- Basic/Advanced Search، Person Timeline، Statistics، Documents Hub، Account Details timeline.
+- PDF: `PAYMENT_RECEIPT`, `DEBT_RECEIPT`, `ACCOUNT_STATEMENT` من immutable snapshots مع hash/page count.
+- Attachments/evidence vault مع internal storage وSHA-256.
+- Backup/Restore مشفر مع staging/FK/path/hash/invariant validation وrollback.
+- App Lock عبر BiometricPrompt / Device Credential، `FLAG_SECURE` وسياسة خصوصية الإشعارات.
+- Natural Entry: Parse → Preview → explicit Confirmation → Save.
+- Voice Dictation testable adapter وحالات recognized/empty/cancelled/unavailable/launch failure.
+- Group Expense v10: العملية الأصلية محفوظة كسياق، وكل حصة Debt عادي، مع atomic transaction وreplay/rollback وPreview/Confirmation في UI.
+- Adaptive/Accessibility hardening وRTL/Bidi isolation على الشاشات الرئيسية مع large-font tests.
 
 ## قاعدة البيانات
 
-- Room Schema الحالي: **v9**.
-- سلسلة Migrations: `v1→v2→v3→v4→v5→v6→v7→v8→v9`.
+- Room Schema الحالي: **v10**.
+- سلسلة Migrations: `v1→v2→v3→v4→v5→v6→v7→v8→v9→v10`.
 - لا `fallbackToDestructiveMigration` في Production.
-- v8 أضافت `payment_claims`.
-- v9 أضافت `attachments`.
-- Backup contract الحالي يستخدم Schema v9 ويشمل 12 جدولًا، إضافة إلى ملفات المستندات والمرفقات.
+- v8: `payment_claims`.
+- v9: `attachments`.
+- v10: `group_expenses` + `group_expense_shares`.
+- Backup contract v10 يشمل **14 جدولًا** بالإضافة إلى ملفات PDF والمرفقات.
 
-التفاصيل في `docs/DATABASE_SCHEMA.md`.
+الملف المرجعي: `app/schemas/com.wasl.app.data.local.WaslDatabase/10.json`.
 
-## بنية المستودع
-
-- `app`: Android entry point، Compose UI، ViewModels، Navigation، Room، Repositories/Stores، Reminders، PDF، Backup، Privacy واختبارات Android.
-- `core:domain`: Money، Debt ledger، Balance summaries، Installment schedule وقواعد مالية خالية من Android.
-- `docs`: عقود التصميم والهندسة والحالة والمراحل.
-- `.github/workflows/ci.yml`: بوابة البناء والاختبارات وLint وRoom schema وAndroid instrumentation وأدلة PDF.
-
-## Stack المعتمد
+## Stack
 
 | المجال | القرار |
 |---|---|
@@ -76,49 +71,35 @@
 | اللغة | Kotlin |
 | UI | Jetpack Compose + Material 3 |
 | المعمارية | UI / Domain / Data مع UDF وRepositories/Stores |
-| المنطق المالي | `core:domain` JVM مستقل |
-| قاعدة البيانات | Room 2.8.4 + KSP، Schema v9 |
+| قاعدة البيانات | Room 2.8.4 + KSP، Schema v10 |
 | التنقل | Navigation 3 |
-| الأعمال المؤجلة | WorkManager مع Unique Work |
-| التنبيه القوي | Exact Alarm اختياري بطلب مستخدم صريح مع fallback |
+| الأعمال المؤجلة | WorkManager |
+| التنبيه القوي | Exact Alarm اختياري مع fallback |
 | المصادقة المحلية | BiometricPrompt + Device Credential |
-| الإدخال الصوتي | Android RecognizerIntent → نص → Natural Parser → Preview |
+| الإدخال الصوتي | Voice bridge → Natural Parser → Preview/Confirmation |
 | PDF | Android PdfDocument/Text layout من Snapshots ثابتة |
 | البناء | AGP 9.3.1، Gradle 9.5.0، JDK 17 |
 | API | min 26، compile/target 36 |
 
 ## الثوابت المعمارية
 
-1. Ledger هو مصدر الحقيقة المالي ويظل append-only.
-2. التصحيح المالي بالعكس لا بالحذف أو تعديل الحدث الأصلي.
-3. Promise وClaim وReminder وInstallment Plan ليست Ledger ولا تغيّر الرصيد تلقائيًا.
-4. لا تجمع العملات المختلفة في إجمالي مالي واحد.
-5. PDF والتقارير تستهلك Read models/Snapshots ولا تعيد حساب المال بقواعد موازية.
-6. أي إجراء مالي قادم من إشعار أو إدخال طبيعي أو صوتي يجب أن يمر بمراجعة وتأكيد داخل التطبيق.
-7. الملفات المهمة تخزن داخل مساحة التطبيق ويثبت سلامتها بـSHA-256.
-8. أي Schema جديد يجب أن يأتي مع Migration واختبارات وBackup/Restore update في نفس المرحلة.
+1. Ledger مصدر الحقيقة المالي وappend-only.
+2. التصحيح بالعكس، لا حذف/تعديل الحدث الأصلي.
+3. Promise/Claim/Reminder/Installment Plan ليست Ledger.
+4. لا تجمع العملات المختلفة في إجمالي واحد.
+5. Group Expense ليست Ledger موازية؛ shares مرتبطة بديون وَصل العادية.
+6. PDF والتقارير تعتمد Snapshots/Read models ولا تعيد تعريف قواعد المال.
+7. Notification/Natural/Voice لا تنفذ كتابة مالية قبل مراجعة وتأكيد داخل التطبيق.
+8. الملفات المهمة داخل مساحة التطبيق وتفحص بـSHA-256.
+9. أي Schema جديد يأتي مع Migration + exported schema + tests + Backup/Restore update.
+10. لا secrets/signing keys في Git.
 
-## حالة التحقق في 27 أغسطس 2026
+## ما تبقى
 
-الرأس السابق قبل دفعة إصلاح التوثيق/CI كان `94ce0adf3ff64431a261042ebb62e815b42f13f1`.
+1. مزامنة التوثيق الحي.
+2. جولة visual polish للتطبيق على دفعات صغيرة مع الحفاظ على semantics/testTags والسلوك.
+3. جولة PDF polish مع بقاء immutable snapshots وCI evidence.
+4. Acceptance gate كاملة بعد التلميع.
+5. Release signing/distribution في مرحلة منفصلة؛ keystore وكلمات المرور خارج Git.
 
-- Job `verify` في Android CI #851 نجح: Unit tests + Lint + Debug APK + Room Schema v9 verification.
-- Job `database-tests` توقف قبل تشغيل الاختبارات بسبب أربعة imports قديمة لـ`androidx.compose.ui.test.onNode` في ملفات AndroidTest.
-- تم إعداد إصلاح يزيل هذه imports فقط؛ الاستدعاءات الصحيحة تبقى `composeRule.onNode(...)`.
-- لا تعتبر Claims/Attachments أو الرأس الحالي مغلقًا نهائيًا حتى تمر بوابة Android instrumentation كاملة على الرأس النهائي.
-
-## ما تبقى بعد استعادة CI الأخضر
-
-الأولوية التالية:
-
-1. إغلاق Claims وAttachments رسميًا بعد نجاح البوابة الكاملة وتوثيق Evidence.
-2. توسيع Adaptive UI وAccessibility: Compact/Medium/Expanded، Font scale، semantics، focus وtouch targets.
-3. تثبيت Statistics وNatural Text/Voice Entry كمرحلة واحدة باختبارات شاملة.
-4. **تقوية الإملاء الصوتي**: فصل Adapter قابل للاختبار، حالات عدم توفر recognizer/الإلغاء/النتيجة الفارغة، واختبار أن الصوت لا يحفظ قبل Preview/Confirmation.
-5. المصاريف/الديون الجماعية وفق المواصفة الأساسية.
-6. جولة تحسين UI/PDF النهائية واختبار قبول شامل Offline.
-7. Release signing ونسخة توزيع نهائية.
-
-## التشغيل والأسرار
-
-استخدم JDK 17 وAndroid SDK 36. لا توجد خدمة خلفية لازمة للوظائف الأساسية الحالية. لا تلتزم Signing keystore أو كلمات مرور أو أسرار في Git؛ توقيع Release يستخدم تخزينًا آمنًا/GitHub Secrets عند مرحلة الإصدار.
+فرع مرحلة الإنهاء الحالي: `agent/final-polish-doc-sync` من الرأس Verified `e09efee...`.

@@ -1,192 +1,156 @@
 # تصميم قاعدة البيانات
 
-آخر تحديث: 2026-08-27
+آخر تحديث: 2026-08-28
 
-الحالة: **Room Schema v9 منفذة في الكود؛ آخر `verify` أكد توليد v9، وتنتظر البوابة الكاملة Android instrumentation بعد إصلاح imports الاختبارات.**
+الحالة: **Room Schema v10 منفذة ومثبتة ببوابة Android CI كاملة على الرأس الحالي.**
 
 - المحرك: Room 2.8.4 فوق SQLite، وتوليد الكود عبر KSP.
-- ملف Schema المرجعي الحالي: `app/schemas/com.wasl.app.data.local.WaslDatabase/9.json`.
-- المبدأ: Ledger هو مصدر الحقيقة المالي؛ Projections والمتابعة والمستندات لا تستبدله.
+- Schema المرجعية: `app/schemas/com.wasl.app.data.local.WaslDatabase/10.json`.
+- التاريخ الملتزم: `1.json → 10.json`.
 - لا `fallbackToDestructiveMigration` في Production.
+- Ledger هو مصدر الحقيقة المالي؛ المتابعة والمستندات والعمليات الجماعية لا تستبدله.
 
 ## قواعد عامة
 
 - IDs نصية ثابتة.
 - `Instant` يخزن epoch milliseconds في INTEGER.
 - `LocalDate` يخزن epoch day في INTEGER.
-- الأموال تخزن `amount_minor` INTEGER و`currency_code` TEXT.
-- Foreign Keys مفعلة حيث توجد علاقات صريحة.
+- الأموال: `amount_minor` INTEGER + `currency_code` TEXT.
+- لا Float/Double للأموال.
 - لا Cascade delete لسجل مالي.
-- كل Migration تصدر Schema JSON وتملك اختبارًا.
-- PDF والمرفقات لا تخزن BLOB داخل Room؛ الملفات في Internal storage وMetadata/Hash في Room.
+- كل Migration تأتي مع exported schema واختبار.
+- PDF والمرفقات لا تخزن BLOB داخل Room؛ الملفات في internal storage وmetadata/hash في Room.
 - Android Auto Backup ليس مسار النسخ المعتمد؛ Backup التطبيق منطقي ومشفر.
 
-## الجداول الحالية
+## الجداول الحالية — 14 جدولًا
 
 ### `persons`
 
-- `id` TEXT PK NOT NULL.
-- `display_name` TEXT NOT NULL.
-- `phone`, `email`, `photo_uri`, `notes` nullable.
-- `created_at`, `updated_at` INTEGER NOT NULL.
-- `archived_at` nullable.
+هوية الشخص وبيانات العرض: `id`, `display_name`, بيانات اتصال/ملاحظات اختيارية، timestamps و`archived_at`.
 
-الاسم ليس مفتاحًا ماليًا؛ الربط الحقيقي بـ`person_id`.
+الاسم ليس مفتاحًا ماليًا؛ العلاقات تستخدم `person_id`.
 
 ### `debts`
 
-- `id` TEXT PK.
+الحساب المالي الأساسي:
+
+- `id` PK.
 - `person_id` FK→`persons.id` RESTRICT.
 - `direction`.
 - `original_amount_minor`, `currency_code`.
-- `opened_at`.
-- `due_date_epoch_day` nullable.
-- `description`, `notes` nullable.
-- `lifecycle_state`.
-- `created_at`, `updated_at`, `closed_at`.
+- `opened_at`, `due_date_epoch_day` nullable.
+- `description`, `notes`.
+- lifecycle/timestamps.
 
-`closed_at` Projection مشتقة من Ledger ولا تمثل رصيدًا موازيًا.
+الرصيد والحالة مشتقان من Ledger.
 
 ### `ledger_entries`
 
-- `id` TEXT PK.
+- `id` PK.
 - `command_id` UNIQUE.
 - `debt_id` FK→`debts.id` RESTRICT.
 - `kind`: `PAYMENT` / `PAYMENT_REVERSAL`.
-- المبلغ/العملة/الأوقات حسب نوع الحدث.
+- المبلغ والعملة والأوقات.
 - `reverses_entry_id` nullable FK→`ledger_entries.id` RESTRICT.
-- `sequence_number` ضمن تسلسل الحساب.
+- `sequence_number`.
 
-الثوابت:
-
-- الدفع لا يتجاوز الرصيد ويطابق عملة الدين.
-- العكس يشير إلى Payment سابق ولا يمحو الأصل.
-- التشغيل الطبيعي لا يوفر Update/Delete لحدث مالي.
+الثوابت: الدفع يطابق عملة الدين ولا يتجاوز الرصيد، والعكس يشير إلى Payment سابق ولا يمحو الأصل.
 
 ### `reminders`
 
-- `id` PK.
-- `subject_type`, `subject_id`, `reminder_type`, `schedule_type`.
-- `trigger_at`, `zone_id`, `repeat_rule`.
-- `status`, `platform_request_code`, `last_failure_code`, `delivered_at`.
-- `created_at`, `updated_at`.
-
-يخدم DUE_DATE وGENERAL scheduling. لا يغير Ledger.
+جدولة DUE_DATE/GENERAL: subject، type، trigger/zone/repeat، status، platform metadata وtimestamps. لا تغير Ledger.
 
 ### `audit_events`
 
-- `id` PK.
-- `command_id` UNIQUE.
-- `aggregate_type`, `aggregate_id`, `event_type`.
-- `occurred_at`, `actor`.
-- `before_snapshot`, `after_snapshot`, `reason` nullable.
-
-Audit لتغييرات غير مالية مثل جدول الاستحقاق؛ لا يحل محل Ledger.
+سجل تغييرات غير مالية: `command_id` UNIQUE، aggregate/event type، before/after snapshots، reason وtimestamps.
 
 ### `document_identities`
 
-- هوية مصدر المستند: الاسم، النشاط، الهاتف، footer، الافتراضي، timestamps.
+هوية مصدر المستند: الاسم، النشاط، الهاتف، footer، default flag وtimestamps.
 
 ### `issued_documents`
 
-السجل العام للمستندات المالية:
+السجل العام للمستندات:
 
-- `id`, `command_id`, `document_type`, `status`, `document_number`.
-- `issue_year`, `sequence_number`.
-- `debt_id` FK.
-- `ledger_entry_id` nullable FK.
-- `identity_id` FK.
-- Snapshot للشخص والمبلغ والعملة ووقت الإصدار.
-- `snapshot_version`, `snapshot_json`.
-- `pdf_relative_path`, `pdf_sha256`, `page_count`, `failure_code`.
+- `PAYMENT_RECEIPT`, `DEBT_RECEIPT`, `ACCOUNT_STATEMENT`.
+- command/document number/year/sequence.
+- debt FK، و`ledger_entry_id` nullable.
+- identity FK.
+- immutable snapshot fields + `snapshot_json`.
+- PDF path/hash/page count/failure metadata.
 
-دلالة `ledger_entry_id`:
-
-- `PAYMENT_RECEIPT`: مرتبط بعملية Payment.
-- `DEBT_RECEIPT`: null.
-- `ACCOUNT_STATEMENT`: null.
-
-كل مستند يصدر من Snapshot ثابت ولا يعاد تفسيره من الحالة الحية لاحقًا.
+`ledger_entry_id` يكون مطلوبًا لإيصال السداد وnullable لمستندات الدين/كشف الحساب.
 
 ### `payment_promises`
 
-- `id`, `create_command_id`, `debt_id`.
-- `promised_date_epoch_day`.
-- `status`: `PENDING / KEPT / MISSED / CANCELLED`.
-- ملاحظات وحقول resolution وtimestamps.
-
-Promise لا تنشئ Payment ولا تغير الرصيد.
+وعد متابعة مستقل عن Ledger، بحالات `PENDING / KEPT / MISSED / CANCELLED` وresolution metadata.
 
 ### `installment_plans`
 
-- `id`, `command_id`, `debt_id`.
-- `revision_number`.
-- `status`: `ACTIVE / SUPERSEDED`.
-- `supersedes_plan_id`, `superseded_at`, `superseded_after_sequence`, `reason`.
-
-Revision جديدة تحفظ السابقة بدل تعديل التاريخ.
+خطط أقساط مع revisions وحالات `ACTIVE / SUPERSEDED`. revision جديدة تحفظ السابقة ولا تعدل التاريخ.
 
 ### `installments`
 
-- `id`, `plan_id`, `debt_id`, `sequence_number`.
-- `due_date_epoch_day`, `amount_minor`, `currency_code`, `created_at`.
-
-القسط لا يملك رصيدًا ماليًا موازيًا؛ paid/remaining مشتقان من Ledger.
+حصة القسط: plan/debt FKs، sequence، due date، amount/currency. paid/remaining مشتقان من Ledger.
 
 ### `payment_claims` — منذ v8
 
-مطالبات «طالبني» مستقلة عن Ledger:
+مطالبات «طالبني» المستقلة عن Ledger:
 
-- `id` TEXT PK.
-- `create_command_id` TEXT UNIQUE.
-- `debt_id` TEXT FK→`debts.id` RESTRICT.
-- `claimed_at` INTEGER.
-- `follow_up_kind`: `TODAY / TOMORROW / SALARY / CUSTOM`.
-- `follow_up_date_epoch_day` nullable.
-- `note` nullable.
-- `status`: `ACTIVE / RESOLVED / CANCELLED`.
-- `created_at`, `updated_at`.
-- `resolution_command_id` nullable UNIQUE.
-- `resolved_at`, `resolution_note` nullable.
+- create/resolution command IDs.
+- debt FK.
+- `TODAY / TOMORROW / SALARY / CUSTOM`.
+- `ACTIVE / RESOLVED / CANCELLED`.
+- custom follow-up date عند الحاجة.
 
-Indexes تشمل create/resolution command IDs، debt+claimed_at، debt+status، status+follow-up date.
-
-ثوابت الاستعادة والتنفيذ:
-
-- Claim يسمح فقط لدين `PAYABLE`.
-- `CUSTOM` يتطلب تاريخ متابعة.
-- `SALARY` لا يخمن تاريخًا.
-- الحالة النهائية تتطلب resolution metadata.
-- Claim لا يغير `originalAmount`, balance, Ledger أو `due_date`.
+لا تغير balance أو Ledger أو due date.
 
 ### `attachments` — منذ v9
 
-خزنة ملفات الإثباتات المحلية:
+خزنة الإثباتات:
 
-- `id` TEXT PK.
-- `debt_id` TEXT FK→`debts.id` RESTRICT.
-- `ledger_entry_id` TEXT nullable FK→`ledger_entries.id` RESTRICT.
-- `display_name` TEXT.
-- `mime_type` TEXT.
-- `size_bytes` INTEGER.
-- `relative_path` TEXT UNIQUE.
-- `sha256` TEXT.
-- `created_at` INTEGER.
-- `note` nullable.
-
-Indexes:
-
-- (`debt_id`, `created_at`).
-- `ledger_entry_id`.
+- debt FK.
+- ledger entry FK اختياري من نفس الدين.
+- display name / mime / size.
 - `relative_path` UNIQUE.
+- `sha256`, created_at, note.
 
-ثوابت السلامة:
+المسار مقيد بخزنة التطبيق وSHA-256 إلزامي.
 
-- المسار نسبي ومقيد بخزنة التطبيق.
-- SHA-256 إلزامي.
-- عند ربط المرفق بحركة يجب أن تكون الحركة من نفس الدين.
-- فقد الملف أو اختلاف البصمة لا يعامل كمرفق سليم.
-- لا تخزين URI مؤقت كمصدر دائم بديل عن نسخ الملف إلى الخزنة.
+### `group_expenses` — منذ v10
+
+يحفظ العملية الجماعية الأصلية كسياق تاريخي، وليس Ledger موازيًا:
+
+- `id` PK.
+- `command_id` UNIQUE.
+- `direction`.
+- `total_amount_minor`, `currency_code`.
+- `occurred_at`.
+- `description`, `notes`.
+- `created_at`.
+
+الثوابت: total موجب، وصف صالح، created_at لا يسبق occurred_at، وعملة/اتجاه العملية موحدان لكل shares.
+
+### `group_expense_shares` — منذ v10
+
+كل حصة تربط العملية الجماعية بدين وَصل عادي:
+
+- `id` PK.
+- `group_expense_id` FK→`group_expenses.id` RESTRICT.
+- `debt_id` FK→`debts.id` RESTRICT وUNIQUE.
+- `person_id` FK→`persons.id` RESTRICT.
+- `amount_minor` موجب.
+- `sequence_number`.
+
+فهارس/ثوابت أساسية:
+
+- UNIQUE(`group_expense_id`, `sequence_number`).
+- UNIQUE(`group_expense_id`, `person_id`).
+- UNIQUE(`debt_id`).
+- كل عملية فيها 2+ shares.
+- الأشخاص والديون والحصص فريدة.
+- مجموع shares يساوي `group_expenses.total_amount_minor` بدقة.
+- دين الحصة يطابق الشخص/الاتجاه/العملة/المبلغ/وقت العملية/الوصف المتوقع.
 
 ## الـView الحالية
 
@@ -198,64 +162,61 @@ FROM issued_documents
 WHERE document_type = 'PAYMENT_RECEIPT'
 ```
 
-تجعل استعلامات إيصالات السداد صريحة بعد تعميم `issued_documents`.
-
 ## سلسلة Migrations
 
-- **v1→v2**: `reminders`.
-- **v2→v3**: `audit_events`.
-- **v3→v4**: `document_identities` + `issued_documents`.
-- **v4→v5**: `payment_promises`.
-- **v5→v6**: `installment_plans` + `installments`.
-- **v6→v7**: إعادة بناء `issued_documents` وجعل `ledger_entry_id` nullable وإعادة إنشاء View.
-- **v7→v8**: إضافة `payment_claims` وفهارسها.
-- **v8→v9**: إضافة `attachments` وفهارسها، ومنها `relative_path` UNIQUE.
+- v1→v2: `reminders`.
+- v2→v3: `audit_events`.
+- v3→v4: document identities + issued documents.
+- v4→v5: payment promises.
+- v5→v6: installment plans + installments.
+- v6→v7: تعميم `issued_documents` وجعل `ledger_entry_id` nullable وإعادة إنشاء View.
+- v7→v8: `payment_claims`.
+- v8→v9: `attachments` وفهارسها.
+- **v9→v10:** `group_expenses` + `group_expense_shares` وفهارس/FKs الخاصة بها.
 
-`WaslDatabase.ALL_MIGRATIONS` يسجل السلسلة كلها صراحة.
+`WaslDatabase.ALL_MIGRATIONS` يسجل السلسلة صراحة.
 
-## Backup contract v9
+## Backup contract v10
 
-Backup المنطقي المشفر يشمل 12 جدولًا:
+Backup المنطقي المشفر يشمل 14 جدولًا:
 
 1. `persons`
 2. `debts`
 3. `ledger_entries`
-4. `reminders`
-5. `audit_events`
-6. `document_identities`
-7. `issued_documents`
-8. `payment_promises`
-9. `payment_claims`
-10. `installment_plans`
-11. `installments`
-12. `attachments`
+4. `group_expenses`
+5. `group_expense_shares`
+6. `reminders`
+7. `audit_events`
+8. `document_identities`
+9. `issued_documents`
+10. `payment_promises`
+11. `payment_claims`
+12. `installment_plans`
+13. `installments`
+14. `attachments`
 
-ويشمل كذلك:
-
-- ملفات PDF للسجلات `READY`.
-- ملفات المرفقات.
+ويشمل كذلك ملفات PDF للسجلات الجاهزة وملفات المرفقات.
 
 قبل Restore:
 
-- Schema يجب أن تكون v9 المدعومة.
+- Schema يجب أن تكون v10 المدعومة.
 - شكل الجداول والصفوف متوقع.
 - المسارات تبقى داخل خزائن التطبيق.
 - SHA-256 يطابق.
 - البيانات تختبر داخل Room مؤقتة.
 - Foreign Keys والثوابت المالية تفحص.
-- Claim validation يفحص الاتجاه والحالات والتواريخ.
-- Attachment validation يفحص أن الحركة الاختيارية من نفس الدين.
-- الاستبدال النهائي يملك Rollback عند الفشل.
+- Claims/Attachments/Group Expense invariants تفحص.
+- Group shares تطابق الديون العادية المرتبطة بها.
+- الاستبدال النهائي يملك rollback عند الفشل.
 
-## بوابة التحقق الحالية
+## آخر بوابة تحقق
 
-Android CI #851 على الرأس السابق `94ce0adf...`:
+**Android CI #967 — run `33137676461` — head `e09efee71cea4b1734afe50a025c2a3218ec2dd5`.**
 
-- Unit tests ✅
-- Lint ✅
-- Debug APK ✅
-- Room Schema v9 generated/current check ✅
-- وجود `payment_claims` و`attachments` وفهرس `attachments.relative_path` الفريد ✅
-- Android instrumentation لم تبدأ لأن compilation لاختبارات Android توقف بسبب أربعة imports قديمة لـ`onNode`.
+- Unit/Lint/Debug ✅
+- Room v10 generated/current verification ✅
+- Emulator instrumentation **123/123** ✅
+- Migration/Repository/Backup regressions، بما فيها Group Expense v10 ✅
+- PDF evidence للأنواع الثلاثة ✅
 
-لا تسجل v9 كـ«بوابة كاملة ناجحة» حتى تمر Android instrumentation وBackup/Restore وPDF evidence على الرأس المصحح.
+بذلك v10 هي Schema الحالية الموثقة، وليست مرحلة pending.

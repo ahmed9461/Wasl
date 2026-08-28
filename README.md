@@ -2,36 +2,35 @@
 
 **كل حساب له وصل**
 
-وَصل مدير مالي شخصي Local-first للديون والحقوق والالتزامات والسداد والأقساط والتذكيرات والمستندات والمرفقات. لا ينفذ تحويلات مالية فعلية، ولا يقدم كنظام محاسبة شركات أو منصة توثيق قانوني.
+وَصل مدير مالي شخصي Local-first للديون والحقوق والالتزامات والسداد والأقساط والتذكيرات والمستندات والمرفقات. لا ينفذ تحويلات مالية فعلية، ولا يقدم كنظام ERP أو منصة توثيق قانوني.
 
 ## الحالة الحالية
 
-المشروع تجاوز MVP المالي الأساسي ويعمل حاليًا على استكمال الميزات المتقدمة وتثبيت بوابة التحقق قبل الإصدار.
+المراحل الوظيفية الرئيسية مكتملة على فرع التطوير ومثبتة ببوابة Android كاملة. المشروع الآن في **مرحلة الإنهاء والتلميع قبل الإصدار**.
 
-- تطبيق Android أصلي بـKotlin وJetpack Compose وMaterial 3 وواجهة عربية RTL.
-- Domain مالي مستقل في `core:domain`، مع `Money` بوحدات Minor Units من نوع `Long`.
+- Android أصلي بـKotlin وJetpack Compose وMaterial 3، وتجربة عربية RTL first-class.
+- Domain مالي مستقل في `core:domain`.
+- `Money` بMinor Units من `Long`؛ لا Floating Point في الحساب المالي.
 - Ledger append-only للدفعات والعكس؛ لا حذف للتاريخ المالي.
-- أشخاص وحسابات متعددة، واتجاهان: لي عند الناس / عليّ للناس، مع YER / SAR / USD دون خلط العملات.
-- Room **Schema v9** مع Migrations متسلسلة من v1 حتى v9 دون destructive migration.
-- الاستحقاقات، Today، WorkManager، Exact Alarm اختياري، تذكيرات متابعة عامة وإجراءات إشعار آمنة.
-- Payment Promises وخطط أقساط مع Revision history وتقدم مشتق من Ledger.
-- بحث محلي ومتقدم وAdaptive search.
-- مستندات PDF: إيصال سداد، إيصال دين، كشف حساب متعدد الصفحات، مع immutable snapshots وSHA-256.
-- Backup/Restore مشفر يشمل الجداول وملفات PDF والمرفقات.
+- أشخاص وحسابات متعددة، RECEIVABLE/PAYABLE، وYER/SAR/USD دون خلط العملات.
+- Room **Schema v10** مع migrations صريحة v1→v10.
+- Due dates، Today، WorkManager، Exact Alarm اختياري، General Reminders.
+- Payment Promises، Installment Plans/Revisions، Payment Claims.
+- Search، Person Timeline، Statistics، Documents Hub، Account Details timeline.
+- PDFs: إيصال سداد، إيصال دين، كشف حساب متعدد الصفحات، من immutable snapshots مع SHA-256.
+- Attachments/evidence vault محلية مع فحص سلامة.
+- Backup/Restore مشفر يشمل البيانات وملفات PDF والمرفقات.
 - App Lock عبر BiometricPrompt / Device Credential وPrivacy controls.
-- «طالبني» / Payment Claims كأحداث متابعة مستقلة عن Ledger.
-- خزنة مرفقات محلية مرتبطة بالدين وبحركة اختيارية مع SHA-256 وفحص سلامة.
-- صفحة شخص موحدة وTimeline عبر حساباته.
-- قوالب رسائل سداد قابلة للنسخ والمشاركة دون إرسال تلقائي.
-- إحصاءات موضوعية.
-- إدخال دين باللغة الطبيعية مع Preview/Confirmation قبل الحفظ.
-- إملاء صوتي أساسي عبر Android `RecognizerIntent`؛ النتيجة تمر عبر نفس Parser والمعاينة والتأكيد قبل الحفظ.
+- Natural Entry مع Preview/Confirmation إلزاميين.
+- Voice Dictation بحالات success/empty/cancel/unavailable/failure، ولا حفظ مالي مباشر من الصوت.
+- Group Expense: عملية جماعية أصلية + حصص غير متساوية تتحول إلى ديون وَصل عادية، مع atomic transaction وPreview/Confirmation.
+- Adaptive UI وRTL/Bidi hardening واختبارات large-font على الشاشات الرئيسية.
 
-الحالة الحية والخطوة التالية موثقتان في `HANDOFF.md` و`docs/CURRENT_STATUS.md`.
+الحالة الحية والخطوة التالية: `HANDOFF.md` و`docs/CURRENT_STATUS.md`.
 
 ## قاعدة البيانات
 
-Schema الحالي: **v9**.
+Schema الحالي: **v10**.
 
 - v1: الأساس المالي.
 - v2: reminders.
@@ -39,36 +38,42 @@ Schema الحالي: **v9**.
 - v4: document identities / issued documents.
 - v5: payment promises.
 - v6: installment plans / installments.
-- v7: تعميم issued documents ودعم مستندات الحساب غير المرتبطة بحركة واحدة.
+- v7: تعميم issued documents ودعم مستندات الحساب.
 - v8: `payment_claims`.
 - v9: `attachments`.
+- v10: `group_expenses` + `group_expense_shares`.
 
-التفاصيل الدقيقة في `docs/DATABASE_SCHEMA.md`.
+Backup contract v10 يشمل **14 جدولًا** إضافة إلى ملفات PDF والمرفقات.
+
+## آخر تحقق كامل
+
+**Android CI #967 — run `33137676461` — head `e09efee71cea4b1734afe50a025c2a3218ec2dd5`**
+
+- Unit tests / Lint / Debug APK / Room v10 ✅
+- Android instrumentation: **123/123**، بلا failures/errors/skips ✅
+- Group Expense UI 4/4 ✅
+- Voice Dictation 5/5 ✅
+- Natural Entry confirmation regression ✅
+- Legacy individual creation + PaymentFlow regressions ✅
+- Payment / Debt / Account Statement PDF evidence ✅
+
+Instrumentation artifact: `9672922910`  
+SHA-256: `c5a10dcba796b337d53fcc988f41e2c4aab6bb518bc95734a1e638ef0fdb0a4f`
 
 ## Stack
 
 - Kotlin 2.3.21
 - Android Gradle Plugin 9.3.1
 - Gradle 9.5.0
-- Jetpack Compose
-- Material 3
+- Jetpack Compose + Material 3
 - Navigation 3
 - Room 2.8.4
 - WorkManager 2.11.2
-- Android RecognizerIntent للإملاء الصوتي الحالي
 - compileSdk / targetSdk: 36
 - minSdk: 26
 - JDK 17
 
 ## البناء والتحقق
-
-المتطلبات:
-
-- JDK 17
-- Android SDK Platform 36
-- Android SDK Build Tools 36.0.0
-
-الأوامر الأساسية:
 
 ```bash
 ./gradlew :core:domain:test
@@ -78,7 +83,7 @@ Schema الحالي: **v9**.
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
-GitHub Actions يشغل Unit tests وLint وبناء Debug، يتحقق من Room Schema الحالية، ثم يشغل Android instrumentation على Emulator ويفحص أدلة PDF الفعلية.
+GitHub Actions هي بوابة التسليم المرجعية وتجمع build + Room schema verification + Android Emulator instrumentation + PDF evidence.
 
 ## خريطة المستودع
 
@@ -86,14 +91,14 @@ GitHub Actions يشغل Unit tests وLint وبناء Debug، يتحقق من Roo
 |---|---|
 | `WASL_MASTER_PROJECT_PROMPT.md` | المرجع التأسيسي الأعلى |
 | `AGENTS.md` | قواعد العمل الإلزامية |
-| `PROJECT_CONTEXT.md` | صورة المشروع والبنية الحالية |
+| `PROJECT_CONTEXT.md` | سياق المنتج والبنية الحالية |
 | `SPEC.md` | المواصفات التشغيلية ومعايير القبول |
-| `DECISIONS.md` | القرارات المعمارية والبدائل |
+| `DECISIONS.md` | القرارات المعمارية |
 | `HANDOFF.md` | الحالة الحية والخطوة التالية |
-| `CHANGELOG.md` | التغييرات المهمة |
-| `docs/` | المعمارية وSchema والتنقل والتصميم والأمان والاختبارات والمراحل |
-| `core/domain/` | مصدر الحقيقة المالي الخالي من Android |
-| `app/` | تطبيق Android وCompose وRoom والـStores والاختبارات |
+| `CHANGELOG.md` | سجل التغييرات |
+| `docs/` | المعمارية وSchema والتنقل والتصميم والأمان والتحقق |
+| `core/domain/` | منطق المال الخالي من Android |
+| `app/` | تطبيق Android وCompose وRoom وPDF/Backup والاختبارات |
 
 ## مبادئ غير قابلة للتفاوض
 
@@ -101,11 +106,13 @@ GitHub Actions يشغل Unit tests وLint وبناء Debug، يتحقق من Roo
 - لا خلط بين العملات.
 - لا Floating Point للأموال.
 - لا Backend إجباري للوظائف الأساسية.
-- لا أسرار أو بيانات مالية حساسة في Git أو Logs.
-- لا Payment من Notification callback أو من إدخال طبيعي/صوتي دون Preview/Confirmation.
+- لا Payment من Notification/Natural/Voice دون Preview/Confirmation.
 - Promise وClaim وReminder وInstallment Plan ليست مصادر حقيقة مالية.
+- Group Expense لا تنشئ Ledger موازيًا.
 - أي Schema جديد يأتي مع Migration + tests + Backup/Restore update.
+- لا أسرار أو signing keys في Git.
+- لا دمج إلى `main` دون طلب صريح.
 
-## حالة التحقق الحالية
+## المرحلة التالية
 
-Android CI #851 أثبت نجاح Unit tests وLint وDebug APK وRoom Schema v9، لكنه توقف قبل Android instrumentation بسبب أربعة imports قديمة في AndroidTest. تم إعداد إصلاحها على فرع التطوير، ولا يتم دمج `main` قبل عودة البوابة كاملة إلى الأخضر.
+المتبقي هو **documentation sync → final UI polish → final PDF polish → acceptance gate → release signing/distribution**. التلميع يجب أن يبقى سلوكيًا محايدًا ويحافظ على invariants وtestTags والـCI الأخضر.

@@ -1,0 +1,35 @@
+name: Fix person contact command compatibility
+
+on:
+  push:
+    branches:
+      - agent/person-contact-details
+    paths:
+      - .github/scripts/fix_person_contact_param_order.py
+      - .github/workflows/fix-person-contact-param-order.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: agent/person-contact-details
+          fetch-depth: 0
+      - name: Apply parameter order fix
+        run: python .github/scripts/fix_person_contact_param_order.py
+      - name: Validate diff
+        run: |
+          git diff --check
+          grep -A8 'data class CreatePersonWithDebtCommand' app/src/main/java/com/wasl/app/data/RepositoryModels.kt
+      - name: Commit product fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/com/wasl/app/data/RepositoryModels.kt
+          git commit -m 'fix: preserve create person command parameter compatibility'
+          git push origin HEAD:agent/person-contact-details

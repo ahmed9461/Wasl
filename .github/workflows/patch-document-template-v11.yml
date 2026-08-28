@@ -1,0 +1,38 @@
+name: Patch document template v11 foundation
+
+on:
+  push:
+    branches:
+      - agent/document-template-v11-foundation
+    paths:
+      - .github/scripts/patch_document_template_v11.py
+      - .github/workflows/patch-document-template-v11.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply checked v11 patch
+        run: |
+          python .github/scripts/patch_document_template_v11.py
+          git diff --check
+          grep -q 'version = 11' app/src/main/java/com/wasl/app/data/local/WaslDatabase.kt
+          grep -q 'MIGRATION_10_11' app/src/main/java/com/wasl/app/data/local/WaslDatabase.kt
+          grep -q 'SCHEMA_VERSION = 11' app/src/main/java/com/wasl/app/backup/BackupService.kt
+          grep -q 'DocumentTemplateSnapshot' app/src/main/java/com/wasl/app/data/RepositoryModels.kt
+      - name: Commit product patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/scripts/patch_document_template_v11.py
+          git add app
+          git checkout -- .github/workflows/patch-document-template-v11.yml
+          git diff --cached --check
+          git commit -m 'feat: add immutable document template v11 foundation'
+          git push origin HEAD:agent/document-template-v11-foundation

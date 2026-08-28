@@ -72,9 +72,7 @@ fun InstallmentsHubScreen(state: InstallmentsHubUiState, onBack: () -> Unit, onR
         else -> LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             if (state.accounts.isEmpty()) item { InfoCard("لا توجد حسابات مفتوحة تحتاج خطة أقساط.") }
-            items(state.accounts, key = { it.account.ledger.header.id.value }) { item ->
-                InstallmentAccountCard(item, onOpenEditor, onOpenAccount)
-            }
+            items(state.accounts, key = { it.account.ledger.header.id.value }) { item -> InstallmentAccountCard(item, onOpenEditor, onOpenAccount) }
         }
     } }
     state.editor?.let { InstallmentPlanEditorDialog(it, state.isSaving, state.saveError, onDismissEditor, onCountChange,
@@ -88,14 +86,12 @@ private fun InstallmentAccountCard(item: InstallmentHubAccount, onOpenEditor: (D
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
                 Column { Text(account.person.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text(if (account.ledger.header.direction == DebtDirection.RECEIVABLE) "لي عنده" else "عليّ له",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    Text(if (account.ledger.header.direction == DebtDirection.RECEIVABLE) "لي عنده" else "عليّ له", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 Column(horizontalAlignment = Alignment.End) { Text("المتبقي", style = MaterialTheme.typography.labelMedium)
                     Text(formatInstallmentMoney(account.ledger.balance), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold) }
             }
             item.activePlan?.let { plan ->
-                HorizontalDivider(); val total = plan.installments.size
-                val paid = plan.installments.count { it.paidMinorUnits >= it.amount.minorUnits }
+                HorizontalDivider(); val total = plan.installments.size; val paid = plan.installments.count { it.isPaid }
                 Text("$total أقساط", fontWeight = FontWeight.SemiBold)
                 LinearProgressIndicator(progress = { if (total == 0) 0f else paid.toFloat() / total }, modifier = Modifier.fillMaxWidth())
                 Text("$paid من $total مكتملة", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -120,8 +116,7 @@ private fun InstallmentPlanEditorDialog(form: InstallmentEditorForm, isSaving: B
             Text("يوزع وَصل الرصيد بدقة، وأي دفعة لاحقة تنعكس تلقائيًا على الخطة.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(form.count, onCountChange, Modifier.fillMaxWidth().testTag("installment-count"), label = { Text("عدد الأقساط") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, enabled = !isSaving)
-            OutlinedButton(onClick = { showPicker = true }, Modifier.fillMaxWidth(), enabled = !isSaving) {
-                Text(form.firstDueDate?.format(installmentDateFormatter) ?: "اختيار تاريخ أول قسط") }
+            OutlinedButton(onClick = { showPicker = true }, Modifier.fillMaxWidth(), enabled = !isSaving) { Text(form.firstDueDate?.format(installmentDateFormatter) ?: "اختيار تاريخ أول قسط") }
             OutlinedTextField(form.reason, onReasonChange, Modifier.fillMaxWidth(), label = { Text("ملاحظة — اختياري") }, enabled = !isSaving)
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         } }, confirmButton = { Button(onClick = onSave, enabled = !isSaving) { Text(if (isSaving) "جارٍ الحفظ" else "حفظ الخطة") } },

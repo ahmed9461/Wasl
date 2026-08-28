@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.wasl.app.data.AccountOverview
 import com.wasl.app.data.CreateDebtForExistingPersonCommand
+import com.wasl.app.data.CreateGroupExpenseCommand
 import com.wasl.app.data.CreatePersonWithDebtCommand
 import com.wasl.app.data.DueReminderRequest
 import com.wasl.app.data.PersonRecord
@@ -19,6 +20,11 @@ import com.wasl.domain.BalanceSummaryCalculator
 import com.wasl.domain.CurrencyCode
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtId
+import com.wasl.domain.GroupExpense
+import com.wasl.domain.GroupExpenseId
+import com.wasl.domain.GroupExpenseShare
+import com.wasl.domain.GroupExpenseShareId
+import com.wasl.domain.Money
 import com.wasl.domain.MoneyInputParser
 import com.wasl.domain.PersonId
 import java.time.Clock
@@ -61,6 +67,24 @@ data class CreateDebtForm(
     val strongAlarmTime: LocalTime = ReminderTime.defaultDueTime,
 )
 
+enum class GroupExpenseEditorStep {
+    EDIT,
+    REVIEW,
+}
+
+data class GroupExpenseParticipantDraft(
+    val person: ExistingPersonSelection,
+    val amount: String = "",
+)
+
+data class GroupExpenseForm(
+    val currency: CurrencyCode = CurrencyCode.YER,
+    val direction: DebtDirection = DebtDirection.RECEIVABLE,
+    val description: String = "",
+    val notes: String = "",
+    val participants: List<GroupExpenseParticipantDraft> = emptyList(),
+)
+
 data class HomeUiState(
     val isLoading: Boolean = true,
     val loadError: String? = null,
@@ -69,10 +93,16 @@ data class HomeUiState(
         receivableByCurrency = emptyMap(),
         payableByCurrency = emptyMap(),
     ),
+    val isCreateTypePickerOpen: Boolean = false,
     val isCreateDialogOpen: Boolean = false,
     val createForm: CreateDebtForm = CreateDebtForm(),
+    val isGroupExpenseDialogOpen: Boolean = false,
+    val groupExpenseStep: GroupExpenseEditorStep = GroupExpenseEditorStep.EDIT,
+    val groupExpenseForm: GroupExpenseForm = GroupExpenseForm(),
+    val groupExpensePreview: GroupExpense? = null,
     val isSaving: Boolean = false,
     val formError: String? = null,
+    val groupExpenseError: String? = null,
     val successMessage: String? = null,
     val peopleQuery: String = "",
     val selectablePeople: List<PersonRecord> = emptyList(),
@@ -91,6 +121,7 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
     private var pendingCreateIdentity: PendingCreateIdentity? = null
+    private var pendingGroupExpenseCommand: CreateGroupExpenseCommand? = null
     private val peopleQuery = MutableStateFlow("")
     private val peopleRetry = MutableStateFlow(0)
 
@@ -155,12 +186,65 @@ class HomeViewModel(
         }
     }
 
-    fun openCreateDialog() {
+    fun openCreateTypePicker() {
+        if (_uiState.value.isSaving) return
         _uiState.update {
             it.copy(
+                isCreateTypePickerOpen = true,
+                formError = null,
+                groupExpenseError = null,
+                successMessage = null,
+            )
+        }
+    }
+
+    fun dismissCreateTypePicker() {
+        if (_uiState.value.isSaving) return
+        _uiState.update { it.copy(isCreateTypePickerOpen = false) }
+    }
+
+    fun openCreateDialog() {
+        if (_uiState.value.isSaving) return
+        _uiState.update {
+            it.copy(
+                isCreateTypePickerOpen = false,
                 isCreateDialogOpen = true,
                 formError = null,
                 successMessage = null,
+            )
+        }
+    }
+
+    fun openGroupExpenseDialog() {
+        if (_uiState.value.isSaving) return
+        pendingGroupExpenseCommand = null
+        peopleQuery.value = ""
+        _uiState.update {
+            it.copy(
+                isCreateTypePickerOpen = false,
+                isGroupExpenseDialogOpen = true,
+                groupExpenseStep = GroupExpenseEditorStep.EDIT,
+                groupExpenseForm = GroupExpenseForm(),
+                groupExpensePreview = null,
+                groupExpenseError = null,
+                peopleQuery = "",
+                successMessage = null,
+            )
+        }
+    }
+
+    fun dismissGroupExpenseDialog() {
+        if (_uiState.value.isSaving) return
+        pendingGroupExpenseCommand = null
+        peopleQuery.value = ""
+        _uiState.update {
+            it.copy(
+                isGroupExpenseDialogOpen = false,
+                groupExpenseStep = GroupExpenseEditorStep.EDIT,
+                groupExpenseForm = GroupExpenseForm(),
+                groupExpensePreview = null,
+                groupExpenseError = null,
+                peopleQuery = "",
             )
         }
     }
@@ -209,6 +293,163 @@ class HomeViewModel(
 
     fun retryPeople() {
         peopleRetry.value += 1
+    }
+
+    fun toggleGroupParticipant(personId: PersonId) {
+        val state = _uiState.value
+        val selected = state.groupExpenseForm.participants.firstOrNull { it.person.id == personId }
+        if (selected != null) {
+            updateGroupExpenseForm {
+                copy(participants = participants.filterNot { it.person.id == personId })
+            }
+            return
+        }
+        val person = state.selectablePeople.firstOrNull { it.id == personId } ?: return
+        updateGroupExpenseForm {
+            copy(
+                participants = participants + GroupExpenseParticipantDraft(
+                    person = ExistingPersonSelection(person.id, person.displayName),
+                ),
+            )
+        }
+    }
+
+    fun updateGroupParticipantAmount(personId: PersonId, value: String) = updateGroupExpenseForm {
+        copy(
+            participants = participants.map { participant ->
+                if (participant.person.id == personId) participant.copy(amount = value) else participant
+            },
+        )
+    }
+
+    fun updateGroupCurrency(value: CurrencyCode) = updateGroupExpenseForm { copy(currency = value) }
+
+    fun updateGroupDirection(value: DebtDirection) = updateGroupExpenseForm { copy(direction = value) }
+
+    fun updateGroupDescription(value: String) = updateGroupExpenseForm { copy(description = value) }
+
+    fun updateGroupNotes(value: String) = updateGroupExpenseForm { copy(notes = value) }
+
+    fun reviewGroupExpense() {
+        val state = _uiState.value
+        if (state.isSaving) return
+        val form = state.groupExpenseForm
+        val description = form.description.trim()
+        if (description.isEmpty()) {
+            _uiState.update { it.copy(groupExpenseError = "اكتب وصف العملية الجماعية.") }
+            return
+        }
+        if (form.participants.size < 2) {
+            _uiState.update { it.copy(groupExpenseError = "اختر شخصين على الأقل للعملية الجماعية.") }
+            return
+        }
+
+        val parsed = try {
+            form.participants.map { participant ->
+                val amount = MoneyInputParser.parse(participant.amount, form.currency)
+                require(amount.minorUnits > 0L)
+                participant to amount
+            }
+        } catch (_: IllegalArgumentException) {
+            _uiState.update {
+                it.copy(groupExpenseError = "تحقق من مبلغ كل حصة ودقة العملة المختارة.")
+            }
+            return
+        }
+
+        val now = Instant.now(clock)
+        val shares = parsed.map { (participant, amount) ->
+            GroupExpenseShare(
+                id = GroupExpenseShareId(idFactory()),
+                debtId = DebtId(idFactory()),
+                personId = participant.person.id,
+                amount = amount,
+            )
+        }
+        val total = parsed.fold(Money.zero(form.currency)) { sum, (_, amount) -> sum.plus(amount) }
+        val command = CreateGroupExpenseCommand(
+            commandId = idFactory(),
+            expense = GroupExpense(
+                id = GroupExpenseId(idFactory()),
+                direction = form.direction,
+                totalAmount = total,
+                occurredAt = now,
+                description = description,
+                notes = form.notes.trim().ifEmpty { null },
+                shares = shares,
+            ),
+            createdAt = now,
+        )
+        pendingGroupExpenseCommand = command
+        _uiState.update {
+            it.copy(
+                groupExpenseStep = GroupExpenseEditorStep.REVIEW,
+                groupExpensePreview = command.expense,
+                groupExpenseError = null,
+            )
+        }
+    }
+
+    fun editGroupExpenseReview() {
+        if (_uiState.value.isSaving) return
+        pendingGroupExpenseCommand = null
+        _uiState.update {
+            it.copy(
+                groupExpenseStep = GroupExpenseEditorStep.EDIT,
+                groupExpensePreview = null,
+                groupExpenseError = null,
+            )
+        }
+    }
+
+    fun confirmGroupExpense() {
+        val state = _uiState.value
+        if (state.isSaving) return
+        val command = pendingGroupExpenseCommand
+        if (command == null || state.groupExpenseStep != GroupExpenseEditorStep.REVIEW) {
+            _uiState.update { it.copy(groupExpenseError = "راجع العملية الجماعية قبل الحفظ.") }
+            return
+        }
+
+        _uiState.update { it.copy(isSaving = true, groupExpenseError = null) }
+        viewModelScope.launch {
+            try {
+                val created = repository.createGroupExpense(command)
+                pendingGroupExpenseCommand = null
+                peopleQuery.value = ""
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        isGroupExpenseDialogOpen = false,
+                        groupExpenseStep = GroupExpenseEditorStep.EDIT,
+                        groupExpenseForm = GroupExpenseForm(),
+                        groupExpensePreview = null,
+                        groupExpenseError = null,
+                        peopleQuery = "",
+                        successMessage = "تم حفظ العملية الجماعية وربط ${created.expense.shares.size} حسابات بنجاح.",
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: RecordNotFoundException) {
+                pendingGroupExpenseCommand = null
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        groupExpenseStep = GroupExpenseEditorStep.EDIT,
+                        groupExpensePreview = null,
+                        groupExpenseError = "أحد الأشخاص المحددين لم يعد متاحًا. راجع المشاركين.",
+                    )
+                }
+            } catch (_: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        groupExpenseError = "لم تُحفظ العملية الجماعية. أعد المحاولة دون تغيير البيانات.",
+                    )
+                }
+            }
+        }
     }
 
     fun updateAmount(value: String) = updateForm { copy(amount = value) }
@@ -421,6 +662,18 @@ class HomeViewModel(
             it.copy(
                 createForm = it.createForm.transform(),
                 formError = null,
+            )
+        }
+    }
+
+    private fun updateGroupExpenseForm(transform: GroupExpenseForm.() -> GroupExpenseForm) {
+        pendingGroupExpenseCommand = null
+        _uiState.update {
+            it.copy(
+                groupExpenseStep = GroupExpenseEditorStep.EDIT,
+                groupExpenseForm = it.groupExpenseForm.transform(),
+                groupExpensePreview = null,
+                groupExpenseError = null,
             )
         }
     }

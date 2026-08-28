@@ -9,16 +9,19 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wasl.app.privacy.AppAppearance
+import com.wasl.app.privacy.PrivacyPreferences
 
-private val LocalWaslAppearance = staticCompositionLocalOf { AppAppearance.SYSTEM }
+private val LocalWaslAppearance = staticCompositionLocalOf<AppAppearance?> { null }
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF087F72), onPrimary = Color.White,
@@ -88,8 +91,12 @@ fun WaslTheme(
     appearance: AppAppearance? = null,
     content: @Composable () -> Unit,
 ) {
+    val context = LocalContext.current
     val inheritedAppearance = LocalWaslAppearance.current
-    val resolvedAppearance = appearance ?: inheritedAppearance
+    val savedAppearance = remember(context) {
+        PrivacyPreferences(context).appearance
+    }
+    val resolvedAppearance = appearance ?: inheritedAppearance ?: savedAppearance
     val darkTheme = when (resolvedAppearance) {
         AppAppearance.SYSTEM -> isSystemInDarkTheme()
         AppAppearance.DARK -> true

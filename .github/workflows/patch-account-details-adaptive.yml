@@ -1,0 +1,350 @@
+name: Patch adaptive account details
+
+on:
+  push:
+    branches:
+      - agent/bootstrap-wasl-foundation
+    paths:
+      - .github/workflows/patch-account-details-adaptive.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/bootstrap-wasl-foundation
+          fetch-depth: 0
+
+      - name: Apply checked Account Details patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("app/src/main/java/com/wasl/app/AccountDetailsScreen.kt")
+          source = path.read_text(encoding="utf-8")
+
+          box_import = "import androidx.compose.foundation.layout.Box\n"
+          if source.count(box_import) != 1:
+              raise SystemExit("Box import did not match exactly once")
+          source = source.replace(
+              box_import,
+              box_import + "import androidx.compose.foundation.layout.BoxWithConstraints\n",
+              1,
+          )
+
+          def sub_once(label, pattern, replacement):
+              global source
+              source, count = re.subn(pattern, replacement, source, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f"{label} matched {count} times")
+
+          sub_once(
+              "timeline heading",
+              r'''        item\("timeline-heading"\) \{\n            Row\(.*?\n        \}\n\n        item\("debt-created"\) \{''',
+              '''        item("timeline-heading") {
+            AccountTimelineHeading()
+        }
+
+        item("debt-created") {''',
+          )
+
+          sub_once(
+              "summary badges",
+              r'''            Row\(\n                modifier = Modifier\.fillMaxWidth\(\),\n                horizontalArrangement = Arrangement\.SpaceBetween,\n                verticalAlignment = Alignment\.CenterVertically,\n            \) \{\n                Surface\(.*?\n            \}\n\n            ledger\.header\.description''',
+              '''            AccountHeroBadges(
+                receivable = receivable,
+                state = ledger.state,
+            )
+
+            ledger.header.description''',
+          )
+
+          sub_once(
+              "financial metrics",
+              r'''            Row\(\n                modifier = Modifier\.fillMaxWidth\(\),\n                horizontalArrangement = Arrangement\.spacedBy\(10\.dp\),\n            \) \{\n                FinancialMetric\(.*?\n            \}\n\n            Surface\(''',
+              '''            AccountFinancialMetrics(
+                originalAmount = ledger.header.originalAmount,
+                paidAmount = ledger.paidAmount,
+            )
+
+            Surface(''',
+          )
+
+          marker = "@Composable\nprivate fun FinancialMetric("
+          if source.count(marker) != 1:
+              raise SystemExit("FinancialMetric marker did not match exactly once")
+
+          helpers = r'''
+          @Composable
+          internal fun AccountTimelineHeading() {
+              BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                  if (shouldStackDenseRows(maxWidth)) {
+                      Column(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("account-timeline-heading-stacked"),
+                          verticalArrangement = Arrangement.spacedBy(10.dp),
+                      ) {
+                          AccountTimelineHeadingCopy()
+                          AccountTimelineVerifiedBadge()
+                      }
+                  } else {
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("account-timeline-heading-inline"),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.CenterVertically,
+                      ) {
+                          AccountTimelineHeadingCopy(modifier = Modifier.weight(1f))
+                          AccountTimelineVerifiedBadge()
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          private fun AccountTimelineHeadingCopy(modifier: Modifier = Modifier) {
+              Column(
+                  modifier = modifier,
+                  verticalArrangement = Arrangement.spacedBy(4.dp),
+              ) {
+                  Text(
+                      text = "سجل العمليات",
+                      style = MaterialTheme.typography.titleLarge,
+                      fontWeight = FontWeight.Bold,
+                  )
+                  Text(
+                      text = "الأصل محفوظ، وكل دفعة أو عكس يظهر كسجل مستقل.",
+                      style = MaterialTheme.typography.bodyMedium,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+              }
+          }
+
+          @Composable
+          private fun AccountTimelineVerifiedBadge() {
+              Surface(
+                  shape = MaterialTheme.shapes.extraLarge,
+                  color = MaterialTheme.colorScheme.surfaceContainerHigh,
+              ) {
+                  Text(
+                      text = "سجل موثق",
+                      modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                      style = MaterialTheme.typography.labelLarge,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+              }
+          }
+
+          @Composable
+          internal fun AccountHeroBadges(
+              receivable: Boolean,
+              state: DebtState,
+          ) {
+              BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                  if (shouldStackDenseRows(maxWidth)) {
+                      Column(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("account-summary-badges-stacked"),
+                          verticalArrangement = Arrangement.spacedBy(10.dp),
+                      ) {
+                          AccountDirectionSummaryBadge(receivable)
+                          AccountStateSummaryBadge(state)
+                      }
+                  } else {
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("account-summary-badges-inline"),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.CenterVertically,
+                      ) {
+                          AccountDirectionSummaryBadge(receivable)
+                          AccountStateSummaryBadge(state)
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          private fun AccountDirectionSummaryBadge(receivable: Boolean) {
+              Surface(
+                  shape = MaterialTheme.shapes.extraLarge,
+                  color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+              ) {
+                  Text(
+                      text = if (receivable) "لي عنده" else "عليّ له",
+                      modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                      style = MaterialTheme.typography.labelLarge,
+                      fontWeight = FontWeight.Bold,
+                      color = MaterialTheme.colorScheme.onSurface,
+                  )
+              }
+          }
+
+          @Composable
+          private fun AccountStateSummaryBadge(state: DebtState) {
+              Surface(
+                  shape = MaterialTheme.shapes.extraLarge,
+                  color = when (state) {
+                      DebtState.SETTLED -> MaterialTheme.colorScheme.surface.copy(alpha = 0.76f)
+                      DebtState.PARTIALLY_PAID -> MaterialTheme.colorScheme.tertiaryContainer
+                      DebtState.OPEN -> MaterialTheme.colorScheme.surface.copy(alpha = 0.56f)
+                  },
+              ) {
+                  Text(
+                      text = when (state) {
+                          DebtState.OPEN -> "مفتوح"
+                          DebtState.PARTIALLY_PAID -> "مسدد جزئيًا"
+                          DebtState.SETTLED -> "مسدد بالكامل"
+                      },
+                      modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                      style = MaterialTheme.typography.labelLarge,
+                      fontWeight = FontWeight.SemiBold,
+                      color = MaterialTheme.colorScheme.onSurface,
+                  )
+              }
+          }
+
+          @Composable
+          internal fun AccountFinancialMetrics(
+              originalAmount: Money,
+              paidAmount: Money,
+          ) {
+              BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                  if (shouldStackDenseRows(maxWidth)) {
+                      Column(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("account-summary-metrics-stacked"),
+                          verticalArrangement = Arrangement.spacedBy(10.dp),
+                      ) {
+                          FinancialMetric(
+                              modifier = Modifier.fillMaxWidth(),
+                              label = "أصل الدين",
+                              money = originalAmount,
+                          )
+                          FinancialMetric(
+                              modifier = Modifier.fillMaxWidth(),
+                              label = "المدفوع",
+                              money = paidAmount,
+                          )
+                      }
+                  } else {
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .testTag("account-summary-metrics-inline"),
+                          horizontalArrangement = Arrangement.spacedBy(10.dp),
+                      ) {
+                          FinancialMetric(
+                              modifier = Modifier.weight(1f),
+                              label = "أصل الدين",
+                              money = originalAmount,
+                          )
+                          FinancialMetric(
+                              modifier = Modifier.weight(1f),
+                              label = "المدفوع",
+                              money = paidAmount,
+                          )
+                      }
+                  }
+              }
+          }
+          '''
+          helpers = "\n".join(line[10:] if line.startswith("          ") else line for line in helpers.splitlines())
+          source = source.replace(marker, helpers + "\n\n" + marker, 1)
+          path.write_text(source, encoding="utf-8")
+
+          test_path = Path("app/src/androidTest/java/com/wasl/app/AccountDetailsAdaptiveUiInstrumentedTest.kt")
+          if test_path.exists():
+              raise SystemExit("adaptive Account Details test already exists")
+          test_path.write_text(r'''package com.wasl.app
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.Density
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.wasl.app.ui.theme.WaslTheme
+import com.wasl.domain.CurrencyCode
+import com.wasl.domain.DebtState
+import com.wasl.domain.Money
+import kotlin.test.Test
+import org.junit.Rule
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class AccountDetailsAdaptiveUiInstrumentedTest {
+    @get:Rule
+    val composeRule = createComposeRule()
+
+    @Test
+    fun largeFontStacksHeroBadgesAndFinancialMetrics() {
+        composeRule.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(
+                LocalDensity provides Density(density.density, fontScale = 2f),
+            ) {
+                WaslTheme {
+                    Column {
+                        AccountHeroBadges(
+                            receivable = true,
+                            state = DebtState.PARTIALLY_PAID,
+                        )
+                        AccountFinancialMetrics(
+                            originalAmount = Money(250_000L, CurrencyCode.SAR),
+                            paidAmount = Money(50_000L, CurrencyCode.SAR),
+                        )
+                    }
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("account-summary-badges-stacked", useUnmergedTree = true)
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag("account-summary-metrics-stacked", useUnmergedTree = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun largeFontStacksTimelineHeading() {
+        composeRule.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(
+                LocalDensity provides Density(density.density, fontScale = 2f),
+            ) {
+                WaslTheme {
+                    AccountTimelineHeading()
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("account-timeline-heading-stacked", useUnmergedTree = true)
+            .assertIsDisplayed()
+    }
+}
+''', encoding="utf-8")
+          PY
+
+      - name: Commit patch and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/patch-account-details-adaptive.yml
+          git add app/src/main/java/com/wasl/app/AccountDetailsScreen.kt
+          git add app/src/androidTest/java/com/wasl/app/AccountDetailsAdaptiveUiInstrumentedTest.kt
+          git commit -m "feat: harden account details large-font layout"
+          git push origin HEAD:agent/bootstrap-wasl-foundation

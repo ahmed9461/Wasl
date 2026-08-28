@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -62,11 +63,11 @@ import kotlinx.coroutines.withContext
 internal fun SettingsHubRoute(
     backupService: BackupService,
     privacyPreferences: PrivacyPreferences,
-    appearance: AppAppearance,
-    onAppearanceChange: (AppAppearance) -> Unit,
+    appearance: AppAppearance = privacyPreferences.appearance,
+    onAppearanceChange: (AppAppearance) -> Unit = { privacyPreferences.appearance = it },
     onBack: () -> Unit,
-    onOpenSecurity: () -> Unit,
-    onOpenReminders: () -> Unit,
+    onOpenSecurity: () -> Unit = {},
+    onOpenReminders: () -> Unit = {},
     onOpenDocuments: () -> Unit,
     onOpenStatistics: () -> Unit,
     onRestored: () -> Unit,
@@ -163,19 +164,36 @@ internal fun SettingsHubRoute(
                 title = "المظهر",
                 subtitle = "اختر المظهر المريح لك؛ التلقائي يتبع إعداد الجهاز.",
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    AppAppearance.entries.forEach { option ->
-                        FilterChip(
-                            selected = appearance == option,
-                            onClick = { onAppearanceChange(option) },
-                            label = { Text(option.label) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("appearance-${option.storedValue}"),
-                        )
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    if (shouldStackDenseRows(maxWidth)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            AppAppearance.entries.forEach { option ->
+                                FilterChip(
+                                    selected = appearance == option,
+                                    onClick = { onAppearanceChange(option) },
+                                    label = { Text(option.label) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("appearance-${option.storedValue}"),
+                                )
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            AppAppearance.entries.forEach { option ->
+                                FilterChip(
+                                    selected = appearance == option,
+                                    onClick = { onAppearanceChange(option) },
+                                    label = { Text(option.label) },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("appearance-${option.storedValue}"),
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -372,24 +390,45 @@ internal fun SettingsHubRoute(
 
 @Composable
 private fun SettingsHeader(onBack: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        TextButton(onClick = onBack) { Text("رجوع") }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "الإعدادات",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.ExtraBold,
-            )
-            Text(
-                text = "المظهر، الأمان، التذكيرات والنسخ الاحتياطي",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("settings-header-stacked"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TextButton(onClick = onBack) { Text("رجوع") }
+                SettingsHeaderText()
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("settings-header-inline"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                TextButton(onClick = onBack) { Text("رجوع") }
+                SettingsHeaderText(Modifier.weight(1f))
+            }
         }
+    }
+}
+
+@Composable
+private fun SettingsHeaderText(modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(
+            text = "الإعدادات",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.ExtraBold,
+        )
+        Text(
+            text = "المظهر، الأمان، التذكيرات والنسخ الاحتياطي",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -471,23 +510,52 @@ private fun SettingsSwitchRow(
     testTag: String,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontWeight = FontWeight.SemiBold)
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("$testTag-row-stacked"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SettingsSwitchText(title, description)
+                Switch(
+                    modifier = Modifier.testTag(testTag),
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("$testTag-row-inline"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                SettingsSwitchText(title, description, Modifier.weight(1f))
+                Switch(
+                    modifier = Modifier.testTag(testTag),
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                )
+            }
         }
-        Switch(
-            modifier = Modifier.testTag(testTag),
-            checked = checked,
-            onCheckedChange = onCheckedChange,
+    }
+}
+
+@Composable
+private fun SettingsSwitchText(
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(text = title, fontWeight = FontWeight.SemiBold)
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

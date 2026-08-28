@@ -1,0 +1,192 @@
+name: Android CI
+
+on:
+  push:
+    branches:
+      - main
+      - "agent/**"
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-wasl-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android API 36
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Run unit tests, lint, and debug build
+        run: gradle --no-daemon :core:domain:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wasl-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload exported Room schema
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wasl-room-schema
+          path: app/schemas/com.wasl.app.data.local.WaslDatabase/11.json
+          if-no-files-found: error
+
+      - name: Verify generated Room schema v11
+        run: |
+          SCHEMA="app/schemas/com.wasl.app.data.local.WaslDatabase/11.json"
+          test "$(jq -r '.database.version' "$SCHEMA")" = "11"
+          jq -e '.database.entities[] | select(.tableName == "payment_claims")' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "attachments")' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "attachments") | .indices[] | select(.name == "index_attachments_relative_path" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expenses")' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expenses") | .indices[] | select(.name == "index_group_expenses_command_id" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expense_shares")' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expense_shares") | .indices[] | select(.name == "index_group_expense_shares_group_expense_id_sequence_number" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expense_shares") | .indices[] | select(.name == "index_group_expense_shares_group_expense_id_person_id" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expense_shares") | .indices[] | select(.name == "index_group_expense_shares_debt_id" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "document_templates")' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "document_templates") | .indices[] | select(.name == "index_document_templates_is_default" and .unique == false)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "document_templates") | .indices[] | select(.name == "index_document_templates_style" and .unique == false)' "$SCHEMA" >/dev/null
+
+  database-tests:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Download generated Room schema
+        uses: actions/download-artifact@v4
+        with:
+          name: Wasl-room-schema
+          path: app/schemas/com.wasl.app.data.local.WaslDatabase
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android API 36
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Allow the emulator to use KVM
+        run: sudo chmod 666 /dev/kvm
+
+      - name: Run Room integration tests on Android
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            gradle --no-daemon -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true :app:connectedDebugAndroidTest || { status=$?; echo "=== Android instrumentation XML reports ==="; find app/build/outputs/androidTest-results/connected -type f -name '*.xml' -print -exec cat {} \; 2>/dev/null || true; echo "=== End Android instrumentation XML reports ==="; exit "$status"; }
+            echo "=== Android instrumentation XML reports ==="
+            find app/build/outputs/androidTest-results/connected -type f -name '*.xml' -print -exec cat {} \; 2>/dev/null || true
+            echo "=== End Android instrumentation XML reports ==="
+            mkdir -p app/build/outputs/payment-receipt app/build/outputs/account-documents
+            adb exec-out run-as com.wasl.app cat files/test-artifacts/wasl-payment-receipt-sample.pdf > app/build/outputs/payment-receipt/wasl-payment-receipt-sample.pdf
+            adb exec-out run-as com.wasl.app cat files/test-artifacts/wasl-debt-receipt-sample.pdf > app/build/outputs/account-documents/wasl-debt-receipt-sample.pdf
+            adb exec-out run-as com.wasl.app cat files/test-artifacts/wasl-account-statement-sample.pdf > app/build/outputs/account-documents/wasl-account-statement-sample.pdf
+
+      - name: Install PDF inspection tools
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+
+      - name: Inspect Arabic payment receipt artifact
+        run: |
+          PDF="app/build/outputs/payment-receipt/wasl-payment-receipt-sample.pdf"
+          PAGES="$(pdfinfo "$PDF" | awk '/^Pages:/ { print $2 }')"
+          test "$PAGES" -ge 2
+          pdftotext -layout "$PDF" app/build/outputs/payment-receipt/receipt-text.txt
+          grep -F "PAY-2026-00042" app/build/outputs/payment-receipt/receipt-text.txt
+          grep -F "AL NOOR TRADING" app/build/outputs/payment-receipt/receipt-text.txt
+          grep -F "123,456.78 USD" app/build/outputs/payment-receipt/receipt-text.txt
+          pdftoppm -png -r 144 "$PDF" \
+            app/build/outputs/payment-receipt/receipt-page
+
+      - name: Inspect debt receipt and account statement artifacts
+        run: |
+          DEBT_PDF="app/build/outputs/account-documents/wasl-debt-receipt-sample.pdf"
+          STATEMENT_PDF="app/build/outputs/account-documents/wasl-account-statement-sample.pdf"
+
+          DEBT_PAGES="$(pdfinfo "$DEBT_PDF" | awk '/^Pages:/ { print $2 }')"
+          STATEMENT_PAGES="$(pdfinfo "$STATEMENT_PDF" | awk '/^Pages:/ { print $2 }')"
+          test "$DEBT_PAGES" -ge 1
+          test "$STATEMENT_PAGES" -ge 2
+
+          pdftotext -layout "$DEBT_PDF" app/build/outputs/account-documents/debt-receipt-text.txt
+          pdftotext -layout "$STATEMENT_PDF" app/build/outputs/account-documents/account-statement-text.txt
+          grep -F "DEBT-2026-00043" app/build/outputs/account-documents/debt-receipt-text.txt
+          grep -F "AL NOOR TRADING" app/build/outputs/account-documents/debt-receipt-text.txt
+          grep -F "STAT-2026-00044" app/build/outputs/account-documents/account-statement-text.txt
+          grep -F "REF-35" app/build/outputs/account-documents/account-statement-text.txt
+
+          pdftoppm -png -r 144 "$DEBT_PDF" \
+            app/build/outputs/account-documents/debt-receipt-page
+          pdftoppm -png -r 144 "$STATEMENT_PDF" \
+            app/build/outputs/account-documents/account-statement-page
+
+      - name: Upload payment receipt PDF evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wasl-payment-receipt-evidence
+          path: app/build/outputs/payment-receipt/
+          if-no-files-found: warn
+
+      - name: Upload account document PDF evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wasl-account-document-evidence
+          path: app/build/outputs/account-documents/
+          if-no-files-found: warn
+
+      - name: Upload instrumentation test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wasl-room-instrumentation-results
+          path: |
+            app/build/outputs/androidTest-results/connected/
+            app/build/reports/androidTests/connected/
+          if-no-files-found: warn

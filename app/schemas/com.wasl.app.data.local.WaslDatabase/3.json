@@ -1,0 +1,581 @@
+{
+  "database": {
+    "entities": [
+      {
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `phone` TEXT, `email` TEXT, `photo_uri` TEXT, `notes` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `archived_at` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "affinity": "TEXT",
+            "columnName": "id",
+            "fieldPath": "id",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "display_name",
+            "fieldPath": "displayName",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "phone",
+            "fieldPath": "phone"
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "email",
+            "fieldPath": "email"
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "photo_uri",
+            "fieldPath": "photoUri"
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "notes",
+            "fieldPath": "notes"
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "created_at",
+            "fieldPath": "createdAt",
+            "notNull": true
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "updated_at",
+            "fieldPath": "updatedAt",
+            "notNull": true
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "archived_at",
+            "fieldPath": "archivedAt"
+          }
+        ],
+        "indices": [
+          {
+            "columnNames": [
+              "display_name"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_persons_display_name` ON `${TABLE_NAME}` (`display_name`)",
+            "name": "index_persons_display_name",
+            "orders": [],
+            "unique": false
+          },
+          {
+            "columnNames": [
+              "archived_at"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_persons_archived_at` ON `${TABLE_NAME}` (`archived_at`)",
+            "name": "index_persons_archived_at",
+            "orders": [],
+            "unique": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "tableName": "persons"
+      },
+      {
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `person_id` TEXT NOT NULL, `direction` TEXT NOT NULL, `original_amount_minor` INTEGER NOT NULL, `currency_code` TEXT NOT NULL, `opened_at` INTEGER NOT NULL, `due_date_epoch_day` INTEGER, `description` TEXT, `notes` TEXT, `lifecycle_state` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `closed_at` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`person_id`) REFERENCES `persons`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "affinity": "TEXT",
+            "columnName": "id",
+            "fieldPath": "id",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "person_id",
+            "fieldPath": "personId",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "direction",
+            "fieldPath": "direction",
+            "notNull": true
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "original_amount_minor",
+            "fieldPath": "originalAmountMinor",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "currency_code",
+            "fieldPath": "currencyCode",
+            "notNull": true
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "opened_at",
+            "fieldPath": "openedAt",
+            "notNull": true
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "due_date_epoch_day",
+            "fieldPath": "dueDateEpochDay"
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "description",
+            "fieldPath": "description"
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "notes",
+            "fieldPath": "notes"
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "lifecycle_state",
+            "fieldPath": "lifecycleState",
+            "notNull": true
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "created_at",
+            "fieldPath": "createdAt",
+            "notNull": true
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "updated_at",
+            "fieldPath": "updatedAt",
+            "notNull": true
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "closed_at",
+            "fieldPath": "closedAt"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "columns": [
+              "person_id"
+            ],
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "referencedColumns": [
+              "id"
+            ],
+            "table": "persons"
+          }
+        ],
+        "indices": [
+          {
+            "columnNames": [
+              "person_id",
+              "opened_at"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_debts_person_id_opened_at` ON `${TABLE_NAME}` (`person_id`, `opened_at`)",
+            "name": "index_debts_person_id_opened_at",
+            "orders": [],
+            "unique": false
+          },
+          {
+            "columnNames": [
+              "lifecycle_state",
+              "due_date_epoch_day"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_debts_lifecycle_state_due_date_epoch_day` ON `${TABLE_NAME}` (`lifecycle_state`, `due_date_epoch_day`)",
+            "name": "index_debts_lifecycle_state_due_date_epoch_day",
+            "orders": [],
+            "unique": false
+          },
+          {
+            "columnNames": [
+              "currency_code",
+              "direction"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_debts_currency_code_direction` ON `${TABLE_NAME}` (`currency_code`, `direction`)",
+            "name": "index_debts_currency_code_direction",
+            "orders": [],
+            "unique": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "tableName": "debts"
+      },
+      {
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `command_id` TEXT NOT NULL, `debt_id` TEXT NOT NULL, `kind` TEXT NOT NULL, `amount_minor` INTEGER, `currency_code` TEXT, `occurred_at` INTEGER, `recorded_at` INTEGER NOT NULL, `reverses_entry_id` TEXT, `note` TEXT, `reason` TEXT, `sequence_number` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`debt_id`) REFERENCES `debts`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`reverses_entry_id`) REFERENCES `ledger_entries`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "affinity": "TEXT",
+            "columnName": "id",
+            "fieldPath": "id",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "command_id",
+            "fieldPath": "commandId",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "debt_id",
+            "fieldPath": "debtId",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "kind",
+            "fieldPath": "kind",
+            "notNull": true
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "amount_minor",
+            "fieldPath": "amountMinor"
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "currency_code",
+            "fieldPath": "currencyCode"
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "occurred_at",
+            "fieldPath": "occurredAt"
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "recorded_at",
+            "fieldPath": "recordedAt",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "reverses_entry_id",
+            "fieldPath": "reversesEntryId"
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "note",
+            "fieldPath": "note"
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "reason",
+            "fieldPath": "reason"
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "sequence_number",
+            "fieldPath": "sequenceNumber",
+            "notNull": true
+          }
+        ],
+        "foreignKeys": [
+          {
+            "columns": [
+              "debt_id"
+            ],
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "referencedColumns": [
+              "id"
+            ],
+            "table": "debts"
+          },
+          {
+            "columns": [
+              "reverses_entry_id"
+            ],
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "referencedColumns": [
+              "id"
+            ],
+            "table": "ledger_entries"
+          }
+        ],
+        "indices": [
+          {
+            "columnNames": [
+              "command_id"
+            ],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_ledger_entries_command_id` ON `${TABLE_NAME}` (`command_id`)",
+            "name": "index_ledger_entries_command_id",
+            "orders": [],
+            "unique": true
+          },
+          {
+            "columnNames": [
+              "debt_id",
+              "sequence_number"
+            ],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_ledger_entries_debt_id_sequence_number` ON `${TABLE_NAME}` (`debt_id`, `sequence_number`)",
+            "name": "index_ledger_entries_debt_id_sequence_number",
+            "orders": [],
+            "unique": true
+          },
+          {
+            "columnNames": [
+              "reverses_entry_id"
+            ],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_ledger_entries_reverses_entry_id` ON `${TABLE_NAME}` (`reverses_entry_id`)",
+            "name": "index_ledger_entries_reverses_entry_id",
+            "orders": [],
+            "unique": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "tableName": "ledger_entries"
+      },
+      {
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `subject_type` TEXT NOT NULL, `subject_id` TEXT NOT NULL, `reminder_type` TEXT NOT NULL, `schedule_type` TEXT NOT NULL, `trigger_at` INTEGER NOT NULL, `zone_id` TEXT NOT NULL, `repeat_rule` TEXT, `status` TEXT NOT NULL, `platform_request_code` INTEGER, `last_failure_code` TEXT, `delivered_at` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "affinity": "TEXT",
+            "columnName": "id",
+            "fieldPath": "id",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "subject_type",
+            "fieldPath": "subjectType",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "subject_id",
+            "fieldPath": "subjectId",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "reminder_type",
+            "fieldPath": "reminderType",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "schedule_type",
+            "fieldPath": "scheduleType",
+            "notNull": true
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "trigger_at",
+            "fieldPath": "triggerAt",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "zone_id",
+            "fieldPath": "zoneId",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "repeat_rule",
+            "fieldPath": "repeatRule"
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "status",
+            "fieldPath": "status",
+            "notNull": true
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "platform_request_code",
+            "fieldPath": "platformRequestCode"
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "last_failure_code",
+            "fieldPath": "lastFailureCode"
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "delivered_at",
+            "fieldPath": "deliveredAt"
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "created_at",
+            "fieldPath": "createdAt",
+            "notNull": true
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "updated_at",
+            "fieldPath": "updatedAt",
+            "notNull": true
+          }
+        ],
+        "indices": [
+          {
+            "columnNames": [
+              "subject_type",
+              "subject_id",
+              "reminder_type"
+            ],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_reminders_subject_type_subject_id_reminder_type` ON `${TABLE_NAME}` (`subject_type`, `subject_id`, `reminder_type`)",
+            "name": "index_reminders_subject_type_subject_id_reminder_type",
+            "orders": [],
+            "unique": true
+          },
+          {
+            "columnNames": [
+              "status",
+              "trigger_at"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_reminders_status_trigger_at` ON `${TABLE_NAME}` (`status`, `trigger_at`)",
+            "name": "index_reminders_status_trigger_at",
+            "orders": [],
+            "unique": false
+          },
+          {
+            "columnNames": [
+              "subject_id"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_reminders_subject_id` ON `${TABLE_NAME}` (`subject_id`)",
+            "name": "index_reminders_subject_id",
+            "orders": [],
+            "unique": false
+          },
+          {
+            "columnNames": [
+              "platform_request_code"
+            ],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_reminders_platform_request_code` ON `${TABLE_NAME}` (`platform_request_code`)",
+            "name": "index_reminders_platform_request_code",
+            "orders": [],
+            "unique": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "tableName": "reminders"
+      },
+      {
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `command_id` TEXT NOT NULL, `aggregate_type` TEXT NOT NULL, `aggregate_id` TEXT NOT NULL, `event_type` TEXT NOT NULL, `occurred_at` INTEGER NOT NULL, `actor` TEXT NOT NULL, `before_snapshot` TEXT, `after_snapshot` TEXT, `reason` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "affinity": "TEXT",
+            "columnName": "id",
+            "fieldPath": "id",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "command_id",
+            "fieldPath": "commandId",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "aggregate_type",
+            "fieldPath": "aggregateType",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "aggregate_id",
+            "fieldPath": "aggregateId",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "event_type",
+            "fieldPath": "eventType",
+            "notNull": true
+          },
+          {
+            "affinity": "INTEGER",
+            "columnName": "occurred_at",
+            "fieldPath": "occurredAt",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "actor",
+            "fieldPath": "actor",
+            "notNull": true
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "before_snapshot",
+            "fieldPath": "beforeSnapshot"
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "after_snapshot",
+            "fieldPath": "afterSnapshot"
+          },
+          {
+            "affinity": "TEXT",
+            "columnName": "reason",
+            "fieldPath": "reason"
+          }
+        ],
+        "indices": [
+          {
+            "columnNames": [
+              "command_id"
+            ],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_audit_events_command_id` ON `${TABLE_NAME}` (`command_id`)",
+            "name": "index_audit_events_command_id",
+            "orders": [],
+            "unique": true
+          },
+          {
+            "columnNames": [
+              "aggregate_id",
+              "aggregate_type",
+              "occurred_at"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_audit_events_aggregate_id_aggregate_type_occurred_at` ON `${TABLE_NAME}` (`aggregate_id`, `aggregate_type`, `occurred_at`)",
+            "name": "index_audit_events_aggregate_id_aggregate_type_occurred_at",
+            "orders": [],
+            "unique": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "tableName": "audit_events"
+      }
+    ],
+    "identityHash": "2fbe62b702d436fb78e47b67146eeba0",
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2fbe62b702d436fb78e47b67146eeba0')"
+    ],
+    "version": 3
+  },
+  "formatVersion": 1
+}

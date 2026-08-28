@@ -1,0 +1,102 @@
+# سجل التغييرات
+
+آخر مزامنة: 2026-08-28.
+
+## 0.1.0 — Release Candidate
+
+### الأساس المالي
+
+- تطبيق Android أصلي بـKotlin/Compose/Material 3/Navigation 3.
+- `core:domain` مستقل وMoney بminor units من `Long`.
+- Ledger append-only مع Payment / Payment Reversal وidempotency/replay.
+- أشخاص وحسابات متعددة، RECEIVABLE/PAYABLE، وYER/SAR/USD دون خلط العملات.
+
+### المتابعة
+
+- Due dates + Audit + Today.
+- WorkManager scheduling/recovery وExact Alarm اختياري.
+- General Reminders.
+- Payment Promises.
+- Installment Plans/Revisions.
+- Payment Claims «طالبني».
+
+### البحث والعرض
+
+- Basic/Advanced Search.
+- Person Timeline.
+- Objective Statistics.
+- Documents Hub وAccount Details timeline.
+- Adaptive/RTL/Bidi hardening واختبارات large-font للمناطق الرئيسية.
+
+### الإدخال الطبيعي والصوتي
+
+- Natural Entry: Parser → Preview → explicit Confirmation → Save.
+- Voice Dictation بحالات recognized/empty/cancelled/unavailable/launch failure.
+- لا حفظ مالي مباشر من الصوت أو الإشعار.
+
+### Group Expense
+
+- العملية الأصلية context تاريخي وليست Ledger موازيًا.
+- كل share تتحول إلى Debt عادي.
+- 2+ مشاركين، unequal shares، عملة واتجاه موحدان، exact total.
+- atomic transaction + replay/idempotency + conflict detection + rollback.
+- Preview/Confirmation إلزاميان.
+
+### المستندات
+
+- `PAYMENT_RECEIPT`, `DEBT_RECEIPT`, `ACCOUNT_STATEMENT` من immutable snapshots.
+- numbering + page count + SHA-256 + integrity checks.
+- Room Schema v11 تضيف `document_templates`.
+- قوالب MINIMAL / BUSINESS / CLASSIC / COMPACT / MODERN.
+- القالب المختار يثبت داخل snapshot؛ المستندات القديمة تحتفظ بتوافقها ولا تتغير بسبب إعدادات لاحقة.
+- Payment/Debt/Account Statement PDF evidence ضمن CI.
+
+### المرفقات والنسخ والأمان
+
+- Attachments/evidence vault داخل مساحة التطبيق مع SHA-256 ومسارات آمنة.
+- FileProvider للمشاركة الصريحة وفحوص integrity.
+- Backup/Restore مشفر مع staging + schema/path/hash/FK/invariant validation + rollback.
+- App Lock عبر BiometricPrompt/Device Credential.
+- `FLAG_SECURE` وسياسة خصوصية للإشعارات الحساسة.
+- Local-first، ولا صلاحية `INTERNET` في الإصدار الحالي.
+
+### قاعدة البيانات
+
+- exported Room schemas ملتزمة من v1 إلى v11.
+- migrations صريحة دون destructive migration.
+- v8: payment claims.
+- v9: attachments.
+- v10: group expenses + shares.
+- v11: document templates.
+
+### Release engineering
+
+- `versionName = 0.1.0`, `versionCode = 1`.
+- إضافة `PRIVACY_POLICY.md`.
+- إضافة `docs/RELEASE_CHECKLIST.md`.
+- إضافة Signed Release GitHub Actions workflow.
+- signing configuration تقرأ الأسرار من environment فقط؛ لا keystore/passwords في Git.
+- release workflow يتحقق من APK عبر `apksigner` ويولد SHA-256.
+
+## Verification
+
+### Document Templates / Room v11 pre-merge gate
+
+Android CI #1017 — run `33203634720` — head `fdbb28b2aca59f7d0542eaa785d72502d695a431`:
+
+- Unit/Lint/Debug APK ✅
+- Room Schema v11 generated/verified ✅
+- Emulator integration/migration/repository/backup ✅
+- Payment/Debt/Account Statement PDF evidence ✅
+
+### Functional baseline
+
+Android CI #967 — run `33137676461` — head `e09efee71cea4b1734afe50a025c2a3218ec2dd5`:
+
+- 123/123 instrumentation، 0 failures/errors/skips ✅
+- Group Expense / Voice / Natural Entry / legacy PaymentFlow regressions ✅
+- Room v10 + PDF evidence ✅
+
+## حالة الإصدار
+
+مصدر المنتج أصبح في مرحلة Release Candidate. الحكم النهائي للمصدر هو Android CI المرتبط بأحدث رأس مجمع بعد مزامنة الوثائق. النشر الفعلي يبقى منفصلًا ويتطلب مفتاح توقيع خارجي وأسرار Release غير محفوظة في Git.

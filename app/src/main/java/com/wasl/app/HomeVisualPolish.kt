@@ -178,13 +178,14 @@ private fun HomeSectionCopy(title: String, subtitle: String) {
 @Composable
 private fun HomeSectionCount(count: Int, tagPrefix: String) {
     Surface(
-        modifier = Modifier.testTag("$tagPrefix-count"),
         shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
         Text(
             text = count.toString(),
-            modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp),
+            modifier = Modifier
+                .testTag("$tagPrefix-count")
+                .padding(horizontal = 13.dp, vertical = 8.dp),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.ExtraBold,
         )

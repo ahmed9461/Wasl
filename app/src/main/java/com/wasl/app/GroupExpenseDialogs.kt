@@ -39,14 +39,15 @@ internal fun CreateEntryTypeDialog(
     onCreateIndividual: () -> Unit,
     onCreateGroupExpense: () -> Unit,
 ) {
+    val onOpenNaturalEntry = LocalOpenNaturalEntry.current
     AlertDialog(
         modifier = Modifier.testTag("create-entry-type-picker"),
         onDismissRequest = onDismiss,
-        title = { Text("ماذا تريد أن تضيف؟") },
+        title = { Text("إضافة جديدة") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "اختر حسابًا فرديًا، أو عملية واحدة موزعة على عدة أشخاص.",
+                    text = "اختر الطريقة المناسبة للتسجيل. لن تُحفظ أي حركة مالية قبل تأكيدك.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -59,11 +60,23 @@ internal fun CreateEntryTypeDialog(
                 )
                 CreateEntryOption(
                     title = "عملية جماعية",
-                    description = "عملية واحدة بحصص موزعة على شخصين أو أكثر",
+                    description = "عملية واحدة موزعة على شخصين أو أكثر",
                     primary = false,
                     testTag = "create-entry-group",
                     onClick = onCreateGroupExpense,
                 )
+                onOpenNaturalEntry?.let { openNaturalEntry ->
+                    CreateEntryOption(
+                        title = "إدخال ذكي",
+                        description = "اكتب العملية بطريقتك ثم راجعها قبل الحفظ",
+                        primary = false,
+                        testTag = "create-entry-natural",
+                        onClick = {
+                            onDismiss()
+                            openNaturalEntry()
+                        },
+                    )
+                }
             }
         },
         confirmButton = {},

@@ -1115,7 +1115,7 @@ private fun PaymentDialog(
                             .testTag("payment-amount"),
                         label = { Text("مبلغ الدفعة") },
                         supportingText = {
-                            Text("العملة: ${account.ledger.balance.currency.value}")
+                            Text("العملة: ${ltrIsolate(account.ledger.balance.currency.value)}")
                         },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
@@ -1414,39 +1414,13 @@ private fun PaymentTimelineCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("دفعة مسجلة", fontWeight = FontWeight.Bold)
-                Surface(
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = if (isReversed) {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
-                    } else {
-                        MaterialTheme.colorScheme.primaryContainer
-                    },
-                ) {
-                    Text(
-                        text = if (isReversed) "معكوسة" else "فعّالة",
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                        color = if (isReversed) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        },
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
+            PaymentTimelineStatusHeader(isReversed = isReversed)
             DetailMoneyRow("المبلغ", payment.amount)
             MetadataRow("وقت السداد", formatInstant(payment.paidAt))
             payment.note?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             document?.let { receipt ->
                 HorizontalDivider()
-                MetadataRow("إيصال السداد", receipt.documentNumber)
+                MetadataRow("إيصال السداد", ltrIsolate(receipt.documentNumber))
                 when (receipt.status) {
                     DocumentStatus.READY -> {
                         if (isReversed) {
@@ -1456,23 +1430,14 @@ private fun PaymentTimelineCard(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        Row(
-                            modifier = Modifier.align(Alignment.End),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            TextButton(
-                                onClick = { onShareReceipt(receipt) },
-                                modifier = Modifier.testTag("share-receipt-${receipt.id}"),
-                            ) {
-                                Text("مشاركة")
-                            }
-                            TextButton(
-                                onClick = { onOpenReceipt(receipt) },
-                                modifier = Modifier.testTag("open-receipt-${receipt.id}"),
-                            ) {
-                                Text("فتح PDF")
-                            }
-                        }
+                        AccountTimelineDualActions(
+                            firstLabel = "مشاركة",
+                            secondLabel = "فتح PDF",
+                            firstTag = "share-receipt-${receipt.id}",
+                            secondTag = "open-receipt-${receipt.id}",
+                            onFirst = { onShareReceipt(receipt) },
+                            onSecond = { onOpenReceipt(receipt) },
+                        )
                     }
 
                     DocumentStatus.PENDING_PDF, DocumentStatus.FAILED -> {
@@ -1509,21 +1474,21 @@ private fun PaymentTimelineCard(
                 }
             }
             if (!isReversed) {
-                Row(
-                    modifier = Modifier.align(Alignment.End),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    if (document == null) {
-                        TextButton(
-                            onClick = onIssueReceipt,
-                            modifier = Modifier.testTag("issue-receipt-${payment.id.value}"),
-                        ) {
-                            Text("إصدار إيصال")
-                        }
-                    }
+                if (document == null) {
+                    AccountTimelineDualActions(
+                        firstLabel = "إصدار إيصال",
+                        secondLabel = "عكس الدفعة",
+                        firstTag = "issue-receipt-${payment.id.value}",
+                        secondTag = "reverse-payment-${payment.id.value}",
+                        onFirst = onIssueReceipt,
+                        onSecond = onReverse,
+                    )
+                } else {
                     TextButton(
                         onClick = onReverse,
-                        modifier = Modifier.testTag("reverse-payment-${payment.id.value}"),
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .testTag("reverse-payment-${payment.id.value}"),
                     ) {
                         Text("عكس الدفعة")
                     }
@@ -1621,30 +1586,16 @@ private fun DetailMoneyRow(
     money: Money,
     valueModifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label)
-        Text(
-            text = formatMoney(money),
-            modifier = valueModifier,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.End,
-        )
-    }
+    AdaptiveDetailMoneyRow(
+        label = label,
+        money = money,
+        valueModifier = valueModifier,
+    )
 }
 
 @Composable
 private fun MetadataRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, textAlign = TextAlign.End)
-    }
+    AdaptiveMetadataRow(label = label, value = value)
 }
 
 @Composable
@@ -1673,13 +1624,13 @@ private fun LoadErrorCard(message: String, onRetry: () -> Unit) {
 
 private fun formatInstant(instant: Instant): String {
     val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy - HH:mm", Locale.US)
-    return "\u2066${formatter.format(instant.atZone(ZoneId.systemDefault()))}\u2069"
+    return ltrIsolate(formatter.format(instant.atZone(ZoneId.systemDefault())))
 }
 
 private fun formatLocalTime(time: LocalTime): String =
-    "%02d:%02d".format(Locale.US, time.hour, time.minute)
+    ltrIsolate("%02d:%02d".format(Locale.US, time.hour, time.minute))
 
-private fun formatDate(date: LocalDate): String = "\u2066$date\u2069"
+private fun formatDate(date: LocalDate): String = ltrIsolate(date.toString())
 
 private fun reminderSummary(reminder: DueReminderRequest?): String =
     reminder?.let { "متابعة ذكية — ${formatInstant(it.triggerAt)}" } ?: "غير مفعل"
@@ -1718,7 +1669,7 @@ private fun AccountOperationNotice.toDisplayText(): String = when (this) {
     }
 
     is AccountOperationNotice.PaymentReceiptIssuedNotice ->
-        "تم تجهيز إيصال السداد $documentNumber وحفظه في سجل الدفعة."
+        "تم تجهيز إيصال السداد ${ltrIsolate(documentNumber)} وحفظه في سجل الدفعة."
 
     is AccountOperationNotice.PaymentPromiseCreatedNotice ->
         "تم تسجيل وعد بالسداد بتاريخ ${formatDate(promisedDate)} في حساب $personName."

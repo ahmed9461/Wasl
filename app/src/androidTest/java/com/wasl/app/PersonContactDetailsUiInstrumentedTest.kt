@@ -66,7 +66,6 @@ class PersonContactDetailsUiInstrumentedTest {
         input("create-person-notes", "  مورد رئيسي  ")
         input("create-debt-amount", "150000")
 
-        scrollToTag("create-debt-save")
         composeRule.onNodeWithTag("create-debt-save").performClick()
 
         val account = runBlocking {

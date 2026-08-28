@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 
 internal val LocalOpenInstallmentsHub = staticCompositionLocalOf<(() -> Unit)?> { null }
 internal val LocalOpenSettingsHub = staticCompositionLocalOf<(() -> Unit)?> { null }
+internal val LocalOpenNaturalEntry = staticCompositionLocalOf<(() -> Unit)?> { null }
 
 internal enum class WaslTopLevelDestination {
     HOME,
@@ -48,55 +49,23 @@ internal fun WaslTopLevelNavigation(
 ) {
     val onOpenInstallments = LocalOpenInstallmentsHub.current
     val onOpenSettings = LocalOpenSettingsHub.current
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 3.dp,
-        shadowElevation = 10.dp,
+        tonalElevation = 1.dp,
+        shadowElevation = 8.dp,
     ) {
-        NavigationBar(
-            containerColor = Color.Transparent,
-            tonalElevation = 0.dp,
-        ) {
-            WaslNavigationItem(
-                selected = selected == WaslTopLevelDestination.HOME,
-                destination = WaslTopLevelDestination.HOME,
-                label = "الرئيسية",
-                testTag = "nav-home",
-                onClick = onOpenHome,
-            )
-            WaslNavigationItem(
-                selected = selected == WaslTopLevelDestination.TODAY,
-                destination = WaslTopLevelDestination.TODAY,
-                label = "اليوم",
-                testTag = "nav-today",
-                onClick = onOpenToday,
-            )
-            WaslNavigationItem(
-                selected = selected == WaslTopLevelDestination.SEARCH,
-                destination = WaslTopLevelDestination.SEARCH,
-                label = "البحث",
-                testTag = "nav-search",
-                onClick = onOpenSearch,
-            )
-            onOpenInstallments?.let { openInstallments ->
-                WaslNavigationItem(
-                    selected = selected == WaslTopLevelDestination.INSTALLMENTS,
-                    destination = WaslTopLevelDestination.INSTALLMENTS,
-                    label = "الأقساط",
-                    testTag = "open-installments-hub",
-                    onClick = openInstallments,
-                )
+        NavigationBar(containerColor = Color.Transparent, tonalElevation = 0.dp) {
+            WaslNavigationItem(selected == WaslTopLevelDestination.HOME, WaslTopLevelDestination.HOME, "الرئيسية", "nav-home", onOpenHome)
+            WaslNavigationItem(selected == WaslTopLevelDestination.TODAY, WaslTopLevelDestination.TODAY, "اليوم", "nav-today", onOpenToday)
+            WaslNavigationItem(selected == WaslTopLevelDestination.SEARCH, WaslTopLevelDestination.SEARCH, "البحث", "nav-search", onOpenSearch)
+            onOpenInstallments?.let {
+                WaslNavigationItem(selected == WaslTopLevelDestination.INSTALLMENTS, WaslTopLevelDestination.INSTALLMENTS, "الأقساط", "open-installments-hub", it)
             }
-            onOpenSettings?.let { openSettings ->
-                WaslNavigationItem(
-                    selected = selected == WaslTopLevelDestination.SETTINGS,
-                    destination = WaslTopLevelDestination.SETTINGS,
-                    label = "الإعدادات",
-                    testTag = "open-settings-hub",
-                    onClick = openSettings,
-                )
+            onOpenSettings?.let {
+                WaslNavigationItem(selected == WaslTopLevelDestination.SETTINGS, WaslTopLevelDestination.SETTINGS, "الإعدادات", "open-settings-hub", it)
             }
         }
     }
@@ -114,28 +83,22 @@ private fun RowScope.WaslNavigationItem(
     NavigationBarItem(
         selected = selected,
         onClick = onClick,
-        modifier = Modifier
-            .semantics {
-                contentDescription = label
-                stateDescription = if (selected) "محددة" else "غير محددة"
-            }
-            .testTag(testTag),
-        icon = {
-            WaslDestinationIcon(
-                destination = destination,
-                selected = selected,
-            )
-        },
+        modifier = Modifier.semantics {
+            contentDescription = label
+            stateDescription = if (selected) "محددة" else "غير محددة"
+        }.testTag(testTag),
+        icon = { WaslDestinationIcon(destination, selected) },
         label = {
             Text(
                 text = label,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             )
         },
         alwaysShowLabel = !largeFontScale || selected,
         colors = NavigationBarItemDefaults.colors(
             selectedIconColor = MaterialTheme.colorScheme.primary,
-            selectedTextColor = MaterialTheme.colorScheme.onSurface,
+            selectedTextColor = MaterialTheme.colorScheme.primary,
             indicatorColor = MaterialTheme.colorScheme.primaryContainer,
             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
             unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -144,135 +107,40 @@ private fun RowScope.WaslNavigationItem(
 }
 
 @Composable
-private fun WaslDestinationIcon(
-    destination: WaslTopLevelDestination,
-    selected: Boolean,
-) {
-    val color = if (selected) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Canvas(modifier = Modifier.size(24.dp)) {
-        val strokeWidth = 2.15.dp.toPx()
-        val stroke = Stroke(
-            width = strokeWidth,
-            cap = StrokeCap.Round,
-            join = StrokeJoin.Round,
-        )
+private fun WaslDestinationIcon(destination: WaslTopLevelDestination, selected: Boolean) {
+    val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Canvas(modifier = Modifier.size(23.dp)) {
+        val strokeWidth = if (selected) 2.35.dp.toPx() else 2.05.dp.toPx()
+        val stroke = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
         when (destination) {
             WaslTopLevelDestination.HOME -> {
-                drawLine(
-                    color = color,
-                    start = Offset(size.width * 0.18f, size.height * 0.48f),
-                    end = Offset(size.width * 0.50f, size.height * 0.20f),
-                    strokeWidth = strokeWidth,
-                    cap = StrokeCap.Round,
-                )
-                drawLine(
-                    color = color,
-                    start = Offset(size.width * 0.50f, size.height * 0.20f),
-                    end = Offset(size.width * 0.82f, size.height * 0.48f),
-                    strokeWidth = strokeWidth,
-                    cap = StrokeCap.Round,
-                )
-                drawRoundRect(
-                    color = color,
-                    topLeft = Offset(size.width * 0.26f, size.height * 0.43f),
-                    size = Size(size.width * 0.48f, size.height * 0.40f),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()),
-                    style = stroke,
-                )
+                drawLine(color, Offset(size.width * .18f, size.height * .48f), Offset(size.width * .50f, size.height * .20f), strokeWidth, StrokeCap.Round)
+                drawLine(color, Offset(size.width * .50f, size.height * .20f), Offset(size.width * .82f, size.height * .48f), strokeWidth, StrokeCap.Round)
+                drawRoundRect(color = color, topLeft = Offset(size.width * .26f, size.height * .43f), size = Size(size.width * .48f, size.height * .40f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()), style = stroke)
             }
-
             WaslTopLevelDestination.TODAY -> {
-                drawCircle(
-                    color = color,
-                    radius = size.minDimension * 0.34f,
-                    center = center,
-                    style = stroke,
-                )
-                drawLine(
-                    color = color,
-                    start = center,
-                    end = Offset(center.x, size.height * 0.30f),
-                    strokeWidth = strokeWidth,
-                    cap = StrokeCap.Round,
-                )
-                drawLine(
-                    color = color,
-                    start = center,
-                    end = Offset(size.width * 0.67f, size.height * 0.57f),
-                    strokeWidth = strokeWidth,
-                    cap = StrokeCap.Round,
-                )
+                drawCircle(color, size.minDimension * .34f, center, style = stroke)
+                drawLine(color, center, Offset(center.x, size.height * .30f), strokeWidth, StrokeCap.Round)
+                drawLine(color, center, Offset(size.width * .67f, size.height * .57f), strokeWidth, StrokeCap.Round)
             }
-
             WaslTopLevelDestination.SEARCH -> {
-                drawCircle(
-                    color = color,
-                    radius = size.minDimension * 0.25f,
-                    center = Offset(size.width * 0.43f, size.height * 0.42f),
-                    style = stroke,
-                )
-                drawLine(
-                    color = color,
-                    start = Offset(size.width * 0.61f, size.height * 0.60f),
-                    end = Offset(size.width * 0.82f, size.height * 0.81f),
-                    strokeWidth = strokeWidth,
-                    cap = StrokeCap.Round,
-                )
+                drawCircle(color, size.minDimension * .25f, Offset(size.width * .43f, size.height * .42f), style = stroke)
+                drawLine(color, Offset(size.width * .61f, size.height * .60f), Offset(size.width * .82f, size.height * .81f), strokeWidth, StrokeCap.Round)
             }
-
             WaslTopLevelDestination.INSTALLMENTS -> {
-                drawRoundRect(
-                    color = color,
-                    topLeft = Offset(size.width * 0.18f, size.height * 0.23f),
-                    size = Size(size.width * 0.64f, size.height * 0.56f),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
-                    style = stroke,
-                )
-                drawLine(
-                    color = color,
-                    start = Offset(size.width * 0.32f, size.height * 0.40f),
-                    end = Offset(size.width * 0.68f, size.height * 0.40f),
-                    strokeWidth = strokeWidth,
-                    cap = StrokeCap.Round,
-                )
-                drawLine(
-                    color = color,
-                    start = Offset(size.width * 0.32f, size.height * 0.57f),
-                    end = Offset(size.width * 0.68f, size.height * 0.57f),
-                    strokeWidth = strokeWidth,
-                    cap = StrokeCap.Round,
-                )
+                drawRoundRect(color = color, topLeft = Offset(size.width * .18f, size.height * .23f), size = Size(size.width * .64f, size.height * .56f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()), style = stroke)
+                drawLine(color, Offset(size.width * .32f, size.height * .40f), Offset(size.width * .68f, size.height * .40f), strokeWidth, StrokeCap.Round)
+                drawLine(color, Offset(size.width * .32f, size.height * .57f), Offset(size.width * .68f, size.height * .57f), strokeWidth, StrokeCap.Round)
             }
-
             WaslTopLevelDestination.SETTINGS -> {
-                drawCircle(
-                    color = color,
-                    radius = size.minDimension * 0.20f,
-                    center = center,
-                    style = stroke,
-                )
-                val rays = listOf(
-                    Offset(0.50f, 0.10f) to Offset(0.50f, 0.24f),
-                    Offset(0.50f, 0.76f) to Offset(0.50f, 0.90f),
-                    Offset(0.10f, 0.50f) to Offset(0.24f, 0.50f),
-                    Offset(0.76f, 0.50f) to Offset(0.90f, 0.50f),
-                    Offset(0.22f, 0.22f) to Offset(0.32f, 0.32f),
-                    Offset(0.68f, 0.68f) to Offset(0.78f, 0.78f),
-                    Offset(0.78f, 0.22f) to Offset(0.68f, 0.32f),
-                    Offset(0.32f, 0.68f) to Offset(0.22f, 0.78f),
-                )
-                rays.forEach { (start, end) ->
-                    drawLine(
-                        color = color,
-                        start = Offset(size.width * start.x, size.height * start.y),
-                        end = Offset(size.width * end.x, size.height * end.y),
-                        strokeWidth = strokeWidth,
-                        cap = StrokeCap.Round,
-                    )
+                drawCircle(color, size.minDimension * .20f, center, style = stroke)
+                listOf(
+                    Offset(.50f, .10f) to Offset(.50f, .24f), Offset(.50f, .76f) to Offset(.50f, .90f),
+                    Offset(.10f, .50f) to Offset(.24f, .50f), Offset(.76f, .50f) to Offset(.90f, .50f),
+                    Offset(.22f, .22f) to Offset(.32f, .32f), Offset(.68f, .68f) to Offset(.78f, .78f),
+                    Offset(.78f, .22f) to Offset(.68f, .32f), Offset(.32f, .68f) to Offset(.22f, .78f),
+                ).forEach { (start, end) ->
+                    drawLine(color = color, start = Offset(size.width * start.x, size.height * start.y), end = Offset(size.width * end.x, size.height * end.y), strokeWidth = strokeWidth, cap = StrokeCap.Round)
                 }
             }
         }

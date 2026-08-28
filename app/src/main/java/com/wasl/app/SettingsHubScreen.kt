@@ -1,6 +1,7 @@
 package com.wasl.app
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -8,11 +9,9 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
@@ -22,6 +21,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -48,6 +48,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.wasl.app.backup.BackupCreated
 import com.wasl.app.backup.BackupService
+import com.wasl.app.privacy.AppAppearance
 import com.wasl.app.privacy.PrivacyPreferences
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -62,15 +63,20 @@ import kotlinx.coroutines.withContext
 internal fun SettingsHubRoute(
     backupService: BackupService,
     privacyPreferences: PrivacyPreferences,
+    appearance: AppAppearance = privacyPreferences.appearance,
+    onAppearanceChange: (AppAppearance) -> Unit = { privacyPreferences.appearance = it },
     onBack: () -> Unit,
+    onOpenSecurity: () -> Unit = {},
+    onOpenReminders: () -> Unit = {},
     onOpenDocuments: () -> Unit,
     onOpenStatistics: () -> Unit,
     onRestored: () -> Unit,
     onSecureScreenChanged: () -> Unit,
 ) {
+    BackHandler(onBack = onBack)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbar = remember { SnackbarHostState() }
 
     var hideSensitiveNotifications by remember {
         mutableStateOf(privacyPreferences.hideSensitiveNotifications)
@@ -79,16 +85,16 @@ internal fun SettingsHubRoute(
         mutableStateOf(privacyPreferences.secureScreen)
     }
     var busyMessage by remember { mutableStateOf<String?>(null) }
-    var showCreatePasswordDialog by remember { mutableStateOf(false) }
-    var showRestorePasswordDialog by remember { mutableStateOf(false) }
+    var createPasswordDialog by remember { mutableStateOf(false) }
+    var restorePasswordDialog by remember { mutableStateOf(false) }
     var restoreBytes by remember { mutableStateOf<ByteArray?>(null) }
     var pendingBackup by remember { mutableStateOf<BackupCreated?>(null) }
 
-    fun showMessage(message: String) {
-        scope.launch { snackbarHostState.showSnackbar(message) }
+    fun message(text: String) {
+        scope.launch { snackbar.showSnackbar(text) }
     }
 
-    val createDocumentLauncher = rememberLauncherForActivityResult(
+    val saveBackup = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument(BACKUP_MIME_TYPE),
     ) { uri: Uri? ->
         val backup = pendingBackup
@@ -107,16 +113,14 @@ internal fun SettingsHubRoute(
             busyMessage = null
             result.fold(
                 onSuccess = {
-                    showMessage(
-                        "تم حفظ النسخة: ${backup.rowCount} سجل و${backup.documentCount} مستند.",
-                    )
+                    message("تم حفظ النسخة: ${backup.rowCount} سجل و${backup.documentCount} مستند.")
                 },
-                onFailure = { showMessage(it.userFacingMessage("تعذر حفظ النسخة الاحتياطية.")) },
+                onFailure = { message(it.userFacingMessage("تعذر حفظ النسخة الاحتياطية.")) },
             )
         }
     }
 
-    val openDocumentLauncher = rememberLauncherForActivityResult(
+    val openBackup = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -131,31 +135,136 @@ internal fun SettingsHubRoute(
             }
             busyMessage = null
             result.fold(
-                onSuccess = { bytes ->
-                    restoreBytes = bytes
-                    showRestorePasswordDialog = true
+                onSuccess = {
+                    restoreBytes = it
+                    restorePasswordDialog = true
                 },
-                onFailure = { showMessage(it.userFacingMessage("تعذر قراءة ملف النسخة.")) },
+                onFailure = { message(it.userFacingMessage("تعذر قراءة ملف النسخة.")) },
             )
         }
     }
 
     Scaffold(
+        modifier = Modifier.testTag("settings-hub"),
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.safeDrawing,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { padding ->
+        snackbarHost = { SnackbarHost(snackbar) },
+    ) { insets ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(insets)
                 .verticalScroll(rememberScrollState())
-                .padding(PaddingValues(horizontal = 20.dp, vertical = 20.dp)),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(PaddingValues(horizontal = 20.dp, vertical = 18.dp)),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            SettingsHubHeader(onBack = onBack)
+            SettingsHeader(onBack)
 
-            busyMessage?.let { message ->
+            SettingsCard(
+                title = "المظهر",
+                subtitle = "اختر المظهر المريح لك؛ التلقائي يتبع إعداد الجهاز.",
+            ) {
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    if (shouldStackDenseRows(maxWidth)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            AppAppearance.entries.forEach { option ->
+                                FilterChip(
+                                    selected = appearance == option,
+                                    onClick = { onAppearanceChange(option) },
+                                    label = { Text(option.label) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("appearance-${option.storedValue}"),
+                                )
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            AppAppearance.entries.forEach { option ->
+                                FilterChip(
+                                    selected = appearance == option,
+                                    onClick = { onAppearanceChange(option) },
+                                    label = { Text(option.label) },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("appearance-${option.storedValue}"),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            SettingsCard(
+                title = "الأمان والخصوصية",
+                subtitle = "خيارات الحماية في مكان واحد بدون أزرار عائمة.",
+            ) {
+                SettingsActionRow(
+                    title = "قفل التطبيق",
+                    description = "البصمة أو قفل الجهاز وإعداد مهلة القفل",
+                    testTag = "open-security",
+                    onClick = onOpenSecurity,
+                )
+                HorizontalDivider()
+                SettingsSwitchRow(
+                    title = "إخفاء تفاصيل الإشعارات",
+                    description = "يعرض إشعارًا عامًا بدون اسم الشخص أو المبلغ.",
+                    checked = hideSensitiveNotifications,
+                    testTag = "privacy-hide-notification-details",
+                    onCheckedChange = {
+                        hideSensitiveNotifications = it
+                        privacyPreferences.hideSensitiveNotifications = it
+                    },
+                )
+                HorizontalDivider()
+                SettingsSwitchRow(
+                    title = "حماية الشاشة",
+                    description = "يمنع لقطات الشاشة ويخفي المعاينة من التطبيقات الأخيرة.",
+                    checked = secureScreen,
+                    testTag = "privacy-secure-screen",
+                    onCheckedChange = {
+                        secureScreen = it
+                        privacyPreferences.secureScreen = it
+                        onSecureScreenChanged()
+                    },
+                )
+            }
+
+            SettingsCard(
+                title = "التذكيرات",
+                subtitle = "إدارة التذكيرات العامة ومواعيد المتابعة.",
+            ) {
+                SettingsActionRow(
+                    title = "مركز التذكيرات",
+                    description = "إضافة ومراجعة التذكيرات المحفوظة",
+                    testTag = "open-reminders",
+                    onClick = onOpenReminders,
+                )
+            }
+
+            SettingsCard(
+                title = "الأدوات والتقارير",
+                subtitle = "وصول منظم إلى مستنداتك وإحصاءاتك.",
+            ) {
+                SettingsActionRow(
+                    title = "المستندات",
+                    description = "إيصالات الدين وكشوف الحساب",
+                    testTag = "open-documents-hub",
+                    onClick = onOpenDocuments,
+                )
+                HorizontalDivider()
+                SettingsActionRow(
+                    title = "الإحصاءات",
+                    description = "مؤشرات موضوعية بدون خلط العملات",
+                    testTag = "open-objective-statistics",
+                    onClick = onOpenStatistics,
+                )
+            }
+
+            busyMessage?.let { current ->
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.large,
@@ -167,95 +276,28 @@ internal fun SettingsHubRoute(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         CircularProgressIndicator()
-                        Text(message, fontWeight = FontWeight.Medium)
+                        Text(current)
                     }
                 }
             }
 
-            SettingsSectionCard(
-                title = "الإحصاءات",
-                subtitle = "مؤشرات موضوعية من سجل الحسابات ووعود السداد.",
-            ) {
-                Text(
-                    text = "لا توجد تقييمات للأشخاص، ولا يتم جمع مبالغ العملات المختلفة.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Button(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("open-objective-statistics"),
-                    onClick = onOpenStatistics,
-                ) {
-                    Text("فتح الإحصاءات")
-                }
-            }
-
-            SettingsSectionCard(
-                title = "المستندات",
-                subtitle = "إصدار إيصال الدين وكشف الحساب من بيانات وَصل المحفوظة.",
-            ) {
-                Text(
-                    text = "إيصال السداد يبقى مرتبطًا بالدفعة نفسها، بينما تجد هنا مستندات الحساب العامة.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Button(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("open-documents-hub"),
-                    onClick = onOpenDocuments,
-                ) {
-                    Text("فتح مركز المستندات")
-                }
-            }
-
-            SettingsSectionCard(
-                title = "الخصوصية",
-                subtitle = "تحكم بما يمكن أن يظهر خارج شاشة وَصل.",
-            ) {
-                PrivacySwitchRow(
-                    title = "إخفاء تفاصيل الإشعارات",
-                    description = "يعرض تنبيهًا عامًا بدون اسم الشخص أو المبلغ.",
-                    checked = hideSensitiveNotifications,
-                    testTag = "privacy-hide-notification-details",
-                    onCheckedChange = { value ->
-                        hideSensitiveNotifications = value
-                        privacyPreferences.hideSensitiveNotifications = value
-                    },
-                )
-                HorizontalDivider()
-                PrivacySwitchRow(
-                    title = "حماية الشاشة",
-                    description = "يمنع لقطات الشاشة ويخفي معاينة وَصل من التطبيقات الأخيرة أثناء التفعيل.",
-                    checked = secureScreen,
-                    testTag = "privacy-secure-screen",
-                    onCheckedChange = { value ->
-                        secureScreen = value
-                        privacyPreferences.secureScreen = value
-                        onSecureScreenChanged()
-                    },
-                )
-            }
-
-            SettingsSectionCard(
+            SettingsCard(
                 title = "النسخ الاحتياطي المشفّر",
-                subtitle = "نسخة يدوية قابلة للنقل لجهاز آخر، ولا تعتمد على حساب أو سحابة.",
+                subtitle = "نسخة محلية قابلة للنقل ولا تعتمد على سحابة.",
             ) {
                 Text(
-                    text = "تُشفّر البيانات والمستندات بكلمة مرور تختارها أنت. لا يمكن لوَصل استرجاع كلمة المرور إذا فقدتها.",
+                    text = "تُشفّر البيانات والمستندات بكلمة مرور تختارها أنت.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(4.dp))
                 Button(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("create-encrypted-backup"),
                     enabled = busyMessage == null,
-                    onClick = { showCreatePasswordDialog = true },
+                    onClick = { createPasswordDialog = true },
                 ) {
-                    Text("إنشاء نسخة احتياطية مشفّرة")
+                    Text("إنشاء نسخة احتياطية")
                 }
                 OutlinedButton(
                     modifier = Modifier
@@ -263,31 +305,26 @@ internal fun SettingsHubRoute(
                         .testTag("restore-encrypted-backup"),
                     enabled = busyMessage == null,
                     onClick = {
-                        openDocumentLauncher.launch(
+                        openBackup.launch(
                             arrayOf(BACKUP_MIME_TYPE, "application/octet-stream", "*/*"),
                         )
                     },
                 ) {
                     Text("استعادة نسخة احتياطية")
                 }
-                Text(
-                    text = "الاستعادة تستبدل بيانات وَصل الحالية فقط بعد فك التشفير والتحقق من سلامة الملف وقاعدة البيانات.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
     }
 
-    if (showCreatePasswordDialog) {
+    if (createPasswordDialog) {
         BackupPasswordDialog(
             title = "حماية النسخة بكلمة مرور",
-            description = "استخدم 8 أحرف على الأقل. احتفظ بالكلمة في مكان آمن لأنها مطلوبة عند الاستعادة.",
+            description = "استخدم 8 أحرف على الأقل واحتفظ بالكلمة في مكان آمن.",
             confirmLabel = "إنشاء النسخة",
             requireConfirmation = true,
-            onDismiss = { showCreatePasswordDialog = false },
+            onDismiss = { createPasswordDialog = false },
             onConfirm = { password ->
-                showCreatePasswordDialog = false
+                createPasswordDialog = false
                 scope.launch {
                     busyMessage = "جارٍ إنشاء نسخة مشفّرة والتحقق منها…"
                     val chars = password.toCharArray()
@@ -298,12 +335,12 @@ internal fun SettingsHubRoute(
                     }
                     busyMessage = null
                     result.fold(
-                        onSuccess = { backup ->
-                            pendingBackup = backup
-                            createDocumentLauncher.launch(defaultBackupFileName())
+                        onSuccess = {
+                            pendingBackup = it
+                            saveBackup.launch(defaultBackupFileName())
                         },
                         onFailure = {
-                            showMessage(it.userFacingMessage("تعذر إنشاء النسخة الاحتياطية."))
+                            message(it.userFacingMessage("تعذر إنشاء النسخة الاحتياطية."))
                         },
                     )
                 }
@@ -311,41 +348,40 @@ internal fun SettingsHubRoute(
         )
     }
 
-    if (showRestorePasswordDialog) {
+    if (restorePasswordDialog) {
         BackupPasswordDialog(
             title = "استعادة النسخة",
-            description = "سيتم استبدال بيانات وَصل الحالية بالنسخة المحددة بعد التحقق منها بالكامل.",
-            confirmLabel = "استعادة واستبدال البيانات",
+            description = "سيتم استبدال بيانات وَصل الحالية بعد التحقق الكامل.",
+            confirmLabel = "استعادة البيانات",
             requireConfirmation = false,
             onDismiss = {
-                showRestorePasswordDialog = false
+                restorePasswordDialog = false
                 restoreBytes = null
             },
             onConfirm = { password ->
                 val bytes = restoreBytes
-                showRestorePasswordDialog = false
-                if (bytes == null) return@BackupPasswordDialog
-                scope.launch {
-                    busyMessage = "جارٍ فك التشفير والتحقق والاستعادة…"
-                    val chars = password.toCharArray()
-                    val result = try {
-                        runCatching { backupService.restore(bytes, chars) }
-                    } finally {
-                        chars.fill('\u0000')
-                        restoreBytes = null
+                restorePasswordDialog = false
+                if (bytes != null) {
+                    scope.launch {
+                        busyMessage = "جارٍ فك التشفير والتحقق والاستعادة…"
+                        val chars = password.toCharArray()
+                        val result = try {
+                            runCatching { backupService.restore(bytes, chars) }
+                        } finally {
+                            chars.fill('\u0000')
+                            restoreBytes = null
+                        }
+                        busyMessage = null
+                        result.fold(
+                            onSuccess = {
+                                onRestored()
+                                message("تمت الاستعادة بنجاح: ${it.rowCount} سجل و${it.documentCount} مستند.")
+                            },
+                            onFailure = {
+                                message(it.userFacingMessage("تعذرت استعادة النسخة."))
+                            },
+                        )
                     }
-                    busyMessage = null
-                    result.fold(
-                        onSuccess = { restored ->
-                            onRestored()
-                            showMessage(
-                                "تمت الاستعادة بنجاح: ${restored.rowCount} سجل و${restored.documentCount} مستند.",
-                            )
-                        },
-                        onFailure = {
-                            showMessage(it.userFacingMessage("تعذرت استعادة النسخة."))
-                        },
-                    )
                 }
             },
         )
@@ -353,7 +389,7 @@ internal fun SettingsHubRoute(
 }
 
 @Composable
-private fun SettingsHubHeader(onBack: () -> Unit) {
+private fun SettingsHeader(onBack: () -> Unit) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         if (shouldStackDenseRows(maxWidth)) {
             Column(
@@ -362,8 +398,8 @@ private fun SettingsHubHeader(onBack: () -> Unit) {
                     .testTag("settings-header-stacked"),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                OutlinedButton(onClick = onBack) { Text("رجوع") }
-                SettingsHubHeaderText()
+                TextButton(onClick = onBack) { Text("رجوع") }
+                SettingsHeaderText()
             }
         } else {
             Row(
@@ -373,23 +409,23 @@ private fun SettingsHubHeader(onBack: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                OutlinedButton(onClick = onBack) { Text("رجوع") }
-                SettingsHubHeaderText()
+                TextButton(onClick = onBack) { Text("رجوع") }
+                SettingsHeaderText(Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-private fun SettingsHubHeaderText() {
-    Column {
+private fun SettingsHeaderText(modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
         Text(
-            text = "الإعدادات والخصوصية",
+            text = "الإعدادات",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.ExtraBold,
         )
         Text(
-            text = "حماية بيانات وَصل والنسخ الاحتياطي المحلي",
+            text = "المظهر، الأمان، التذكيرات والنسخ الاحتياطي",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -397,22 +433,28 @@ private fun SettingsHubHeaderText() {
 }
 
 @Composable
-private fun SettingsSectionCard(
+private fun SettingsCard(
     title: String,
     subtitle: String,
     content: @Composable () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
-                subtitle,
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -422,7 +464,46 @@ private fun SettingsSectionCard(
 }
 
 @Composable
-private fun PrivacySwitchRow(
+private fun SettingsActionRow(
+    title: String,
+    description: String,
+    testTag: String,
+    onClick: () -> Unit,
+) {
+    TextButton(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(testTag),
+        onClick = onClick,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                text = "‹",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsSwitchRow(
     title: String,
     description: String,
     checked: Boolean,
@@ -437,7 +518,7 @@ private fun PrivacySwitchRow(
                     .testTag("$testTag-row-stacked"),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                PrivacySwitchText(title, description)
+                SettingsSwitchText(title, description)
                 Switch(
                     modifier = Modifier.testTag(testTag),
                     checked = checked,
@@ -452,7 +533,7 @@ private fun PrivacySwitchRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                PrivacySwitchText(title, description, Modifier.weight(1f))
+                SettingsSwitchText(title, description, Modifier.weight(1f))
                 Switch(
                     modifier = Modifier.testTag(testTag),
                     checked = checked,
@@ -464,15 +545,15 @@ private fun PrivacySwitchRow(
 }
 
 @Composable
-private fun PrivacySwitchText(
+private fun SettingsSwitchText(
     title: String,
     description: String,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
-        Text(title, fontWeight = FontWeight.SemiBold)
+        Text(text = title, fontWeight = FontWeight.SemiBold)
         Text(
-            description,
+            text = description,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -505,14 +586,9 @@ private fun BackupPasswordDialog(
                         .testTag("backup-password"),
                     value = password,
                     onValueChange = { password = it },
-                    singleLine = true,
                     label = { Text("كلمة المرور") },
+                    singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
-                    supportingText = {
-                        if (password.isNotEmpty() && !longEnough) {
-                            Text("يجب أن تكون 8 أحرف على الأقل.")
-                        }
-                    },
                 )
                 if (requireConfirmation) {
                     OutlinedTextField(
@@ -521,14 +597,9 @@ private fun BackupPasswordDialog(
                             .testTag("backup-password-confirmation"),
                         value = confirmation,
                         onValueChange = { confirmation = it },
-                        singleLine = true,
                         label = { Text("تأكيد كلمة المرور") },
+                        singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
-                        supportingText = {
-                            if (confirmation.isNotEmpty() && !matches) {
-                                Text("كلمتا المرور غير متطابقتين.")
-                            }
-                        },
                     )
                 }
             }
@@ -549,10 +620,10 @@ private fun BackupPasswordDialog(
 }
 
 private fun defaultBackupFileName(): String {
-    val stamp = LocalDateTime.now().format(
+    val timestamp = LocalDateTime.now().format(
         DateTimeFormatter.ofPattern("yyyyMMdd-HHmm", Locale.US),
     )
-    return "Wasl-$stamp.wasl"
+    return "Wasl-$timestamp.wasl"
 }
 
 private fun InputStream.readBytesLimited(limit: Int): ByteArray {

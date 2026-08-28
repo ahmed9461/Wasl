@@ -57,18 +57,18 @@ private val DarkColors = darkColorScheme(
 )
 
 private val WaslTypography = Typography(
-    displaySmall = TextStyle(FontFamily.SansSerif, FontWeight.ExtraBold, 34.sp, 43.sp),
-    headlineMedium = TextStyle(FontFamily.SansSerif, FontWeight.Bold, 28.sp, 37.sp),
-    headlineSmall = TextStyle(FontFamily.SansSerif, FontWeight.Bold, 24.sp, 33.sp),
-    titleLarge = TextStyle(FontFamily.SansSerif, FontWeight.Bold, 21.sp, 30.sp),
-    titleMedium = TextStyle(FontFamily.SansSerif, FontWeight.SemiBold, 17.sp, 26.sp),
-    titleSmall = TextStyle(FontFamily.SansSerif, FontWeight.SemiBold, 15.sp, 23.sp),
-    bodyLarge = TextStyle(FontFamily.SansSerif, FontWeight.Normal, 16.sp, 26.sp),
-    bodyMedium = TextStyle(FontFamily.SansSerif, FontWeight.Normal, 14.sp, 22.sp),
-    bodySmall = TextStyle(FontFamily.SansSerif, FontWeight.Normal, 12.sp, 19.sp),
-    labelLarge = TextStyle(FontFamily.SansSerif, FontWeight.SemiBold, 14.sp, 21.sp),
-    labelMedium = TextStyle(FontFamily.SansSerif, FontWeight.SemiBold, 12.sp, 18.sp),
-    labelSmall = TextStyle(FontFamily.SansSerif, FontWeight.Medium, 11.sp, 17.sp),
+    displaySmall = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.ExtraBold, fontSize = 34.sp, lineHeight = 43.sp),
+    headlineMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 28.sp, lineHeight = 37.sp),
+    headlineSmall = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 33.sp),
+    titleLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 21.sp, lineHeight = 30.sp),
+    titleMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, lineHeight = 26.sp),
+    titleSmall = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 23.sp),
+    bodyLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 26.sp),
+    bodyMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 22.sp),
+    bodySmall = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 19.sp),
+    labelLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 21.sp),
+    labelMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 18.sp),
+    labelSmall = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 17.sp),
 )
 
 private val WaslShapes = Shapes(

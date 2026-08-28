@@ -1,0 +1,45 @@
+name: Apply voice dictation hardening
+
+on:
+  push:
+    branches:
+      - agent/voice-dictation-hardening
+    paths:
+      - .github/workflows/patch-voice-dictation-hardening.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/voice-dictation-hardening
+          fetch-depth: 0
+
+      - name: Apply checked voice hardening patch
+        run: python3 .github/scripts/patch_voice_dictation_hardening.py
+
+      - name: Validate patch shape
+        run: |
+          git diff --check
+          grep -q 'voiceBridge: VoiceDictationBridge? = null' app/src/main/java/com/wasl/app/NaturalEntryActivity.kt
+          grep -q 'VoiceDictationOutcome.Cancelled' app/src/main/java/com/wasl/app/VoiceDictation.kt
+          grep -q 'recognizedVoiceReachesPreviewButNeverPersistsBeforeConfirmation' app/src/androidTest/java/com/wasl/app/NaturalEntryVoiceUiInstrumentedTest.kt
+          grep -q 'availabilityIsSafeWhenResolverFails' app/src/test/java/com/wasl/app/VoiceDictationAdapterTest.kt
+
+      - name: Commit product and test changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/scripts/patch_voice_dictation_hardening.py .github/workflows/patch-voice-dictation-hardening.yml
+          git add app/src/main/java/com/wasl/app/NaturalEntryActivity.kt \
+                  app/src/main/java/com/wasl/app/VoiceDictation.kt \
+                  app/src/main/java/com/wasl/app/AndroidVoiceDictationBridge.kt \
+                  app/src/test/java/com/wasl/app/VoiceDictationAdapterTest.kt \
+                  app/src/androidTest/java/com/wasl/app/NaturalEntryVoiceUiInstrumentedTest.kt
+          git commit -m 'feat: harden voice dictation flow'
+          git push origin HEAD:agent/voice-dictation-hardening

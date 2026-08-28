@@ -4,6 +4,8 @@ import androidx.room.withTransaction
 import com.wasl.app.data.AccountOverview
 import com.wasl.app.data.CommandConflictException
 import com.wasl.app.data.CreateDebtForExistingPersonCommand
+import com.wasl.app.data.CreateGroupExpenseCommand
+import com.wasl.app.data.GroupExpenseRecord
 import com.wasl.app.data.CreatePersonWithDebtCommand
 import com.wasl.app.data.DebtLifecycleState
 import com.wasl.app.data.DueReminderRequest
@@ -33,6 +35,9 @@ import com.wasl.app.data.WaslRepository
 import com.wasl.app.data.local.entity.DebtAggregate
 import com.wasl.app.data.local.entity.AuditEventEntity
 import com.wasl.app.data.local.entity.DebtEntity
+import com.wasl.app.data.local.entity.GroupExpenseAggregate
+import com.wasl.app.data.local.entity.GroupExpenseEntity
+import com.wasl.app.data.local.entity.GroupExpenseShareEntity
 import com.wasl.app.data.local.entity.LedgerEntryEntity
 import com.wasl.app.data.local.entity.PersonEntity
 import com.wasl.app.data.local.entity.ReminderEntity
@@ -44,6 +49,10 @@ import com.wasl.domain.DebtHeader
 import com.wasl.domain.DebtId
 import com.wasl.domain.DebtLedger
 import com.wasl.domain.DebtState
+import com.wasl.domain.GroupExpense
+import com.wasl.domain.GroupExpenseId
+import com.wasl.domain.GroupExpenseShare
+import com.wasl.domain.GroupExpenseShareId
 import com.wasl.domain.LedgerEntry
 import com.wasl.domain.LedgerEntryId
 import com.wasl.domain.Money
@@ -67,6 +76,7 @@ class RoomWaslRepository(
     private val auditEventDao = database.auditEventDao()
     private val documentIdentityDao = database.documentIdentityDao()
     private val issuedDocumentDao = database.issuedDocumentDao()
+    private val groupExpenseDao = database.groupExpenseDao()
 
     override fun observeAccounts(): Flow<List<AccountOverview>> =
         debtDao.observeActiveAggregates().map { aggregates ->
@@ -103,6 +113,11 @@ class RoomWaslRepository(
     override fun observeAccount(debtId: DebtId): Flow<AccountOverview?> =
         debtDao.observeAggregateById(debtId.value).map { aggregate ->
             aggregate?.let(::toAccountOverview)
+        }
+
+    override fun observeGroupExpenses(): Flow<List<GroupExpenseRecord>> =
+        groupExpenseDao.observeAggregates().map { aggregates ->
+            aggregates.map(::toGroupExpenseRecord)
         }
 
     override suspend fun createPersonWithDebt(
@@ -171,8 +186,96 @@ class RoomWaslRepository(
         )
     }
 
+    override suspend fun createGroupExpense(
+        command: CreateGroupExpenseCommand,
+    ): GroupExpenseRecord = database.withTransaction {
+        val normalizedExpense = command.expense.copy(
+            description = command.expense.description.trim(),
+            notes = command.expense.notes?.trim(),
+        )
+        val normalizedCommand = command.copy(expense = normalizedExpense)
+
+        groupExpenseDao.findAggregateByCommandId(command.commandId)?.let { existing ->
+            validateGroupExpenseReplay(normalizedCommand, existing)
+            return@withTransaction toGroupExpenseRecord(existing)
+        }
+        if (groupExpenseDao.findAggregateById(normalizedExpense.id.value) != null) {
+            throw CommandConflictException(
+                "Group expense ID ${normalizedExpense.id.value} is already used by another command.",
+            )
+        }
+
+        normalizedExpense.shares.forEach { share ->
+            val person = personDao.findById(share.personId.value)
+                ?: throw RecordNotFoundException("Person ${share.personId.value} was not found.")
+            if (person.archivedAt != null) {
+                throw RecordNotFoundException("Person ${share.personId.value} is archived.")
+            }
+            if (debtDao.findAggregateById(share.debtId.value) != null) {
+                throw CommandConflictException(
+                    "Debt ID ${share.debtId.value} is already used by another command.",
+                )
+            }
+            if (groupExpenseDao.findShareById(share.id.value) != null) {
+                throw CommandConflictException(
+                    "Group expense share ID ${share.id.value} is already used.",
+                )
+            }
+        }
+
+        groupExpenseDao.insertGroupExpense(
+            GroupExpenseEntity(
+                id = normalizedExpense.id.value,
+                commandId = command.commandId,
+                direction = normalizedExpense.direction.name,
+                totalAmountMinor = normalizedExpense.totalAmount.minorUnits,
+                currencyCode = normalizedExpense.totalAmount.currency.value,
+                occurredAt = normalizedExpense.occurredAt.toEpochMilli(),
+                description = normalizedExpense.description,
+                notes = normalizedExpense.notes,
+                createdAt = command.createdAt.toEpochMilli(),
+            ),
+        )
+        normalizedExpense.shares.forEachIndexed { index, share ->
+            insertDebtWithReminder(
+                DebtCreation(
+                    personId = share.personId,
+                    debtId = share.debtId,
+                    direction = normalizedExpense.direction,
+                    originalAmount = share.amount,
+                    openedAt = normalizedExpense.occurredAt,
+                    createdAt = command.createdAt,
+                    dueDate = null,
+                    description = normalizedExpense.description,
+                    debtNotes = null,
+                    dueReminder = null,
+                    strongAlarm = null,
+                ),
+            )
+            groupExpenseDao.insertShare(
+                GroupExpenseShareEntity(
+                    id = share.id.value,
+                    groupExpenseId = normalizedExpense.id.value,
+                    debtId = share.debtId.value,
+                    personId = share.personId.value,
+                    amountMinor = share.amount.minorUnits,
+                    sequenceNumber = index + 1,
+                ),
+            )
+        }
+
+        toGroupExpenseRecord(
+            requireNotNull(groupExpenseDao.findAggregateById(normalizedExpense.id.value)) {
+                "Created group expense could not be read back."
+            },
+        )
+    }
+
     override suspend fun getAccount(debtId: DebtId): AccountOverview? =
         debtDao.findAggregateById(debtId.value)?.let(::toAccountOverview)
+
+    override suspend fun getGroupExpense(groupExpenseId: GroupExpenseId): GroupExpenseRecord? =
+        groupExpenseDao.findAggregateById(groupExpenseId.value)?.let(::toGroupExpenseRecord)
 
     override suspend fun getDefaultDocumentIdentity(): DocumentIdentityRecord? =
         documentIdentityDao.findDefault()?.toRecord()
@@ -629,6 +732,82 @@ class RoomWaslRepository(
                 updatedAt = updatedAt.toEpochMilli(),
             ) == 1,
         ) { "Reminder $id was not rescheduled." }
+    }
+
+    private fun toGroupExpenseRecord(aggregate: GroupExpenseAggregate): GroupExpenseRecord {
+        val entity = aggregate.groupExpense
+        val orderedShares = aggregate.shares.sortedBy { it.sequenceNumber }
+        orderedShares.forEachIndexed { index, share ->
+            check(share.sequenceNumber == index + 1) {
+                "Group expense share sequence contains a gap or duplicate."
+            }
+        }
+        return GroupExpenseRecord(
+            commandId = entity.commandId,
+            expense = GroupExpense(
+                id = GroupExpenseId(entity.id),
+                direction = DebtDirection.valueOf(entity.direction),
+                totalAmount = Money(
+                    minorUnits = entity.totalAmountMinor,
+                    currency = CurrencyCode.of(entity.currencyCode),
+                ),
+                occurredAt = Instant.ofEpochMilli(entity.occurredAt),
+                description = entity.description,
+                notes = entity.notes,
+                shares = orderedShares.map { share ->
+                    GroupExpenseShare(
+                        id = GroupExpenseShareId(share.id),
+                        debtId = DebtId(share.debtId),
+                        personId = PersonId(share.personId),
+                        amount = Money(
+                            minorUnits = share.amountMinor,
+                            currency = CurrencyCode.of(entity.currencyCode),
+                        ),
+                    )
+                },
+            ),
+            createdAt = Instant.ofEpochMilli(entity.createdAt),
+        )
+    }
+
+    private suspend fun validateGroupExpenseReplay(
+        command: CreateGroupExpenseCommand,
+        aggregate: GroupExpenseAggregate,
+    ) {
+        val persisted = toGroupExpenseRecord(aggregate)
+        val expected = GroupExpenseRecord(
+            commandId = command.commandId,
+            expense = command.expense,
+            createdAt = command.createdAt,
+        )
+        if (persisted != expected) {
+            throw CommandConflictException(
+                "Group expense command ID was reused with different data.",
+            )
+        }
+        command.expense.shares.forEach { share ->
+            val debtAggregate = debtDao.findAggregateById(share.debtId.value)
+                ?: throw CommandConflictException("Group expense child debt is missing.")
+            val account = toAccountOverview(debtAggregate)
+            val expectedDebt = DebtCreation(
+                personId = share.personId,
+                debtId = share.debtId,
+                direction = command.expense.direction,
+                originalAmount = share.amount,
+                openedAt = command.expense.occurredAt,
+                createdAt = command.createdAt,
+                dueDate = null,
+                description = command.expense.description,
+                debtNotes = null,
+                dueReminder = null,
+                strongAlarm = null,
+            )
+            if (!debtCreationMatches(expectedDebt, debtAggregate, account)) {
+                throw CommandConflictException(
+                    "Group expense child debt does not match the original command.",
+                )
+            }
+        }
     }
 
     private suspend fun requireAccount(debtId: DebtId): AccountOverview =

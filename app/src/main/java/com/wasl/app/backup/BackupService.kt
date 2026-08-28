@@ -477,6 +477,86 @@ class AndroidBackupService(
         require(singleLong(db, "SELECT COUNT(*) FROM debts WHERE original_amount_minor <= 0") == 0L) {
             "النسخة تحتوي مبلغ دين غير صالح."
         }
+        require(singleLong(db, "SELECT COUNT(*) FROM group_expenses WHERE total_amount_minor <= 0") == 0L) {
+            "النسخة تحتوي إجمالي عملية جماعية غير صالح."
+        }
+        require(singleLong(db, "SELECT COUNT(*) FROM group_expense_shares WHERE amount_minor <= 0") == 0L) {
+            "النسخة تحتوي حصة جماعية غير صالحة."
+        }
+        require(
+            singleLong(
+                db,
+                """
+                SELECT COUNT(*) FROM group_expenses
+                WHERE trim(id) = ''
+                   OR trim(command_id) = ''
+                   OR direction NOT IN ('RECEIVABLE', 'PAYABLE')
+                   OR currency_code NOT GLOB '[A-Z][A-Z][A-Z]'
+                   OR trim(description) = ''
+                   OR (notes IS NOT NULL AND trim(notes) = '')
+                   OR created_at < occurred_at
+                """.trimIndent(),
+            ) == 0L,
+        ) { "النسخة تحتوي عملية جماعية ببيانات أساسية غير متسقة." }
+        require(
+            singleLong(
+                db,
+                """
+                SELECT COUNT(*) FROM group_expense_shares
+                WHERE trim(id) = ''
+                   OR trim(group_expense_id) = ''
+                   OR trim(debt_id) = ''
+                   OR trim(person_id) = ''
+                   OR sequence_number <= 0
+                """.trimIndent(),
+            ) == 0L,
+        ) { "النسخة تحتوي حصة جماعية ببيانات تعريف غير صالحة." }
+        require(
+            singleLong(
+                db,
+                """
+                SELECT COUNT(*) FROM (
+                    SELECT g.id
+                    FROM group_expenses g
+                    LEFT JOIN group_expense_shares s ON s.group_expense_id = g.id
+                    GROUP BY g.id, g.total_amount_minor
+                    HAVING COUNT(s.id) < 2 OR COALESCE(SUM(s.amount_minor), 0) != g.total_amount_minor
+                )
+                """.trimIndent(),
+            ) == 0L,
+        ) { "النسخة تحتوي عملية جماعية لا يطابق مجموع حصصها الإجمالي." }
+        require(
+            singleLong(
+                db,
+                """
+                SELECT COUNT(*) FROM (
+                    SELECT group_expense_id
+                    FROM group_expense_shares
+                    GROUP BY group_expense_id
+                    HAVING MIN(sequence_number) != 1
+                       OR MAX(sequence_number) != COUNT(*)
+                       OR COUNT(DISTINCT sequence_number) != COUNT(*)
+                )
+                """.trimIndent(),
+            ) == 0L,
+        ) { "النسخة تحتوي تسلسل حصص جماعية غير متصل." }
+        require(
+            singleLong(
+                db,
+                """
+                SELECT COUNT(*) FROM group_expense_shares s
+                JOIN group_expenses g ON g.id = s.group_expense_id
+                JOIN debts d ON d.id = s.debt_id
+                WHERE d.person_id != s.person_id
+                   OR d.direction != g.direction
+                   OR d.currency_code != g.currency_code
+                   OR d.original_amount_minor != s.amount_minor
+                   OR d.opened_at != g.occurred_at
+                   OR d.created_at != g.created_at
+                   OR d.description != g.description
+                """.trimIndent(),
+            ) == 0L,
+        ) { "النسخة تحتوي حصة جماعية لا تطابق الدين المرتبط بها." }
         require(singleLong(db, "SELECT COUNT(*) FROM installments WHERE amount_minor <= 0") == 0L) {
             "النسخة تحتوي مبلغ قسط غير صالح."
         }
@@ -586,7 +666,7 @@ class AndroidBackupService(
     )
 
     private companion object {
-        const val SCHEMA_VERSION = 9
+        const val SCHEMA_VERSION = 10
         const val MIN_PASSWORD_LENGTH = 8
         const val READY_STATUS = "READY"
         const val DOCUMENTS_DIRECTORY = "documents"
@@ -599,6 +679,8 @@ class AndroidBackupService(
         val TABLES = listOf(
             "persons",
             "debts",
+            "group_expenses",
+            "group_expense_shares",
             "ledger_entries",
             "reminders",
             "audit_events",
@@ -616,6 +698,8 @@ class AndroidBackupService(
         val EXPORT_QUERIES = mapOf(
             "persons" to "SELECT * FROM persons ORDER BY created_at, id",
             "debts" to "SELECT * FROM debts ORDER BY opened_at, id",
+            "group_expenses" to "SELECT * FROM group_expenses ORDER BY occurred_at, id",
+            "group_expense_shares" to "SELECT * FROM group_expense_shares ORDER BY group_expense_id, sequence_number, id",
             "ledger_entries" to "SELECT * FROM ledger_entries ORDER BY debt_id, sequence_number, id",
             "reminders" to "SELECT * FROM reminders ORDER BY created_at, id",
             "audit_events" to "SELECT * FROM audit_events ORDER BY occurred_at, id",

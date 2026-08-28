@@ -56,16 +56,22 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Wasl-room-schema
-          path: app/schemas/com.wasl.app.data.local.WaslDatabase/9.json
+          path: app/schemas/com.wasl.app.data.local.WaslDatabase/10.json
           if-no-files-found: error
 
-      - name: Verify generated Room schema v9
+      - name: Verify generated Room schema v10
         run: |
-          SCHEMA="app/schemas/com.wasl.app.data.local.WaslDatabase/9.json"
-          test "$(jq -r '.database.version' "$SCHEMA")" = "9"
+          SCHEMA="app/schemas/com.wasl.app.data.local.WaslDatabase/10.json"
+          test "$(jq -r '.database.version' "$SCHEMA")" = "10"
           jq -e '.database.entities[] | select(.tableName == "payment_claims")' "$SCHEMA" >/dev/null
           jq -e '.database.entities[] | select(.tableName == "attachments")' "$SCHEMA" >/dev/null
           jq -e '.database.entities[] | select(.tableName == "attachments") | .indices[] | select(.name == "index_attachments_relative_path" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expenses")' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expenses") | .indices[] | select(.name == "index_group_expenses_command_id" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expense_shares")' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expense_shares") | .indices[] | select(.name == "index_group_expense_shares_group_expense_id_sequence_number" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expense_shares") | .indices[] | select(.name == "index_group_expense_shares_group_expense_id_person_id" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expense_shares") | .indices[] | select(.name == "index_group_expense_shares_debt_id" and .unique == true)' "$SCHEMA" >/dev/null
 
   database-tests:
     needs: verify

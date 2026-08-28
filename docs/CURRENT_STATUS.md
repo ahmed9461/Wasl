@@ -15,7 +15,7 @@
 
 ## آخر بوابة كاملة مثبتة
 
-**Android CI #896 — Run `33126013233` — head `feb9c2cda0a15172b946044d516686ffbde29e39`.**
+**Android CI #901 — Run `33127031311` — head `9fb1b98d05dadc119943f23f177245bcace3ad1b`.**
 
 نجح بالكامل:
 
@@ -24,7 +24,9 @@
 - Debug APK ✅
 - Room Schema v9 generated/current verification ✅
 - Claims/Attachments schema checks ✅
-- Android instrumentation: **102/102**، 0 failed، 0 errors، 0 skipped ✅
+- Android instrumentation: **104/104**، 0 failed، 0 errors، 0 skipped ✅
+- `HomeAdaptiveUiInstrumentedTest.largeFontStacksAccountCardRowsAndRetainsClick` ✅
+- `HomeAdaptiveUiInstrumentedTest.largeFontStacksEverySummaryCurrencyRow` ✅
 - `DocumentsAdaptiveUiInstrumentedTest.largeFontStacksHeaderAndDualActionsWithoutLosingClicks` ✅
 - Security large-font tests الأربعة ✅
 - Settings 200% Font Scale test ✅
@@ -32,15 +34,15 @@
 - Debt Receipt PDF evidence ✅
 - Account Statement PDF evidence ✅
 
-Artifacts المرجعية من #896:
+Artifacts المرجعية من #901:
 
-- `Wasl-debug`: `9668500937`
-- `Wasl-room-schema`: `9668501233`
-- `Wasl-payment-receipt-evidence`: `9668689925`
-- `Wasl-account-document-evidence`: `9668690532`
-- `Wasl-room-instrumentation-results`: `9668691150`
+- `Wasl-debug`: `9668887938`
+- `Wasl-room-schema`: `9668888172`
+- `Wasl-payment-receipt-evidence`: `9669058109`
+- `Wasl-account-document-evidence`: `9669058391`
+- `Wasl-room-instrumentation-results`: `9669058737`
 
-وبذلك أصبحت دفعات RTL/Bidi وSecurity/Settings وDocuments Hub Adaptive مثبتة ببوابة كاملة، إضافة إلى Statistics وPerson Timeline وToday وClaims وAttachments وSchema v9.
+وبذلك أصبحت دفعات RTL/Bidi وSecurity/Settings وDocuments Hub وHome Adaptive مثبتة ببوابة كاملة، إضافة إلى Statistics وPerson Timeline وToday وClaims وAttachments وSchema v9.
 
 ## ما يعمل الآن
 
@@ -109,7 +111,7 @@ Artifacts المرجعية من #896:
 
 ## Accessibility / Adaptive UI
 
-**الحالة: قيد التنفيذ الفعلي، والدفعات حتى Documents Hub Verified بالكامل. Home تحت البوابة الحالية.**
+**الحالة: قيد التنفيذ الفعلي، والدفعات حتى Home Verified بالكامل. Account Details تحت البوابة الحالية.**
 
 الأساس الموجود:
 
@@ -159,7 +161,7 @@ commit `526dfcd79a6d587a884953a36e9d1d831465c619`:
 - `DocumentsAdaptiveUiInstrumentedTest` عند 200% Font Scale يثبت التكديس والنقر على الإجراءين مباشرة، ونجح ضمن **102/102** في #896.
 - لا تغيير في منطق إصدار PDF أو immutable snapshots أو فحوص SHA-256.
 
-### Home — تحت البوابة الحالية
+### Home — Verified عبر CI #901
 
 commit `09b79974d43269b153095a861935ead8df4efb16`:
 
@@ -168,8 +170,19 @@ commit `09b79974d43269b153095a861935ead8df4efb16`:
 - أصل الدين والمبلغ يتحولان إلى تخطيط رأسي عند النص الكبير.
 - صفوف العملة/القيمة في بطاقات الملخص المالي تتكدس لكل YER/SAR/USD عند النص الكبير.
 - `Card(onClick)` للحساب بقي بنفس السلوك ولم يتغير منطق فتح الحساب.
-- أضيف `HomeAdaptiveUiInstrumentedTest` باختبارين عند 200% Font Scale: بطاقة حساب جزئي السداد حقيقية من `DebtLedger` + صفوف العملات الثلاثة في الملخص.
+- `HomeAdaptiveUiInstrumentedTest` يختبر عند 200% Font Scale بطاقة حساب جزئي السداد حقيقية من `DebtLedger`، استمرار النقر، وصفوف العملات الثلاثة.
+- الاختباران نجحا ضمن **104/104** في #901.
 - لا تغيير في Create Debt dialog أو منطق Ledger/الرصيد/العملات.
+
+### Account Details — تحت البوابة الحالية
+
+commit `afc95ef2b63b48a780cfac0efc14d13a1f84a054`:
+
+- Hero direction/state badges تتحول من Row ثابت إلى تكديس فعلي عند النص الكبير/العرض الضيق.
+- بطاقتا `أصل الدين` و`المدفوع` تتكدسان full-width عند النص الكبير وتبقيان عمودين في الوضع الطبيعي.
+- عنوان `سجل العمليات` وشارة `سجل موثق` يتكدسان عند النص الكبير بدل الضغط في Row واحد.
+- أضيف `AccountDetailsAdaptiveUiInstrumentedTest` باختبارين عند 200% Font Scale للمكونات الثلاثة مباشرة.
+- التغيير Layout-only ولا يلمس AccountDetailsViewModel أو Room أو Ledger أو dialogs.
 
 هذه الدفعة لا توسم Verified قبل نجاح Android CI كاملة على الرأس الحالي.
 
@@ -183,13 +196,12 @@ commit `09b79974d43269b153095a861935ead8df4efb16`:
 
 ## ترتيب العمل التالي
 
-1. إغلاق بوابة CI الكاملة لدفعة Home الحالية.
-2. إذا أخضر: Account Details — hero badges/metrics وtimeline heading، مع اختبار قبل أي تغييرات أوسع للـdialogs.
-3. مراجعة touch targets والـsemantics للعناصر المخصصة وأي identifiers/dates متبقية داخل RTL.
-4. تنفيذ المصاريف/الديون الجماعية حسب المواصفة دون إنشاء Ledger موازٍ.
-5. جولة UI/PDF polishing النهائية المؤجلة عمدًا حتى اكتمال الوظائف.
-6. Full offline acceptance + migrations/backup regression.
-7. Release signing والتوزيع.
+1. إغلاق بوابة CI الكاملة لدفعة Account Details الحالية.
+2. إذا أخضر: مراجعة touch targets والـsemantics للعناصر المخصصة وأي identifiers/dates متبقية داخل RTL.
+3. تنفيذ المصاريف/الديون الجماعية حسب المواصفة دون إنشاء Ledger موازٍ.
+4. جولة UI/PDF polishing النهائية المؤجلة عمدًا حتى اكتمال الوظائف.
+5. Full offline acceptance + migrations/backup regression.
+6. Release signing والتوزيع.
 
 ## سياسة الجودة
 

@@ -18,6 +18,20 @@ enum class AppLockTimeout(
     }
 }
 
+enum class AppAppearance(
+    val storedValue: String,
+    val label: String,
+) {
+    SYSTEM("system", "تلقائي"),
+    DARK("dark", "داكن"),
+    LIGHT("light", "فاتح");
+
+    companion object {
+        fun fromStoredValue(value: String?): AppAppearance =
+            entries.firstOrNull { it.storedValue == value } ?: SYSTEM
+    }
+}
+
 class PrivacyPreferences(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(
         PREFERENCES_NAME,
@@ -50,11 +64,18 @@ class PrivacyPreferences(context: Context) {
             preferences.edit().putString(KEY_APP_LOCK_TIMEOUT, value.storedValue).apply()
         }
 
+    var appearance: AppAppearance
+        get() = AppAppearance.fromStoredValue(preferences.getString(KEY_APPEARANCE, null))
+        set(value) {
+            preferences.edit().putString(KEY_APPEARANCE, value.storedValue).apply()
+        }
+
     companion object {
         private const val PREFERENCES_NAME = "wasl_privacy"
         private const val KEY_HIDE_SENSITIVE_NOTIFICATIONS = "hide_sensitive_notifications"
         private const val KEY_SECURE_SCREEN = "secure_screen"
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
         private const val KEY_APP_LOCK_TIMEOUT = "app_lock_timeout"
+        private const val KEY_APPEARANCE = "appearance"
     }
 }

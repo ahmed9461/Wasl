@@ -12,66 +12,58 @@
 - الشعار: **كل حساب له وصل**
 - المستودع: `ahmed9461/Wasl`
 - Application ID: `com.wasl.app`
-- الإصدار المرشح: `0.1.0` (`versionCode = 1`) إلى أن تُغلق جولة v0.4.
-- `main` يحتوي Corrective UI v0.3 بعد دمج PR #12.
-- merge commit المرجعي على `main`: `15f982b9a3804861f96b454431c96ed4f8c19c04`.
+- الإصدار المرشح: `0.1.0` (`versionCode = 1`).
+- `main` يحتوي Corrective UI v0.3 بعد دمج PR #12 عند `15f982b9a3804861f96b454431c96ed4f8c19c04`.
 - Android CI #1100 على merge commit في `main` نجح بالكامل.
 
 ## الجولة المفتوحة — UI/UX Hardening v0.4
 
 - الفرع: `agent/ui-ux-hardening-v0.4`
-- PR: **#13** — Draft.
-- المواصفة التنفيذية الملزمة: `docs/UI_UX_HARDENING_V0.4_EXECUTION_PLAN.md`.
-- Room على الفرع: **Schema v12**، و`1.json → 12.json` ملتزمة في Git.
-- لا destructive migration في Production.
-
-> لا تعتبر CI الأخضر وحده تعريفًا للإنجاز؛ شروط القبول البصري والعملي في خطة v0.4 إلزامية أيضًا.
+- PR: **#13 — Draft**.
+- المواصفة التنفيذية: `docs/UI_UX_HARDENING_V0.4_EXECUTION_PLAN.md`.
+- Room: **Schema v12**، exported schemas `1.json → 12.json`.
+- functional-code checkpoint قبل مزامنة الوثائق: `9d0622f26ab6760d68362adf279da4e7e2ca69c7`.
+- Android CI #1248 — run `33274101583` على checkpoint أعلاه: **نجاح كامل**.
+- instrumentation: **149 tests / 0 failures / 0 errors / 0 skipped**.
 
 ## ما أُنجز في v0.4
 
-### UI/UX Batch 1
+- Home/Account cards/Group Expense/Account Details/Payment Promises جرى ضغطها وتحسين التكيف مع الهاتف والخط الكبير.
+- Documents Hub يستخدم Attachment Store الحقيقي، وFile Picker محمي ومغطى باختبارات cancel/PNG/PDF/unreadable URI/integrity.
+- Room v12 تضيف banner path/hash لهوية المستند.
+- Banner vault خاص بالتطبيق ومحتوى البانر يتحقق بـSHA-256/path/image/size بصورة fail-closed.
+- البانر يثبت داخل immutable document snapshot، ويرسم تاريخيًا في Payment/Debt/Account Statement PDFs بعد التحقق.
+- Backup/Restore يحفظ أصل البانر ومرجعه.
+- UI تدعم picker/preview/change/remove ثم **crop/reposition** بنسبة رأس PDF مع تحكم أفقي ورأسي.
+- crop output محدود حتى 1800px عرضًا، وpreview decode محدود حتى 1600px لتجنب استهلاك ذاكرة غير ضروري.
+- Debt Receipt / Account Statement يتطلبان **Preview ثم explicit confirmation** قبل الإصدار.
+- launcher resources تشمل legacy/adaptive/round/monochrome، مع اختبار Android 13+ للـmonochrome.
+- CI workflow على فروع PR لا يكرر push+PR runs، وconcurrency معزولة عن التشغيلات القديمة.
 
-- Home يخفي العملات ذات الرصيد المفتوح صفر.
-- بطاقات الحساب compact بدون placeholder حرف كبير.
-- تخطيط الهاتف القياسي أكثر أفقية وكثافة مع adaptive fallback.
-- Group Expense compact/responsive للاتجاه والعملات والمشاركين.
-- زر PDF السريع في تفاصيل الحساب نُقل إلى المنطقة العلوية اليسرى.
-- Payment Promise actions جُمعت في Action Bar.
-- Documents Hub مربوط بالـAttachment Store الحقيقي.
-- Attachment picker محمي والنصوص التقنية الخاصة بـSHA-256/storage أزيلت من UX اليومي.
+## البوابة الآلية المثبتة
 
-مرجع checkpoint: `docs/V04_BATCH1_PROGRESS.md`.
+Android CI #1248 — run `33274101583` ✅
 
-### Document Banner / Room v12
+- unit tests / lint / debug build ✅
+- Room v12 generated/verified ✅
+- 149 instrumentation tests، صفر فشل/أخطاء/تخطّي ✅
+- Payment Receipt PDF inspection ✅
+- Debt Receipt PDF inspection ✅
+- Account Statement PDF inspection ✅
+- artifacts: debug APK + Room schema + instrumentation reports + PDF evidence ✅
 
-- Migration `11→12` تضيف banner path/hash لهوية المستند.
-- `DocumentBannerAsset` + content-addressed app-private vault + path/hash/image validation.
-- `DocumentBannerSnapshotCodec` و`DocumentIdentityBannerMapper` مع fail-closed validation.
-- snapshots الخاصة بالدفع/الدين/كشف الحساب تجمد البانر المختار تاريخيًا مع backward compatibility.
-- PDF renderers تتحقق من البانر التاريخي قبل الرسم ولا تستخدم fallback صامتًا عند العبث.
-- Encrypted Backup/Restore يحفظ البانر ومرجعه مع اختبار استعادة.
-- Documents UI تدعم اختيار/معاينة/إزالة صورة رأس المستند بصورة compact.
-- اختبارات migration/snapshot/vault/backup/launcher أضيفت ضمن الجولة.
+بعد commit مزامنة الوثائق يجب انتظار CI النهائي لذلك الرأس؛ لا تعتمد #1248 بوصفه CI للرأس الجديد، رغم أن الكود الوظيفي لا يتغير.
 
-مرجع core checkpoint: `docs/V04_BANNER_CORE_PROGRESS.md`.
+## الخطوات التالية — لا تتجاوز الترتيب
 
-## وضع CI الآن
-
-- آخر baseline كامل مثبت قبل دفعات البانر الأخيرة: Android CI #1152 — run `33254422017` — head `c990642575ca5635a68f66342828f7d1fb411e49` ✅.
-- Android CI #1195 على `624b6f18...` كشف compile error واحدًا في `DocumentIdentityBannerControls.kt`: import غير صالح لـ`layout.weight`.
-- أصل الخطأ أُصلح في commit `7129faaccef7dadcffa66bf5f32a7c1653cf4d31` بإزالة الاستيراد المباشر واستخدام `RowScope.weight`.
-- بعد أي commit جديد على الفرع، اعتمد Android CI الخاص **برأس PR الحالي نفسه**؛ لا تعتمد run قديمًا أو workflow تطبيق مخصصًا بدل البوابة الكاملة.
-
-## المتبقي قبل دمج v0.4
-
-1. Android CI كامل أخضر على رأس PR #13 النهائي.
-2. Regression coverage للمرفقات/File Picker: cancel، صورة سليمة، PDF سليم، URI غير صالح/غير قابل للقراءة، integrity failure.
-3. قبول banner end-to-end: pick/preview/remove → snapshot → PDF فعلي مع banner → tamper fails closed → backup/restore.
-4. فحص بصري يدوي للشاشات المطلوبة في خطة v0.4، بما يشمل RTL وLarge Font وDark/Light/Auto.
-5. clean install للأيقونة المرجعية والتحقق من legacy/adaptive/round/monochrome resources على Launcher.
-6. مزامنة `CURRENT_STATUS` و`PROJECT_CONTEXT` و`CHANGELOG` وPR body مع الرأس المقبول النهائي.
-7. دمج PR #13 إلى `main` فقط بعد إغلاق البنود السابقة.
-8. إعادة Android CI على merge commit في `main` ثم استخراج APK من artifact الخاص بـ`main` فقط وحساب SHA-256.
+1. تأكد أن CI الخاص بcommit مزامنة الوثائق أخضر بالكامل.
+2. استخدم `Wasl-debug` من **رأس PR النهائي** كـPR test/debug APK للقبول البصري، وليس كإصدار نهائي منشور.
+3. راجع يدويًا: Home، العملات المتعددة، Add Account، Group Expense، Account Details/PDF action، Promise states، Documents/Attachments، banner crop/preview/export، Dark/Light/Auto، RTL، Large Font.
+4. نفذ clean install وتحقق بصريًا من launcher icon على Android حديث؛ الاختبار الآلي للموارد لا يغني عن شكل Launcher الفعلي/cache.
+5. بعد اعتماد القبول البصري فقط: حوّل PR #13 من Draft إلى Ready وادمجه إلى `main`.
+6. شغّل/انتظر Android CI على merge commit في `main`.
+7. استخرج APK الاختبار النهائي من artifact الخاص بـ`main` واحسب SHA-256.
+8. Signed public release مرحلة منفصلة بعد توفير أسرار التوقيع الخارجية.
 
 ## الثوابت
 
@@ -87,7 +79,7 @@
 10. كل Migration معها exported schema + tests.
 11. لا secrets أو signing keys في Git.
 
-## أوامر البوابة المحلية/CI
+## أوامر البوابة
 
 ```bash
 ./gradlew :core:domain:test
@@ -101,11 +93,11 @@ GitHub Actions على رأس PR/merge commit هي بوابة التسليم ال
 
 ## النشر العام
 
-Signed Release منفصل ويحتاج الأسرار الخارجية التالية فقط عند الاستعداد للنشر:
+Signed Release يحتاج خارجيًا فقط:
 
 - `WASL_KEYSTORE_BASE64`
 - `WASL_KEYSTORE_PASSWORD`
 - `WASL_KEY_ALIAS`
 - `WASL_KEY_PASSWORD`
 
-بدونها تكون الحالة signing pending وليست Published.
+بدون Signed Release ناجح تكون الحالة signing pending وليست Published.

@@ -127,7 +127,7 @@ class AdvancedSearchUiInstrumentedTest {
 
         waitForText("خالد")
         composeRule.onNodeWithText("خالد").assertIsDisplayed()
-        composeRule.onNodeWithText("رجوع").performClick()
+        composeRule.onNodeWithTag("account-details-back").performClick()
 
         waitForTag("search-advanced-document-document-advanced-ui")
         composeRule.onNodeWithTag("search-input").assertTextContains(documentNumber)

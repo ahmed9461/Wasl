@@ -108,7 +108,10 @@ internal fun DocumentsHubRoute(
             try {
                 val resolver = context.contentResolver
                 val metadata = queryAttachmentMetadata(context, uri)
-                val mime = resolver.getType(uri)?.takeIf { it.isNotBlank() } ?: "application/octet-stream"
+                val mime = runCatching { resolver.getType(uri) }
+                    .getOrNull()
+                    ?.takeIf { it.isNotBlank() }
+                    ?: "application/octet-stream"
                 resolver.openInputStream(uri)?.use { input ->
                     attachmentStore.importAttachment(
                         AddAttachmentCommand(
@@ -125,7 +128,7 @@ internal fun DocumentsHubRoute(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                showMessage(error.message?.takeIf { it.isNotBlank() } ?: "تعذر حفظ المرفق.")
+                showMessage(attachmentImportFailureMessage(error))
             } finally {
                 attachmentBusy = false
             }
@@ -607,22 +610,38 @@ private data class PickedAttachmentMetadata(val displayName: String)
 
 private fun queryAttachmentMetadata(context: android.content.Context, uri: Uri): PickedAttachmentMetadata {
     var name: String? = null
-    val cursor: Cursor? = context.contentResolver.query(
-        uri,
-        arrayOf(OpenableColumns.DISPLAY_NAME),
-        null,
-        null,
-        null,
-    )
-    cursor?.use {
-        if (it.moveToFirst()) {
-            val index = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            if (index >= 0) name = it.getString(index)
+    val cursor: Cursor? = runCatching {
+        context.contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null,
+        )
+    }.getOrNull()
+    runCatching {
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val index = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index >= 0) name = it.getString(index)
+            }
         }
     }
     return PickedAttachmentMetadata(
         displayName = name?.trim()?.takeIf(String::isNotBlank) ?: "مرفق",
     )
+}
+
+internal fun attachmentImportFailureMessage(error: Throwable): String {
+    val details = error.message.orEmpty()
+    return when {
+        error is SecurityException -> "لا يمكن قراءة هذا الملف. اختر ملفًا آخر أو امنح الإذن المطلوب."
+        details.contains("25 MB", ignoreCase = true) || details.contains("larger", ignoreCase = true) ->
+            "حجم المرفق أكبر من الحد المسموح (25 ميجابايت)."
+        details.contains("empty", ignoreCase = true) -> "الملف المختار فارغ ولا يمكن إضافته."
+        details == "تعذر قراءة الملف المختار." -> details
+        else -> "تعذر حفظ المرفق. جرّب ملفًا آخر."
+    }
 }
 
 private fun formatFileSize(bytes: Long): String = when {

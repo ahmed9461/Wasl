@@ -114,7 +114,7 @@ class TodayUiInstrumentedTest {
         }
 
         composeRule.onNodeWithTag("nav-today").performClick()
-        waitForText("اليوم لديك 2 أمور")
+        waitForText("ملخص اليوم")
 
         scrollToText("متأخر 3 أيام")
         composeRule.onNodeWithText("متأخر 3 أيام").assertIsDisplayed()

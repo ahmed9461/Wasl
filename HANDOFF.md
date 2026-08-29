@@ -1,6 +1,6 @@
 # HANDOFF — وَصل
 
-آخر تحديث: 2026-08-28
+آخر تحديث: 2026-08-29
 
 نقطة البدء لأي جلسة تطوير جديدة. ترتيب مصدر الحقيقة: الكود على الرأس الحالي → Room exported schema → GitHub Actions لنفس الرأس → `docs/CURRENT_STATUS.md` → هذا الملف.
 
@@ -9,21 +9,33 @@
 - المنتج: **وَصل — Wasl**
 - الشعار: **كل حساب له وصل**
 - الإصدار المرشح: `0.1.0` (`versionCode = 1`).
-- فرع الإنهاء المجمع: `agent/final-polish-doc-sync`.
-- آخر integration head يحمل تغييرات المنتج: `5794e9a74914c8af3a3ecf750664f2f6083eaf66`.
+- فرع الواجهة المرشح: `agent/ui-redesign-v0.3-corrective`.
+- آخر رأس اجتاز بوابة Corrective UI الكاملة: `acb5dea0fd54897afcc56e55ee52afc99bcb0392`.
 - Room Schema: **v11**، و`1.json → 11.json` ملتزمة في Git.
-- PR #10 الخاص بـDocument Templates v11 تم دمجه في فرع الإنهاء بعد نجاح Android CI الكامل.
+- الحالة الحالية: Release Candidate؛ دمج الواجهة إلى `main` ثم CI على merge commit هما الخطوتان الداخليتان المتبقيتان قبل APK التجريبي النهائي لهذه الجولة.
 
-## آخر بوابة v11 مكتملة قبل الدمج
+## آخر بوابة مكتملة
 
-Android CI #1017 — run `33203634720` — head `fdbb28b2aca59f7d0542eaa785d72502d695a431`:
+Android CI **#1097** — run `33228386198` — head `acb5dea0fd54897afcc56e55ee52afc99bcb0392`:
 
 - Unit/Lint/Debug APK ✅
 - Room v11 generation/verification ✅
 - Emulator instrumentation + migrations/repository/backup ✅
-- Payment/Debt/Account Statement PDF evidence ✅
+- جميع اختبارات Android على المحاكي ✅
+- Payment/Debt/Account Statement PDF inspection ✅
+- instrumentation وPDF evidence artifacts ✅
 
-بعد مزامنة وثائق الإنهاء، يجب اعتماد GitHub Actions المرتبطة **بأحدث رأس على فرع الإنهاء** قبل نقل المصدر إلى `main`.
+## Corrective UI v0.3
+
+- الهوية البصرية الجديدة الداكنة/الفيروزية/الذهبية هي المرجع المعتمد.
+- الأيقونة الجديدة مثبتة مع adaptive/round launcher support.
+- الرئيسية: ملخص عملات وحسابات مختصر، مع فصل «إضافة حساب» عن «إدخال ذكي».
+- إضافة الحساب: تدفق مباشر أقصر، والخيارات الثانوية داخل إعدادات إضافية.
+- اليوم: ملخص واضح وصياغة عربية طبيعية.
+- الأقساط: ملخص إجمالي/مسدد/متبقٍ + فلاتر + تقدم الخطة.
+- تفاصيل الحساب: الرصيد والتقدم والإجراءات والمتابعة ضمن الشاشة نفسها.
+- الإعدادات: نفس الهوية، تلقائي/داكن/فاتح، أمان، تذكيرات، نسخ احتياطي.
+- اختبارات UI تعتمد testTags مستقرة للمسارات الحساسة بدل النصوص المرئية المتغيرة.
 
 ## ما هو مغلق وظيفيًا
 
@@ -50,7 +62,7 @@ Android CI #1017 — run `33203634720` — head `fdbb28b2aca59f7d0542eaa785d7250
 - `.github/workflows/release.yml` يبني APK موقعًا فقط عند وجود أسرار التوقيع الخارجية.
 - `app/build.gradle.kts` لا يحتوي أسرارًا؛ يقرأ signing configuration من environment variables.
 
-الأسرار المطلوبة خارج Git:
+الأسرار المطلوبة خارج Git للنشر الموقّع:
 
 - `WASL_KEYSTORE_BASE64`
 - `WASL_KEYSTORE_PASSWORD`
@@ -61,10 +73,10 @@ Android CI #1017 — run `33203634720` — head `fdbb28b2aca59f7d0542eaa785d7250
 
 ## المتبقي
 
-1. نجاح Android CI على آخر رأس مجمع بعد مزامنة الوثائق.
-2. نقل الرأس المجمع إلى مسار PR #1 / `main` بعد نجاح البوابة.
-3. توفير مفتاح التوقيع الخارجي وتشغيل Signed Release عند الاستعداد للنشر.
-4. بيانات المتجر الخارجية ووسيلة التواصل الرسمية إن كانت مطلوبة.
+1. فتح PR من `agent/ui-redesign-v0.3-corrective` إلى `main` ودمجه بعد بوابة الفرع الخضراء.
+2. اعتماد Android CI على merge commit في `main`.
+3. استخراج APK التجريبي النهائي من CI على `main`.
+4. للنشر العام فقط: توفير مفتاح التوقيع الخارجي وتشغيل Signed Release واستكمال بيانات المتجر الخارجية.
 
 ## ثوابت
 

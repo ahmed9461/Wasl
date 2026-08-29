@@ -2,6 +2,37 @@
 
 آخر مزامنة: 2026-08-29.
 
+## غير منشور — UI/UX Hardening v0.4
+
+### تجربة الاستخدام
+
+- الرئيسية تخفي العملات التي لا يوجد لها رصيد مفتوح بدل عرض بطاقات صفرية ثابتة.
+- بطاقات الحساب أصبحت compact وأزيل الـplaceholder الكبير بحرف واحد.
+- تحسين التخطيطات الأفقية/adaptive على الهاتف القياسي مع fallback للشاشات الضيقة والخط الكبير.
+- ضغط واجهة Group Expense للاتجاه والعملات والمشاركين بدل التدفق العمودي الطويل.
+- نقل إجراء تصدير PDF في تفاصيل الحساب إلى المنطقة العلوية اليسرى ضمن Safe Area.
+- تجميع إجراءات Payment Promise المعلقة داخل Action Bar منظمة.
+- ربط Documents Hub بالـAttachment Store الحقيقي وحماية تشغيل منتقي الملفات.
+- إزالة نصوص SHA-256 وصلاحيات/تفاصيل التخزين التقنية من UX اليومي.
+
+### هوية المستندات وصورة الرأس
+
+- رفع Room Schema من v11 إلى **v12** مع Migration `11→12` وإضافة `banner_relative_path` و`banner_sha256` إلى `document_identities`.
+- إضافة `DocumentBannerAsset` وapp-private content-addressed vault مع path/hash/image/size validation.
+- إضافة `DocumentBannerSnapshotCodec` و`DocumentIdentityBannerMapper` مع fail-closed validation.
+- تثبيت البانر المختار داخل immutable snapshots الخاصة بـPayment/Debt/Account Statement مع backward compatibility للمستندات القديمة.
+- تحديث PDF renderers للتحقق من الأصل التاريخي ورسم البانر على الصفحة الأولى دون fallback صامت عند فشل integrity.
+- تحديث Encrypted Backup/Restore ليحفظ أصل البانر ومرجعه، مع regression test للاستعادة.
+- إضافة واجهة compact لاختيار/معاينة/إزالة صورة رأس هوية المستند.
+- إضافة اختبارات Room migration وsnapshot/vault/backup وlauncher resources المرتبطة بالجولة.
+
+### التحقق الجاري
+
+- آخر baseline كامل مثبت قبل دفعات البانر الأخيرة: Android CI #1152 — run `33254422017` — head `c990642575ca5635a68f66342828f7d1fb411e49` ✅.
+- Android CI #1195 كشف compile error في `DocumentIdentityBannerControls.kt` بسبب import مباشر غير صالح لـ`layout.weight`.
+- تم إصلاح السبب في `7129faaccef7dadcffa66bf5f32a7c1653cf4d31` بالاعتماد على `RowScope.weight` الصحيح.
+- لا تُغلق v0.4 ولا تُدمج قبل Android CI كامل أخضر على رأس PR #13 النهائي، ثم القبول البصري/العملي المحدد في `docs/UI_UX_HARDENING_V0.4_EXECUTION_PLAN.md`.
+
 ## واجهة احترافية — Corrective UI v0.3
 
 - اعتماد اللوحة المرئية التي وافق عليها المالك كمرجع تصميم ملزم بدل التحسينات العامة السابقة.
@@ -89,12 +120,13 @@ Android CI **#1097** — run `33228386198` — head `acb5dea0fd54897afcc56e55ee5
 
 ### قاعدة البيانات
 
-- exported Room schemas ملتزمة من v1 إلى v11.
+- exported Room schemas ملتزمة من v1 إلى v11 في baseline 0.1.0؛ v0.4 تضيف v12 على الفرع النشط.
 - migrations صريحة دون destructive migration.
 - v8: payment claims.
 - v9: attachments.
 - v10: group expenses + shares.
 - v11: document templates.
+- v12: document identity banner metadata ضمن v0.4.
 
 ### Release engineering
 
@@ -106,6 +138,10 @@ Android CI **#1097** — run `33228386198` — head `acb5dea0fd54897afcc56e55ee5
 - release workflow يتحقق من APK عبر `apksigner` ويولد SHA-256.
 
 ## Verification
+
+### Corrective UI v0.3 — merged baseline
+
+Corrective UI v0.3 دُمجت إلى `main` عند `15f982b9a3804861f96b454431c96ed4f8c19c04`، وAndroid CI #1100 — run `33229515030` على merge commit نجح بالكامل ✅.
 
 ### Corrective UI v0.3 pre-merge gate
 
@@ -130,4 +166,4 @@ Android CI #967 — run `33137676461` — head `e09efee71cea4b1734afe50a025c2a32
 
 ## حالة الإصدار
 
-المصدر بعد Corrective UI v0.3 في مرحلة Release Candidate. بوابة الكود والواجهة الحالية نجحت على CI #1097. بعد دمج فرع الواجهة في `main` يجب اعتماد Android CI الناتج من merge نفسه قبل تسليم APK التجريبي النهائي. النشر العام الموقّع يبقى منفصلًا ويتطلب مفتاح توقيع خارجي وأسرار Release غير محفوظة في Git.
+`main` يحمل Corrective UI v0.3 المدمجة والمتحققة. التطوير النشط الآن هو v0.4 على PR #13، لذلك لا يُسلَّم APK نهائي جديد ولا يوصف رأس v0.4 بأنه مقبول حتى ينجح Android CI الكامل والقبول البصري/العملي على الرأس النهائي، ثم يدمج إلى `main` ويُعاد CI على merge commit. النشر العام الموقّع يبقى منفصلًا ويتطلب مفتاح توقيع خارجي وأسرار Release غير محفوظة في Git.

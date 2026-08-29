@@ -154,9 +154,12 @@ internal fun AccountDetailsScreen(
                     )
                 },
                 navigationIcon = {
-                    TextButton(onClick = onBack) {
-                        Text("‹", style = MaterialTheme.typography.headlineSmall)
-                    }
+                    TextButton(
+              onClick = onBack,
+              modifier = Modifier.testTag("account-details-back"),
+          ) {
+              Text("‹", style = MaterialTheme.typography.headlineSmall)
+          }
                 },
             )
         },

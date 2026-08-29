@@ -23,24 +23,20 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p = Path('app/src/main/java/com/wasl/app/AccountDetailsScreen.kt')
           s = p.read_text()
-          old = '''                navigationIcon = {
-                    TextButton(onClick = onBack) {
-                        Text("‹", style = MaterialTheme.typography.headlineSmall)
-                    }
-                },'''
-          new = '''                navigationIcon = {
-                    TextButton(
+          pattern = r'TextButton\(onClick = onBack\)\s*\{\s*Text\("‹", style = MaterialTheme\.typography\.headlineSmall\)\s*\}'
+          replacement = '''TextButton(
                         onClick = onBack,
                         modifier = Modifier.testTag("account-details-back"),
                     ) {
                         Text("‹", style = MaterialTheme.typography.headlineSmall)
-                    }
-                },'''
-          if old not in s:
-              raise SystemExit('account details back button anchor not found')
-          p.write_text(s.replace(old, new, 1))
+                    }'''
+          updated, count = re.subn(pattern, replacement, s, count=1)
+          if count != 1:
+              raise SystemExit(f'expected exactly one account back button, found {count}')
+          p.write_text(updated)
           PY
       - name: Commit result and remove temporary workflow
         shell: bash

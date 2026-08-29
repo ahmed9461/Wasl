@@ -56,6 +56,7 @@ import com.wasl.app.data.PrepareDebtReceiptCommand
 import com.wasl.app.data.UnavailableAttachmentStore
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.document.AttachmentFileAccess
+import com.wasl.app.document.DocumentBannerAsset
 import com.wasl.app.document.PaymentReceiptService
 import com.wasl.app.document.ReceiptFileAccess
 import com.wasl.domain.DebtId
@@ -89,6 +90,9 @@ internal fun DocumentsHubRoute(
     var footer by remember { mutableStateOf("") }
     var identityId by remember { mutableStateOf<String?>(null) }
     var identityLoaded by remember { mutableStateOf(false) }
+    var issuerBanner by remember { mutableStateOf<DocumentBannerAsset?>(null) }
+    var bannerPreviewBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var bannerBusy by remember { mutableStateOf(false) }
     var busyKey by remember { mutableStateOf<String?>(null) }
     var readyDocument by remember { mutableStateOf<IssuedDocumentRecord?>(null) }
     var attachments by remember { mutableStateOf<List<AttachmentRecord>>(emptyList()) }
@@ -135,6 +139,30 @@ internal fun DocumentsHubRoute(
         }
     }
 
+    val bannerPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri == null || bannerBusy) return@rememberLauncherForActivityResult
+        bannerBusy = true
+        scope.launch {
+            try {
+                val asset = context.contentResolver.openInputStream(uri)?.use { input ->
+                    documentService.importIdentityBanner(input)
+                } ?: error("تعذر قراءة الصورة المختارة.")
+                val verifiedBytes = documentService.readIdentityBanner(asset)
+                issuerBanner = asset
+                bannerPreviewBytes = verifiedBytes
+                showMessage("تم تجهيز صورة رأس المستند.")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                showMessage(error.message?.takeIf { it.isNotBlank() } ?: "تعذر حفظ صورة رأس المستند.")
+            } finally {
+                bannerBusy = false
+            }
+        }
+    }
+
     LaunchedEffect(repository) {
         repository.observeAccounts()
             .catch { error -> loadError = error.message ?: "تعذر قراءة الحسابات." }
@@ -144,17 +172,28 @@ internal fun DocumentsHubRoute(
             }
     }
     LaunchedEffect(documentService) {
-        runCatching { documentService.getDefaultIdentity() }
-            .onSuccess { identity ->
-                identity?.let {
-                    identityId = it.id
-                    issuerName = it.displayName
-                    activityName = it.activityName.orEmpty()
-                    phone = it.phone.orEmpty()
-                    footer = it.footerText.orEmpty()
+        try {
+            documentService.getDefaultIdentity()?.let { identity ->
+                identityId = identity.id
+                issuerName = identity.displayName
+                activityName = identity.activityName.orEmpty()
+                phone = identity.phone.orEmpty()
+                footer = identity.footerText.orEmpty()
+                issuerBanner = identity.banner
+                bannerPreviewBytes = identity.banner?.let { banner ->
+                    runCatching { documentService.readIdentityBanner(banner) }.getOrNull()
+                }
+                if (identity.banner != null && bannerPreviewBytes == null) {
+                    showMessage("تعذر التحقق من صورة رأس الهوية. اختر الصورة من جديد قبل التصدير.")
                 }
             }
-        identityLoaded = true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            showMessage("تعذر تحميل هوية المستند المحفوظة.")
+        } finally {
+            identityLoaded = true
+        }
     }
     LaunchedEffect(attachmentStore, initialDebtId) {
         val debtId = initialDebtId ?: return@LaunchedEffect
@@ -189,6 +228,7 @@ internal fun DocumentsHubRoute(
                             issuerActivityName = activityName.trim().ifEmpty { null },
                             issuerPhone = phone.trim().ifEmpty { null },
                             footerText = footer.trim().ifEmpty { null },
+                            issuerBanner = issuerBanner,
                             issuedAt = now,
                             issueZoneId = zone,
                         ),
@@ -203,6 +243,7 @@ internal fun DocumentsHubRoute(
                             issuerActivityName = activityName.trim().ifEmpty { null },
                             issuerPhone = phone.trim().ifEmpty { null },
                             footerText = footer.trim().ifEmpty { null },
+                            issuerBanner = issuerBanner,
                             issuedAt = now,
                             issueZoneId = zone,
                         ),
@@ -311,6 +352,20 @@ item("header") {
                     ) {
                         Text("هوية مُصدر المستند", fontWeight = FontWeight.Bold)
                         if (!identityLoaded) CircularProgressIndicator()
+                        DocumentIdentityBannerControls(
+                            previewBytes = bannerPreviewBytes,
+                            hasBanner = issuerBanner != null,
+                            busy = bannerBusy,
+                            onPick = {
+                                runCatching { bannerPicker.launch(arrayOf("image/*")) }
+                                    .onFailure { showMessage("تعذر فتح معرض الصور على هذا الجهاز.") }
+                            },
+                            onRemove = {
+                                issuerBanner = null
+                                bannerPreviewBytes = null
+                                showMessage("لن تظهر صورة رأس في المستندات الجديدة.")
+                            },
+                        )
                         OutlinedTextField(
                             modifier = Modifier.fillMaxWidth().testTag("documents-issuer-name"),
                             value = issuerName,
@@ -402,24 +457,14 @@ DocumentDualActionButtons(
                             "المتبقي ${formatDocumentsMoney(account.ledger.balance)} من ${formatDocumentsMoney(account.ledger.header.originalAmount)}",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Button(
-                            modifier = Modifier.fillMaxWidth().testTag("issue-debt-receipt-${account.ledger.header.id.value}"),
+                        DocumentDualActionButtons(
+                            testTagPrefix = "account-documents-${account.ledger.header.id.value}",
+                            primaryLabel = if (busyKey == debtKey) "جاري الإصدار…" else "إيصال دين",
+                            secondaryLabel = if (busyKey == statementKey) "جاري التصدير…" else "كشف حساب PDF",
                             enabled = busyKey == null && identityLoaded,
-                            onClick = { issue(account, DocumentType.DEBT_RECEIPT) },
-                        ) {
-                            if (busyKey == debtKey) CircularProgressIndicator() else Text("إصدار إيصال دين")
-                        }
-                        OutlinedButton(
-                            modifier = Modifier.fillMaxWidth().testTag("issue-account-statement-${account.ledger.header.id.value}"),
-                            enabled = busyKey == null && identityLoaded,
-                            onClick = { issue(account, DocumentType.ACCOUNT_STATEMENT) },
-                        ) {
-                            if (busyKey == statementKey) CircularProgressIndicator() else Text("تصدير كل المعاملات PDF")
-                        }
-                        Text(
-                            "كشف الحساب يحفظ Snapshot ثابتًا للحساب ويشمل أصل الدين، صافي المسدد، المتبقي، وكل دفعة أو عملية عكس مسجلة حتى وقت التصدير.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            primaryFilled = true,
+                            onPrimary = { issue(account, DocumentType.DEBT_RECEIPT) },
+                            onSecondary = { issue(account, DocumentType.ACCOUNT_STATEMENT) },
                         )
                     }
                 }

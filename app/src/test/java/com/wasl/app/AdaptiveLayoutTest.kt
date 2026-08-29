@@ -7,14 +7,16 @@ import kotlin.test.assertTrue
 
 class AdaptiveLayoutTest {
     @Test
-    fun narrowContentStacksDenseRows() {
-        assertTrue(shouldStackDenseRows(360.dp, fontScale = 1f))
+    fun veryNarrowContentStacksDenseRows() {
+        assertTrue(shouldStackDenseRows(320.dp, fontScale = 1f))
     }
 
     @Test
-    fun regularWidthKeepsDenseRowsHorizontalAtDefaultFontScale() {
-        assertFalse(shouldStackDenseRows(500.dp, fontScale = 1f))
+    fun standardPhoneWidthKeepsDenseRowsHorizontalAtDefaultFontScale() {
+        assertFalse(shouldStackDenseRows(360.dp, fontScale = 1f))
+        assertFalse(shouldStackDenseRows(390.dp, fontScale = 1f))
         assertFalse(shouldStackDenseRows(420.dp, fontScale = 1f))
+        assertFalse(shouldStackDenseRows(500.dp, fontScale = 1f))
     }
 
     @Test

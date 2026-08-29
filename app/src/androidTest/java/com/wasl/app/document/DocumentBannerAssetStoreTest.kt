@@ -1,8 +1,11 @@
 package com.wasl.app.document
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Color
 import androidx.test.core.app.ApplicationProvider
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.fail
@@ -14,7 +17,7 @@ class DocumentBannerAssetStoreTest {
     @Test
     fun importThenRead_roundTripsVerifiedImage() {
         val store = AndroidDocumentBannerAssetStore(context)
-        val bytes = onePixelPng()
+        val bytes = validPng()
         val asset = store.importImage(ByteArrayInputStream(bytes))
 
         assertEquals(DocumentBannerAsset.sha256(bytes), asset.sha256)
@@ -32,7 +35,16 @@ class DocumentBannerAssetStoreTest {
         }
     }
 
-    private fun onePixelPng(): ByteArray = java.util.Base64.getDecoder().decode(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlZf1cAAAAASUVORK5CYII=",
-    )
+    private fun validPng(): ByteArray {
+        val bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
+        return try {
+            bitmap.eraseColor(Color.rgb(8, 127, 114))
+            ByteArrayOutputStream().use { output ->
+                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
+                output.toByteArray()
+            }
+        } finally {
+            bitmap.recycle()
+        }
+    }
 }

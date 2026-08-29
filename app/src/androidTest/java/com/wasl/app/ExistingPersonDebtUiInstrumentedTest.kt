@@ -6,7 +6,6 @@ import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
@@ -67,11 +66,9 @@ class ExistingPersonDebtUiInstrumentedTest {
             }
         }
         scrollToTag("account-${firstAccount.ledger.header.id.value}")
-        composeRule.onNodeWithTag("account-${firstAccount.ledger.header.id.value}")
-            .assertIsDisplayed()
+        composeRule.onNodeWithTag("account-${firstAccount.ledger.header.id.value}").assertIsDisplayed()
 
-        composeRule.onNodeWithText("إضافة حساب").performClick()
-        composeRule.onNodeWithTag("create-entry-individual").performClick()
+        composeRule.onNodeWithTag("home-add-entry").performClick()
         composeRule.onNodeWithTag("create-person-mode-existing").performClick()
         waitForTag("existing-person-${firstAccount.person.id.value}")
         composeRule.onNodeWithTag("existing-person-${firstAccount.person.id.value}").performClick()
@@ -100,8 +97,7 @@ class ExistingPersonDebtUiInstrumentedTest {
     }
 
     private fun createFirstDebt() {
-        composeRule.onNodeWithText("إضافة حساب").performClick()
-        composeRule.onNodeWithTag("create-entry-individual").performClick()
+        composeRule.onNodeWithTag("home-add-entry").performClick()
         composeRule.onNodeWithTag("create-person-name").performTextInput("أحمد")
         composeRule.onNodeWithTag("create-debt-amount").performTextInput("100000")
         composeRule.onNodeWithTag("create-debt-save").performClick()

@@ -5,8 +5,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.wasl.app.document.DocumentBannerCropper
 
 @Composable
 internal fun DocumentIdentityBannerControls(
@@ -47,6 +48,7 @@ internal fun DocumentIdentityBannerControls(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .aspectRatio(DocumentBannerCropper.HEADER_ASPECT_RATIO)
                     .testTag("documents-banner-preview"),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -57,9 +59,9 @@ internal fun DocumentIdentityBannerControls(
                     contentDescription = "معاينة صورة رأس المستند",
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(104.dp)
+                        .aspectRatio(DocumentBannerCropper.HEADER_ASPECT_RATIO)
                         .clip(RoundedCornerShape(14.dp)),
-                    contentScale = ContentScale.Fit,
+                    contentScale = ContentScale.Crop,
                 )
             }
         } else if (hasBanner) {

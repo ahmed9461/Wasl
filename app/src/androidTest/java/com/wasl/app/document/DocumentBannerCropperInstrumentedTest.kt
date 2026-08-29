@@ -50,6 +50,29 @@ class DocumentBannerCropperInstrumentedTest {
     }
 
     @Test
+    fun tinyImageStillProducesAReadableBannerInsteadOfZeroSizedCrop() {
+        val source = Bitmap.createBitmap(1, 16, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(Color.GREEN)
+        }
+        val sourceBytes = ByteArrayOutputStream().use { output ->
+            check(source.compress(Bitmap.CompressFormat.PNG, 100, output))
+            output.toByteArray()
+        }
+        source.recycle()
+
+        val croppedBytes = DocumentBannerCropper.cropToHeader(sourceBytes, focusX = 0.5f, focusY = 0.5f)
+        val cropped = requireNotNull(
+            android.graphics.BitmapFactory.decodeByteArray(croppedBytes, 0, croppedBytes.size),
+        )
+        try {
+            assertTrue(cropped.width >= 1)
+            assertTrue(cropped.height >= 1)
+        } finally {
+            cropped.recycle()
+        }
+    }
+
+    @Test
     fun candidateReadRejectsOversizedInputBeforeDecode() {
         val oversized = ByteArray(AndroidDocumentBannerAssetStore.MAX_BANNER_BYTES + 1)
         assertFailsWith<IllegalArgumentException> {

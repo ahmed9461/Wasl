@@ -5,6 +5,7 @@ import com.wasl.app.data.DocumentTemplateCatalog
 import com.wasl.app.data.DocumentTemplateSnapshot
 import com.wasl.app.data.DocumentTemplateStyle
 import com.wasl.app.data.PaymentReceiptSnapshot
+import com.wasl.app.document.DocumentBannerAsset
 import com.wasl.domain.CurrencyCode
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtId
@@ -28,6 +29,14 @@ internal object PaymentReceiptSnapshotCodec {
 
     fun decode(value: String): PaymentReceiptSnapshot =
         json.decodeFromString<SnapshotPayload>(value).toSnapshot()
+
+    private fun bannerAsset(relativePath: String?, sha256: String?): DocumentBannerAsset? {
+        if (relativePath == null && sha256 == null) return null
+        check(relativePath != null && sha256 != null) {
+            "Payment receipt banner metadata is incomplete."
+        }
+        return DocumentBannerAsset(relativePath = relativePath, sha256 = sha256)
+    }
 
     @Serializable
     private data class SnapshotPayload(
@@ -53,6 +62,8 @@ internal object PaymentReceiptSnapshotCodec {
         val issuerActivityName: String?,
         val issuerPhone: String?,
         val footerText: String?,
+        val issuerBannerRelativePath: String? = null,
+        val issuerBannerSha256: String? = null,
         val templateId: String = DocumentTemplateCatalog.DEFAULT_TEMPLATE_ID,
         val templateDisplayName: String = "عملي",
         val templateStyle: String = DocumentTemplateStyle.BUSINESS.name,
@@ -86,6 +97,7 @@ internal object PaymentReceiptSnapshotCodec {
                     activityName = issuerActivityName,
                     phone = issuerPhone,
                     footerText = footerText,
+                    banner = bannerAsset(issuerBannerRelativePath, issuerBannerSha256),
                 ),
                 template = DocumentTemplateSnapshot(
                     id = templateId,
@@ -123,6 +135,8 @@ internal object PaymentReceiptSnapshotCodec {
                 issuerActivityName = snapshot.identity.activityName,
                 issuerPhone = snapshot.identity.phone,
                 footerText = snapshot.identity.footerText,
+                issuerBannerRelativePath = snapshot.identity.banner?.relativePath,
+                issuerBannerSha256 = snapshot.identity.banner?.sha256,
                 templateId = snapshot.template.id,
                 templateDisplayName = snapshot.template.displayName,
                 templateStyle = snapshot.template.style.name,

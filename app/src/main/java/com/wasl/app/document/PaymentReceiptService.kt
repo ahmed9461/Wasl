@@ -29,6 +29,8 @@ interface PaymentReceiptService {
 
     suspend fun importIdentityBanner(content: InputStream): DocumentBannerAsset
 
+    suspend fun readIdentityBanner(asset: DocumentBannerAsset): ByteArray
+
     suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord
 
     suspend fun issueDebtReceipt(command: PrepareDebtReceiptCommand): IssuedDocumentRecord =
@@ -48,6 +50,9 @@ object UnavailablePaymentReceiptService : PaymentReceiptService {
     override suspend fun getDefaultIdentity(): DocumentIdentityRecord? = null
 
     override suspend fun importIdentityBanner(content: InputStream): DocumentBannerAsset =
+        error("Document banner service is unavailable.")
+
+    override suspend fun readIdentityBanner(asset: DocumentBannerAsset): ByteArray =
         error("Document banner service is unavailable.")
 
     override suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord =
@@ -90,6 +95,9 @@ class AndroidPaymentReceiptService(
 
     override suspend fun importIdentityBanner(content: InputStream): DocumentBannerAsset =
         withContext(Dispatchers.IO) { bannerStore.importImage(content) }
+
+    override suspend fun readIdentityBanner(asset: DocumentBannerAsset): ByteArray =
+        withContext(Dispatchers.IO) { bannerStore.readVerified(asset) }
 
     override suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord {
         val prepared = store.preparePaymentReceipt(command)

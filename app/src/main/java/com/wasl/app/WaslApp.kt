@@ -447,8 +447,8 @@ fun WaslApp(
                                 )
                                 OutlinedButton(
                                     modifier = Modifier
-                                        .align(Alignment.BottomStart)
-                                        .padding(start = 20.dp, bottom = 24.dp)
+                                        .align(Alignment.TopStart)
+                                        .padding(start = 18.dp, top = 82.dp)
                                         .testTag("account-export-pdf"),
                                     onClick = { openAccountDocuments(debtId) },
                                 ) {
@@ -646,13 +646,36 @@ private fun WaslHomeScreen(
 
 @Composable
 private fun HomeCurrencyOverview(state: HomeUiState) {
+    val visibleCurrencies = supportedCurrencies.filter { currency ->
+        val receivable = state.balanceSummary.receivableByCurrency[currency] ?: Money.zero(currency)
+        val payable = state.balanceSummary.payableByCurrency[currency] ?: Money.zero(currency)
+        !receivable.isZero || !payable.isZero
+    }
+
+    if (visibleCurrencies.isEmpty()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().testTag("home-currency-overview-empty"),
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            Text(
+                text = "لا توجد أرصدة مفتوحة حاليًا.",
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        return
+    }
+
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        if (shouldStackDenseRows(maxWidth)) {
+        val stack = shouldStackDenseRows(maxWidth) || visibleCurrencies.size > 2 && maxWidth < 390.dp
+        if (stack) {
             Column(
                 modifier = Modifier.fillMaxWidth().testTag("home-currency-overview-stacked"),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                supportedCurrencies.forEach { currency ->
+                visibleCurrencies.forEach { currency ->
                     CurrencyBalanceTile(
                         currency,
                         state.balanceSummary.receivableByCurrency[currency] ?: Money.zero(currency),
@@ -666,7 +689,7 @@ private fun HomeCurrencyOverview(state: HomeUiState) {
                 modifier = Modifier.fillMaxWidth().testTag("home-currency-overview-inline"),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                supportedCurrencies.forEach { currency ->
+                visibleCurrencies.forEach { currency ->
                     CurrencyBalanceTile(
                         currency,
                         state.balanceSummary.receivableByCurrency[currency] ?: Money.zero(currency),
@@ -896,52 +919,43 @@ internal fun AccountCard(account: AccountOverview, onClick: () -> Unit) {
     val header = account.ledger.header
     val receivable = header.direction == DebtDirection.RECEIVABLE
     val tagPrefix = "account-${header.id.value}"
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag(tagPrefix),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                if (shouldStackDenseRows(maxWidth)) {
-                    Column(Modifier.fillMaxWidth().testTag("$tagPrefix-header-stacked"), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                        AccountIdentityRow(account, receivable, Modifier.fillMaxWidth())
-                        AccountDirectionBadge(receivable)
-                    }
-                } else {
-                    Row(Modifier.fillMaxWidth().testTag("$tagPrefix-header-inline"),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        AccountIdentityRow(account, receivable, Modifier.weight(1f))
-                        AccountDirectionBadge(receivable)
-                    }
-                }
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().testTag(tagPrefix),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().testTag("$tagPrefix-header-inline"),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AccountIdentityRow(account, receivable, Modifier.weight(1f))
+                AccountDirectionBadge(receivable)
             }
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                if (shouldStackDenseRows(maxWidth)) {
-                    Column(Modifier.fillMaxWidth().testTag("$tagPrefix-balance-stacked"), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                        AccountRemainingBalance(account)
-                        AccountStateBadge(account.ledger.state)
-                    }
-                } else {
-                    Row(Modifier.fillMaxWidth().testTag("$tagPrefix-balance-inline"),
-                        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-                        AccountRemainingBalance(account)
-                        AccountStateBadge(account.ledger.state)
-                    }
-                }
+            Row(
+                modifier = Modifier.fillMaxWidth().testTag("$tagPrefix-balance-inline"),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AccountRemainingBalance(account)
+                AccountStateBadge(account.ledger.state)
             }
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                val dueText = header.dueDate?.let { "الاستحقاق ${it.format(dueDateFormatter)}" } ?: "بدون تاريخ استحقاق"
-                if (shouldStackDenseRows(maxWidth)) {
-                    Column(Modifier.fillMaxWidth().testTag("$tagPrefix-original-stacked"), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(dueText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("الأصل ${formatMoney(header.originalAmount)}", style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    Row(Modifier.fillMaxWidth().testTag("$tagPrefix-original-inline"), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(dueText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("الأصل ${formatMoney(header.originalAmount)}", style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
+            val dueText = header.dueDate?.let { "الاستحقاق ${it.format(dueDateFormatter)}" } ?: "بدون استحقاق"
+            Row(
+                modifier = Modifier.fillMaxWidth().testTag("$tagPrefix-original-inline"),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(dueText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "الأصل ${formatMoney(header.originalAmount)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -953,50 +967,23 @@ private fun AccountIdentityRow(
     receivable: Boolean,
     modifier: Modifier,
 ) {
-    Row(
+    Column(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Surface(
-            modifier = Modifier.size(46.dp),
-            shape = MaterialTheme.shapes.large,
-            color = if (receivable) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.secondaryContainer
-            },
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = account.person.displayName.trim().firstOrNull()?.toString() ?: "و",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = if (receivable) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSecondaryContainer
-                    },
-                )
-            }
-        }
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
+        Text(
+            text = account.person.displayName,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
+        account.ledger.header.description?.takeIf { it.isNotBlank() }?.let {
             Text(
-                text = account.person.displayName,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
             )
-            account.ledger.header.description?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                )
-            }
         }
     }
 }

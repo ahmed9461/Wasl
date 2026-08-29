@@ -3,6 +3,8 @@ package com.wasl.app
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -193,6 +195,7 @@ internal fun GroupExpenseDialog(
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun GroupExpenseEditContent(
     form: GroupExpenseForm,
@@ -266,7 +269,7 @@ private fun GroupExpenseEditContent(
         label = { Text("وصف العملية") },
         supportingText = { Text("مثال: فاتورة مطعم أو مشتريات مشتركة") },
         enabled = !isSaving,
-        maxLines = 3,
+        maxLines = 2,
     )
 
     OutlinedTextField(
@@ -277,7 +280,7 @@ private fun GroupExpenseEditContent(
             .testTag("group-expense-notes"),
         label = { Text("ملاحظات — اختياري") },
         enabled = !isSaving,
-        maxLines = 3,
+        maxLines = 2,
     )
 
     HorizontalDivider()
@@ -310,17 +313,21 @@ private fun GroupExpenseEditContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         else -> {
-            selectablePeople.forEach { person ->
-                val selected = form.participants.any { it.person.id == person.id }
-                FilterChip(
-                    selected = selected,
-                    onClick = { onToggleParticipant(person.id) },
-                    label = { Text(person.displayName) },
-                    enabled = !isSaving,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("group-person-${person.id.value}"),
-                )
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().testTag("group-people-chips"),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                selectablePeople.forEach { person ->
+                    val selected = form.participants.any { it.person.id == person.id }
+                    FilterChip(
+                        selected = selected,
+                        onClick = { onToggleParticipant(person.id) },
+                        label = { Text(person.displayName, maxLines = 1) },
+                        enabled = !isSaving,
+                        modifier = Modifier.testTag("group-person-${person.id.value}"),
+                    )
+                }
             }
             if (hasMorePeople) {
                 Text(

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -255,16 +256,22 @@ item("header") {
                         ) {
                             Text("المرفقات وخزنة الإثباتات", fontWeight = FontWeight.Bold)
                             Text(
-                                "الملفات تُنسخ إلى التخزين الخاص بالتطبيق وتُفحص ببصمة SHA-256. لا يحتاج وَصل إلى صلاحية الوصول الشامل للملفات.",
+                                "أضف صورًا أو ملفات مرتبطة بهذا الحساب لتجدها معه لاحقًا.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Button(
                                 modifier = Modifier.fillMaxWidth().testTag("add-attachment"),
                                 enabled = !attachmentBusy,
-                                onClick = { attachmentPicker.launch(arrayOf("image/*", "application/pdf", "text/*", "application/octet-stream")) },
+                                onClick = {
+                                    runCatching {
+                                        attachmentPicker.launch(arrayOf("image/*", "application/pdf", "text/*", "application/octet-stream"))
+                                    }.onFailure {
+                                        showMessage("تعذر فتح منتقي الملفات على هذا الجهاز.")
+                                    }
+                                },
                             ) {
-                                if (attachmentBusy) CircularProgressIndicator() else Text("إضافة صورة أو PDF أو ملف")
+                                if (attachmentBusy) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp) else Text("إضافة مرفق")
                             }
                             if (attachments.isEmpty()) {
                                 Text("لا توجد مرفقات لهذا الحساب بعد.")

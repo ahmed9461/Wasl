@@ -232,39 +232,23 @@ private fun PaymentPromiseCard(
 
             if (promise.status == PaymentPromiseStatus.PENDING) {
                 HorizontalDivider()
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                Row(
+                    modifier = Modifier.fillMaxWidth().testTag("payment-promise-actions-${promise.id}"),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        TextButton(
-                            onClick = { onResolve(PaymentPromiseStatus.KEPT) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("resolve-promise-kept-${promise.id}"),
-                        ) {
-                            Text("تم الوفاء")
-                        }
-                        TextButton(
-                            onClick = { onResolve(PaymentPromiseStatus.MISSED) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("resolve-promise-missed-${promise.id}"),
-                        ) {
-                            Text("لم يُنفذ")
-                        }
-                    }
+                    Button(
+                        onClick = { onResolve(PaymentPromiseStatus.KEPT) },
+                        modifier = Modifier.weight(1f).testTag("resolve-promise-kept-${promise.id}"),
+                    ) { Text("تم الوفاء", maxLines = 1) }
+                    OutlinedButton(
+                        onClick = { onResolve(PaymentPromiseStatus.MISSED) },
+                        modifier = Modifier.weight(1f).testTag("resolve-promise-missed-${promise.id}"),
+                    ) { Text("لم يُنفذ", maxLines = 1) }
                     TextButton(
                         onClick = { onResolve(PaymentPromiseStatus.CANCELLED) },
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .testTag("resolve-promise-cancelled-${promise.id}"),
-                    ) {
-                        Text("إلغاء الوعد")
-                    }
+                        modifier = Modifier.weight(1f).testTag("resolve-promise-cancelled-${promise.id}"),
+                    ) { Text("إلغاء", maxLines = 1) }
                 }
             }
         }

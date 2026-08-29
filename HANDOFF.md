@@ -4,81 +4,40 @@
 
 نقطة البدء لأي جلسة تطوير جديدة. ترتيب مصدر الحقيقة: الكود على الرأس الحالي → Room exported schema → GitHub Actions لنفس الرأس → `docs/CURRENT_STATUS.md` → هذا الملف.
 
-## الحالة
+## الحالة الحالية
 
 - المنتج: **وَصل — Wasl**
 - الشعار: **كل حساب له وصل**
 - الإصدار المرشح: `0.1.0` (`versionCode = 1`).
-- فرع الواجهة المرشح: `agent/ui-redesign-v0.3-corrective`.
-- آخر رأس اجتاز بوابة Corrective UI الكاملة: `acb5dea0fd54897afcc56e55ee52afc99bcb0392`.
+- `main` الحالي يحتوي Corrective UI v0.3 بعد دمج PR #12.
+- merge commit المرجعي على `main`: `15f982b9a3804861f96b454431c96ed4f8c19c04`.
+- Android CI #1100 — run `33229515030` على هذا الـmerge commit نجح بالكامل: Unit/Lint/APK/Room v11/Emulator/PDF ✅.
 - Room Schema: **v11**، و`1.json → 11.json` ملتزمة في Git.
-- الحالة الحالية: Release Candidate؛ دمج الواجهة إلى `main` ثم CI على merge commit هما الخطوتان الداخليتان المتبقيتان قبل APK التجريبي النهائي لهذه الجولة.
 
-## آخر بوابة مكتملة
+## الجولة المفتوحة الآن — UI/UX Hardening v0.4
 
-Android CI **#1097** — run `33228386198` — head `acb5dea0fd54897afcc56e55ee52afc99bcb0392`:
+**الفرع:** `agent/ui-ux-hardening-v0.4`
 
-- Unit/Lint/Debug APK ✅
-- Room v11 generation/verification ✅
-- Emulator instrumentation + migrations/repository/backup ✅
-- جميع اختبارات Android على المحاكي ✅
-- Payment/Debt/Account Statement PDF inspection ✅
-- instrumentation وPDF evidence artifacts ✅
+**المواصفة التنفيذية الملزمة:**
 
-## Corrective UI v0.3
+`docs/UI_UX_HARDENING_V0.4_EXECUTION_PLAN.md`
 
-- الهوية البصرية الجديدة الداكنة/الفيروزية/الذهبية هي المرجع المعتمد.
-- الأيقونة الجديدة مثبتة مع adaptive/round launcher support.
-- الرئيسية: ملخص عملات وحسابات مختصر، مع فصل «إضافة حساب» عن «إدخال ذكي».
-- إضافة الحساب: تدفق مباشر أقصر، والخيارات الثانوية داخل إعدادات إضافية.
-- اليوم: ملخص واضح وصياغة عربية طبيعية.
-- الأقساط: ملخص إجمالي/مسدد/متبقٍ + فلاتر + تقدم الخطة.
-- تفاصيل الحساب: الرصيد والتقدم والإجراءات والمتابعة ضمن الشاشة نفسها.
-- الإعدادات: نفس الهوية، تلقائي/داكن/فاتح، أمان، تذكيرات، نسخ احتياطي.
-- اختبارات UI تعتمد testTags مستقرة للمسارات الحساسة بدل النصوص المرئية المتغيرة.
+> قبل تعديل أي واجهة أو اختبار في هذه الجولة، اقرأ الملف أعلاه كاملًا. لا تسقط أي بند منه، ولا تعتبر CI الأخضر وحده كافيًا إذا فشل شرط القبول البصري أو العملي.
 
-## ما هو مغلق وظيفيًا
+### أبرز المشاكل المطلوب إغلاقها في v0.4
 
-- Ledger append-only، Payment/Reversal، partial/final payments، idempotency/replay.
-- أشخاص وحسابات متعددة، RECEIVABLE/PAYABLE، YER/SAR/USD دون خلط العملات.
-- Due/Today/WorkManager/Exact Alarm/General Reminders.
-- Promises / Installments / Claims.
-- Search / Timeline / Statistics / Documents Hub / Account Details.
-- Attachments vault + FileProvider + integrity checks.
-- Encrypted Backup/Restore + rollback.
-- App Lock / privacy controls.
-- Natural Entry + Voice مع Preview/Confirmation إلزاميين.
-- Group Expense atomic مع shares تتحول إلى ديون عادية.
-- RTL/Bidi/adaptive/large-font hardening.
-- Payment Receipt / Debt Receipt / Account Statement من immutable snapshots.
-- Document Templates v11 مع snapshot compatibility.
+- الرئيسية لا تعرض العملات ذات الرصيد صفر.
+- بطاقة الحساب تصبح compact ولا تعرض حرفًا كبيرًا غير مفهوم قبل الاسم.
+- العملية الجماعية تستخدم تخطيطًا أفقيًا/مدمجًا بدل قائمة طويلة.
+- تفاصيل الحساب ترتب الإجراءات في صفوف/Grid مدمجة، وتنقل زر PDF لأعلى اليسار.
+- أزرار وعد السداد تصبح Action Bar منظمة.
+- إصلاح crash اختيار صورة/PDF/ملف بصورة جذرية مع regression tests.
+- حذف النصوص التقنية مثل SHA-256 وصلاحيات التخزين من UX اليومي.
+- تنفيذ صورة رأس/بانر لهوية PDF مع Preview وsnapshot ثابت للمستند.
+- تثبيت أيقونة التطبيق المرجعية الفعلية واختبار clean install على Launcher.
+- مراجعة النصوص العربية وكثافة المسافات في كل شاشة يتم لمسها.
 
-## Release
-
-تم تجهيز المصدر للإصدار `0.1.0`:
-
-- `PRIVACY_POLICY.md` موجود.
-- `docs/RELEASE_CHECKLIST.md` موجود.
-- `.github/workflows/release.yml` يبني APK موقعًا فقط عند وجود أسرار التوقيع الخارجية.
-- `app/build.gradle.kts` لا يحتوي أسرارًا؛ يقرأ signing configuration من environment variables.
-
-الأسرار المطلوبة خارج Git للنشر الموقّع:
-
-- `WASL_KEYSTORE_BASE64`
-- `WASL_KEYSTORE_PASSWORD`
-- `WASL_KEY_ALIAS`
-- `WASL_KEY_PASSWORD`
-
-بدونها تكون الحالة **Release-ready / signing pending**، وليست Published.
-
-## المتبقي
-
-1. فتح PR من `agent/ui-redesign-v0.3-corrective` إلى `main` ودمجه بعد بوابة الفرع الخضراء.
-2. اعتماد Android CI على merge commit في `main`.
-3. استخراج APK التجريبي النهائي من CI على `main`.
-4. للنشر العام فقط: توفير مفتاح التوقيع الخارجي وتشغيل Signed Release واستكمال بيانات المتجر الخارجية.
-
-## ثوابت
+## ثوابت لا تكسر
 
 1. Ledger append-only؛ التصحيح بالعكس.
 2. Money = integer minor units فقط.
@@ -91,7 +50,9 @@ Android CI **#1097** — run `33228386198` — head `acb5dea0fd54897afcc56e55ee5
 9. كل Migration معها exported schema + tests.
 10. لا secrets أو signing keys في Git.
 
-## أوامر التحقق
+## بوابة تسليم v0.4
+
+لا دمج إلى `main` حتى تتحقق كل البنود في ملف الخطة، ثم:
 
 ```bash
 ./gradlew :core:domain:test
@@ -101,4 +62,15 @@ Android CI **#1097** — run `33228386198` — head `acb5dea0fd54897afcc56e55ee5
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
-GitHub Actions هي بوابة التسليم المرجعية.
+بعد نجاح PR ودمجه يجب إعادة Android CI على `main`، واستخراج APK فقط من artifact الخاص بـ`main`.
+
+## النشر
+
+Signed Release منفصل ويحتاج الأسرار الخارجية التالية فقط عند الاستعداد للنشر العام:
+
+- `WASL_KEYSTORE_BASE64`
+- `WASL_KEYSTORE_PASSWORD`
+- `WASL_KEY_ALIAS`
+- `WASL_KEY_PASSWORD`
+
+بدونها تكون الحالة signing pending وليست Published.

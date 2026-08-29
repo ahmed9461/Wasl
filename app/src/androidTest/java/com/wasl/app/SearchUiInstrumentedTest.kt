@@ -79,7 +79,7 @@ class SearchUiInstrumentedTest {
         waitForText("خالد")
         composeRule.onNodeWithText("خالد").assertIsDisplayed()
 
-        composeRule.onNodeWithText("رجوع").performClick()
+        composeRule.onNodeWithTag("account-details-back").performClick()
         waitForTag("search-result-debt-rent")
         composeRule.onNodeWithTag("search-input").assertTextContains("إيجار")
     }

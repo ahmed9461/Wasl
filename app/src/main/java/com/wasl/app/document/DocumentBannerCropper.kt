@@ -10,6 +10,7 @@ import kotlin.math.roundToInt
 object DocumentBannerCropper {
     const val HEADER_ASPECT_RATIO = 499f / 82f
     private const val MAX_DECODE_DIMENSION = 4096
+    private const val MAX_PREVIEW_DIMENSION = 1600
     private const val MAX_OUTPUT_WIDTH = 1800
 
     fun readCandidate(content: InputStream): ByteArray {
@@ -18,6 +19,16 @@ object DocumentBannerCropper {
         val bounds = decodeBounds(bytes)
         require(bounds.first > 0 && bounds.second > 0) { "الملف المختار ليس صورة صالحة." }
         return bytes
+    }
+
+    fun decodePreview(sourceBytes: ByteArray): Bitmap? {
+        if (sourceBytes.isEmpty()) return null
+        val (sourceWidth, sourceHeight) = decodeBounds(sourceBytes)
+        if (sourceWidth <= 0 || sourceHeight <= 0) return null
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = calculateSampleSize(sourceWidth, sourceHeight, MAX_PREVIEW_DIMENSION)
+        }
+        return BitmapFactory.decodeByteArray(sourceBytes, 0, sourceBytes.size, options)
     }
 
     fun cropToHeader(
@@ -33,7 +44,7 @@ object DocumentBannerCropper {
         require(sourceWidth > 0 && sourceHeight > 0) { "الملف المختار ليس صورة صالحة." }
 
         val options = BitmapFactory.Options().apply {
-            inSampleSize = calculateSampleSize(sourceWidth, sourceHeight)
+            inSampleSize = calculateSampleSize(sourceWidth, sourceHeight, MAX_DECODE_DIMENSION)
         }
         val source = requireNotNull(
             BitmapFactory.decodeByteArray(sourceBytes, 0, sourceBytes.size, options),
@@ -95,9 +106,9 @@ object DocumentBannerCropper {
         return options.outWidth to options.outHeight
     }
 
-    private fun calculateSampleSize(width: Int, height: Int): Int {
+    private fun calculateSampleSize(width: Int, height: Int, maxDimension: Int): Int {
         var sample = 1
-        while (max(width, height) / sample > MAX_DECODE_DIMENSION) sample *= 2
+        while (max(width, height) / sample > maxDimension) sample *= 2
         return sample
     }
 

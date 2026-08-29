@@ -32,7 +32,7 @@ class HomeAdaptiveUiInstrumentedTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun largeFontStacksAccountCardRowsAndRetainsClick() {
+    fun largeFontKeepsCompactAccountCardReachableAndClickable() {
         val account = partialAccount()
         var clicks = 0
 
@@ -50,11 +50,13 @@ class HomeAdaptiveUiInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithTag("account-debt-1-header-stacked", useUnmergedTree = true)
+        composeRule.onNodeWithTag("account-debt-1", useUnmergedTree = true)
             .assertIsDisplayed()
-        composeRule.onNodeWithTag("account-debt-1-balance-stacked", useUnmergedTree = true)
+        composeRule.onNodeWithTag("account-debt-1-header-inline", useUnmergedTree = true)
             .assertIsDisplayed()
-        composeRule.onNodeWithTag("account-debt-1-original-stacked", useUnmergedTree = true)
+        composeRule.onNodeWithTag("account-debt-1-balance-inline", useUnmergedTree = true)
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag("account-debt-1-original-inline", useUnmergedTree = true)
             .assertIsDisplayed()
         composeRule.onNodeWithTag("account-debt-1").performClick()
         composeRule.runOnIdle { assertEquals(1, clicks) }

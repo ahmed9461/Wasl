@@ -1,0 +1,52 @@
+name: V0.4 banner backup retry
+
+on:
+  push:
+    branches:
+      - agent/ui-ux-hardening-v0.4
+    paths:
+      - .github/workflows/v04-backup-banner-retry.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/ui-ux-hardening-v0.4
+          fetch-depth: 0
+      - name: Reuse hardened script with deterministic SHA regex target
+        shell: python
+        run: |
+          from pathlib import Path
+          import textwrap
+
+          source_path = Path('.github/workflows/v04-backup-banner-once.yml')
+          raw = source_path.read_text()
+          start_marker = '        run: |\n'
+          end_marker = '      - name: Remove one-shot workflow\n'
+          if start_marker not in raw or end_marker not in raw:
+              raise SystemExit('Cannot locate original one-shot script.')
+          block = raw.split(start_marker, 1)[1].split(end_marker, 1)[0]
+          script = textwrap.dedent(block)
+
+          bad = '''once('val SHA256_REGEX = Regex("^[0-9a-fA-F]{64}$")', 'val SHA256_REGEX = Regex("^[0-9a-fA-F]{64}$")\\n        val BANNER_FILE_REGEX = Regex("[0-9a-f]{64}\\\\\\\\.img")')'''
+          good = '''old_sha_regex = '        val SHA256_REGEX = Regex("^[0-9a-fA-F]{64}$")'\n          new_sha_regex = old_sha_regex + '\\n        val BANNER_FILE_REGEX = Regex("[0-9a-f]{64}\\\\\\\\.img")'\n          pos = s.rfind(old_sha_regex)\n          if pos < 0:\n              raise SystemExit('Missing companion SHA256 regex definition')\n          s = s[:pos] + new_sha_regex + s[pos + len(old_sha_regex):]'''
+          if bad not in script:
+              raise SystemExit('Cannot locate ambiguous SHA regex operation in original script.')
+          script = script.replace(bad, good, 1)
+          exec(compile(script, '<v04-backup-banner-one-shot>', 'exec'), {})
+      - name: Remove temporary workflows
+        run: |
+          rm .github/workflows/v04-backup-banner-once.yml
+          rm .github/workflows/v04-backup-banner-retry.yml
+      - name: Commit product changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/wasl/app/backup/BackupService.kt app/src/androidTest/java/com/wasl/app/backup/BackupRestoreInstrumentedTest.kt .github/workflows/v04-backup-banner-once.yml .github/workflows/v04-backup-banner-retry.yml
+          git commit -m "feat(backup): preserve document banner vault in schema v12 backups"
+          git push origin HEAD:agent/ui-ux-hardening-v0.4

@@ -45,11 +45,15 @@ object DocumentBannerCropper {
         val cropWidth: Int
         val cropHeight: Int
         if (sourceRatio > HEADER_ASPECT_RATIO) {
-            cropHeight = source.height
-            cropWidth = (cropHeight * HEADER_ASPECT_RATIO).roundToInt().coerceAtMost(source.width)
+            cropHeight = source.height.coerceAtLeast(1)
+            cropWidth = (cropHeight * HEADER_ASPECT_RATIO)
+                .roundToInt()
+                .coerceIn(1, source.width)
         } else {
-            cropWidth = source.width
-            cropHeight = (cropWidth / HEADER_ASPECT_RATIO).roundToInt().coerceAtMost(source.height)
+            cropWidth = source.width.coerceAtLeast(1)
+            cropHeight = (cropWidth / HEADER_ASPECT_RATIO)
+                .roundToInt()
+                .coerceIn(1, source.height)
         }
 
         val maxLeft = (source.width - cropWidth).coerceAtLeast(0)

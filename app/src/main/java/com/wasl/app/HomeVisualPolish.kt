@@ -47,38 +47,68 @@ internal fun HomeHeroCard(accountCount: Int, modifier: Modifier = Modifier) {
 @Composable
 private fun HomeBrandBlock(modifier: Modifier = Modifier) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text("وَصل", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.tertiary)
-        Text("كل حساب له وصل", style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            "وَصل",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.tertiary,
+        )
+        Text(
+            "كل حساب له وصل",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
 @Composable
 private fun HomeHeroMetric(accountCount: Int) {
     Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Text(accountCount.toString(), Modifier.testTag("home-hero-account-count"), style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
-            Text(if (accountCount == 1) "حساب" else "حسابات", style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                accountCount.toString(),
+                Modifier.testTag("home-hero-account-count"),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                if (accountCount == 1) "حساب" else "حسابات",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
 
 @Composable
-internal fun HomeSectionHeader(title: String, subtitle: String, tagPrefix: String, count: Int? = null, modifier: Modifier = Modifier) {
+internal fun HomeSectionHeader(
+    title: String,
+    subtitle: String,
+    tagPrefix: String,
+    count: Int? = null,
+    modifier: Modifier = Modifier,
+) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val stacked = shouldStackDenseRows(maxWidth)
         if (count != null && stacked) {
-            Column(Modifier.fillMaxWidth().testTag("$tagPrefix-heading-stacked"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(
+                Modifier.fillMaxWidth().testTag("$tagPrefix-heading-stacked"),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 HomeSectionCopy(title, subtitle)
                 HomeSectionCount(count, tagPrefix)
             }
         } else {
-            Row(Modifier.fillMaxWidth().testTag("$tagPrefix-heading-inline"), horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth().testTag("$tagPrefix-heading-inline"),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 HomeSectionCopy(title, subtitle)
                 count?.let { HomeSectionCount(it, tagPrefix) }
             }
@@ -90,34 +120,63 @@ internal fun HomeSectionHeader(title: String, subtitle: String, tagPrefix: Strin
 private fun HomeSectionCopy(title: String, subtitle: String) {
     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
         Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
 @Composable
 private fun HomeSectionCount(count: Int, tagPrefix: String) {
     Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-        Text(count.toString(), Modifier.testTag("$tagPrefix-count").padding(horizontal = 10.dp, vertical = 5.dp),
-            style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text(
+            count.toString(),
+            Modifier.testTag("$tagPrefix-count").padding(horizontal = 10.dp, vertical = 5.dp),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 
 @Composable
-internal fun CreateEntryOption(title: String, description: String, primary: Boolean, testTag: String, onClick: () -> Unit,
-    modifier: Modifier = Modifier) {
+internal fun CreateEntryOption(
+    title: String,
+    description: String,
+    primary: Boolean,
+    testTag: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val content: @Composable () -> Unit = {
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp), horizontalAlignment = Alignment.Start) {
+        Column(
+            Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalAlignment = Alignment.Start,
+        ) {
             Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text(description, style = MaterialTheme.typography.bodySmall)
         }
     }
     if (primary) {
-        Button(modifier.fillMaxWidth().testTag(testTag), onClick = onClick, shape = MaterialTheme.shapes.medium,
+        Button(
+            onClick = onClick,
+            modifier = modifier.fillMaxWidth().testTag(testTag),
+            shape = MaterialTheme.shapes.medium,
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary)) { content() }
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+        ) { content() }
     } else {
-        OutlinedButton(modifier.fillMaxWidth().testTag(testTag), onClick = onClick, shape = MaterialTheme.shapes.medium,
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) { content() }
+        OutlinedButton(
+            onClick = onClick,
+            modifier = modifier.fillMaxWidth().testTag(testTag),
+            shape = MaterialTheme.shapes.medium,
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        ) { content() }
     }
 }

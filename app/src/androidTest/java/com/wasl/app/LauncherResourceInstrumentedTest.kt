@@ -14,7 +14,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class LauncherResourceInstrumentedTest {
     @Test
-    fun manifestLauncherIconsResolveToInstalledResources() {
+    fun manifestAndRoundLauncherResourcesResolve() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val appInfo = context.packageManager.getApplicationInfo(context.packageName, 0)
 
@@ -22,11 +22,10 @@ class LauncherResourceInstrumentedTest {
         assertEquals(R.mipmap.ic_launcher, appInfo.icon)
         assertNotNull(context.getDrawable(appInfo.icon))
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
-            assertNotEquals(0, appInfo.roundIcon)
-            assertEquals(R.mipmap.ic_launcher_round, appInfo.roundIcon)
-            assertNotNull(context.getDrawable(appInfo.roundIcon))
-        }
+        // ApplicationInfo does not expose android:roundIcon as a stable public API.
+        // Validate the round resource directly, while the adaptive-icon test below
+        // verifies that both launcher variants are packaged as adaptive icons.
+        assertNotNull(context.getDrawable(R.mipmap.ic_launcher_round))
     }
 
     @Test

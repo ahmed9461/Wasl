@@ -1,0 +1,53 @@
+name: Add stable account back test tag
+
+on:
+  push:
+    branches:
+      - agent/ui-redesign-v0.3-corrective
+    paths:
+      - '.github/workflows/add-account-back-testtag.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/ui-redesign-v0.3-corrective
+          fetch-depth: 0
+      - name: Add stable account details back test tag
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/wasl/app/AccountDetailsScreen.kt')
+          s = p.read_text()
+          old = '''                navigationIcon = {
+                    TextButton(onClick = onBack) {
+                        Text("‹", style = MaterialTheme.typography.headlineSmall)
+                    }
+                },'''
+          new = '''                navigationIcon = {
+                    TextButton(
+                        onClick = onBack,
+                        modifier = Modifier.testTag("account-details-back"),
+                    ) {
+                        Text("‹", style = MaterialTheme.typography.headlineSmall)
+                    }
+                },'''
+          if old not in s:
+              raise SystemExit('account details back button anchor not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit result and remove temporary workflow
+        shell: bash
+        run: |
+          git rm .github/workflows/add-account-back-testtag.yml
+          git config user.name "wasl-ui-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add app/src/main/java/com/wasl/app/AccountDetailsScreen.kt
+          git commit -m "test(ui): expose stable account details back navigation tag"
+          git push origin HEAD:agent/ui-redesign-v0.3-corrective

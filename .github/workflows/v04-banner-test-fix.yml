@@ -1,0 +1,53 @@
+name: Apply v0.4 banner test fix
+
+on:
+  push:
+    branches:
+      - agent/ui-ux-hardening-v0.4
+    paths:
+      - .github/workflows/v04-banner-test-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/ui-ux-hardening-v0.4
+          fetch-depth: 0
+      - name: Fix test contract and source set
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          vm = Path('app/src/test/java/com/wasl/app/AccountDetailsViewModelTest.kt')
+          text = vm.read_text()
+          anchor = '''    override suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord {\n'''
+          replacement = '''    override suspend fun importIdentityBanner(\n        content: java.io.InputStream,\n    ): com.wasl.app.document.DocumentBannerAsset = error("Not used in AccountDetailsViewModel tests.")\n\n''' + anchor
+          if text.count(anchor) != 1:
+              raise SystemExit(f'AccountDetailsViewModelTest issue anchor count={text.count(anchor)}')
+          vm.write_text(text.replace(anchor, replacement, 1))
+
+          src = Path('app/src/test/java/com/wasl/app/document/DocumentBannerAssetStoreTest.kt')
+          dst = Path('app/src/androidTest/java/com/wasl/app/document/DocumentBannerAssetStoreTest.kt')
+          dst.parent.mkdir(parents=True, exist_ok=True)
+          test = src.read_text()
+          test = test.replace('import org.junit.Assert.assertFailsWith\n', 'import org.junit.Assert.fail\n')
+          old = '''        assertFailsWith<IllegalArgumentException> {\n  store.importImage(ByteArrayInputStream("not an image".toByteArray()))\n        }\n'''
+          new = '''        try {\n            store.importImage(ByteArrayInputStream("not an image".toByteArray()))\n            fail("Expected invalid image bytes to be rejected.")\n        } catch (_: IllegalArgumentException) {\n            // Expected.\n        }\n'''
+          if test.count(old) != 1:
+              raise SystemExit('DocumentBannerAssetStoreTest rejection block mismatch')
+          dst.write_text(test.replace(old, new, 1))
+          src.unlink()
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/v04-banner-test-fix.yml
+          git add app/src/test/java app/src/androidTest/java
+          git diff --cached --check
+          git commit -m "test(documents): align banner vault tests with Android contract"
+          git push origin HEAD:agent/ui-ux-hardening-v0.4

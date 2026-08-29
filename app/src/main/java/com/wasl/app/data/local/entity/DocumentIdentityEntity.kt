@@ -27,4 +27,8 @@ data class DocumentIdentityEntity(
     val createdAt: Long,
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long,
+    @ColumnInfo(name = "banner_relative_path")
+    val bannerRelativePath: String? = null,
+    @ColumnInfo(name = "banner_sha256")
+    val bannerSha256: String? = null,
 )

@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: android-ci-wasl-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  group: android-ci-wasl-v2-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:

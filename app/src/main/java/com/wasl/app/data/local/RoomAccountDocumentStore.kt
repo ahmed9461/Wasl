@@ -277,6 +277,8 @@ class RoomAccountDocumentStore(
                     activityName = snapshot.activityName,
                     phone = snapshot.phone,
                     footerText = snapshot.footerText,
+                    bannerRelativePath = snapshot.banner?.relativePath,
+                    bannerSha256 = snapshot.banner?.sha256,
                     isDefault = true,
                     createdAt = issuedAt.toEpochMilli(),
                     updatedAt = issuedAt.toEpochMilli(),
@@ -290,6 +292,8 @@ class RoomAccountDocumentStore(
                     activityName = snapshot.activityName,
                     phone = snapshot.phone,
                     footerText = snapshot.footerText,
+                    bannerRelativePath = snapshot.banner?.relativePath,
+                    bannerSha256 = snapshot.banner?.sha256,
                     updatedAt = issuedAt.toEpochMilli(),
                 ) == 1,
             ) { "Document identity $identityId was not updated." }
@@ -418,6 +422,7 @@ class RoomAccountDocumentStore(
         activityName = issuerActivityName.normalizedOptional(),
         phone = issuerPhone.normalizedOptional(),
         footerText = footerText.normalizedOptional(),
+        banner = issuerBanner,
     )
 
     private fun PrepareAccountStatementCommand.toIdentitySnapshot() = DocumentIdentitySnapshot(
@@ -425,6 +430,7 @@ class RoomAccountDocumentStore(
         activityName = issuerActivityName.normalizedOptional(),
         phone = issuerPhone.normalizedOptional(),
         footerText = footerText.normalizedOptional(),
+        banner = issuerBanner,
     )
 
     private fun com.wasl.app.data.AccountOverview.latestLedgerTimestamp(): Instant =

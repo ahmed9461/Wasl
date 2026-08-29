@@ -21,6 +21,7 @@ import com.wasl.app.data.ReversePaymentCommand
 import com.wasl.app.data.UnavailablePaymentPromiseStore
 import com.wasl.app.data.UpdateDueScheduleCommand
 import com.wasl.app.data.WaslRepository
+import com.wasl.app.document.DocumentBannerAsset
 import com.wasl.app.document.PaymentReceiptService
 import com.wasl.app.document.UnavailablePaymentReceiptService
 import com.wasl.app.reminder.NoOpReminderScheduler
@@ -69,6 +70,7 @@ data class ReceiptIdentityForm(
     val activityName: String = "",
     val phone: String = "",
     val footerText: String = "",
+    val banner: DocumentBannerAsset? = null,
 )
 
 data class PaymentPromiseForm(
@@ -541,6 +543,7 @@ class AccountDetailsViewModel(
                                     activityName = it.activityName.orEmpty(),
                                     phone = it.phone.orEmpty(),
                                     footerText = it.footerText.orEmpty(),
+                                    banner = it.banner,
                                 )
                             } ?: ReceiptIdentityForm(),
                             isLoadingReceiptIdentity = false,
@@ -624,6 +627,7 @@ class AccountDetailsViewModel(
                 issuerActivityName = state.receiptIdentityForm.activityName.trim().ifEmpty { null },
                 issuerPhone = state.receiptIdentityForm.phone.trim().ifEmpty { null },
                 footerText = state.receiptIdentityForm.footerText.trim().ifEmpty { null },
+                issuerBanner = state.receiptIdentityForm.banner,
                 issuedAt = issuedAt,
                 issueZoneId = zoneIdProvider(),
             ).also { pendingReceiptCommand = it }

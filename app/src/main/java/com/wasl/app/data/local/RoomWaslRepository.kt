@@ -337,6 +337,7 @@ class RoomWaslRepository(
             activityName = command.issuerActivityName.normalizedOptional(),
             phone = command.issuerPhone.normalizedOptional(),
             footerText = command.footerText.normalizedOptional(),
+            banner = command.issuerBanner,
         )
         saveDefaultIdentity(command, normalizedIdentity)
         val template = requireDocumentTemplate(command.templateId).toSnapshot()
@@ -1074,6 +1075,8 @@ class RoomWaslRepository(
                     activityName = snapshot.activityName,
                     phone = snapshot.phone,
                     footerText = snapshot.footerText,
+                    bannerRelativePath = snapshot.banner?.relativePath,
+                    bannerSha256 = snapshot.banner?.sha256,
                     isDefault = true,
                     createdAt = command.issuedAt.toEpochMilli(),
                     updatedAt = command.issuedAt.toEpochMilli(),
@@ -1087,6 +1090,8 @@ class RoomWaslRepository(
                     activityName = snapshot.activityName,
                     phone = snapshot.phone,
                     footerText = snapshot.footerText,
+                    bannerRelativePath = snapshot.banner?.relativePath,
+                    bannerSha256 = snapshot.banner?.sha256,
                     updatedAt = command.issuedAt.toEpochMilli(),
                 ) == 1,
             ) { "Document identity ${command.identityId} was not updated." }
@@ -1111,6 +1116,7 @@ class RoomWaslRepository(
                 activityName = command.issuerActivityName.normalizedOptional(),
                 phone = command.issuerPhone.normalizedOptional(),
                 footerText = command.footerText.normalizedOptional(),
+                banner = command.issuerBanner,
             )
         if (!matches) {
             throw CommandConflictException(

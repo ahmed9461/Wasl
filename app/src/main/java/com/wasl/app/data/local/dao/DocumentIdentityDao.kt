@@ -34,6 +34,8 @@ interface DocumentIdentityDao {
             activity_name = :activityName,
             phone = :phone,
             footer_text = :footerText,
+            banner_relative_path = :bannerRelativePath,
+            banner_sha256 = :bannerSha256,
             is_default = 1,
             updated_at = :updatedAt
         WHERE id = :id
@@ -45,6 +47,8 @@ interface DocumentIdentityDao {
         activityName: String?,
         phone: String?,
         footerText: String?,
+        bannerRelativePath: String?,
+        bannerSha256: String?,
         updatedAt: Long,
     ): Int
 }

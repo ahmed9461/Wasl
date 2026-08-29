@@ -57,17 +57,21 @@ import com.wasl.app.data.UnavailableAttachmentStore
 import com.wasl.app.data.WaslRepository
 import com.wasl.app.document.AttachmentFileAccess
 import com.wasl.app.document.DocumentBannerAsset
+import com.wasl.app.document.DocumentBannerCropper
 import com.wasl.app.document.PaymentReceiptService
 import com.wasl.app.document.ReceiptFileAccess
 import com.wasl.domain.DebtId
 import com.wasl.domain.Money
+import java.io.ByteArrayInputStream
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 internal val LocalOpenAccountDocuments = staticCompositionLocalOf<(DebtId) -> Unit> { { } }
 
@@ -92,8 +96,10 @@ internal fun DocumentsHubRoute(
     var identityLoaded by remember { mutableStateOf(false) }
     var issuerBanner by remember { mutableStateOf<DocumentBannerAsset?>(null) }
     var bannerPreviewBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var pendingBannerSource by remember { mutableStateOf<ByteArray?>(null) }
     var bannerBusy by remember { mutableStateOf(false) }
     var busyKey by remember { mutableStateOf<String?>(null) }
+    var pendingIssue by remember { mutableStateOf<PendingDocumentIssue?>(null) }
     var readyDocument by remember { mutableStateOf<IssuedDocumentRecord?>(null) }
     var attachments by remember { mutableStateOf<List<AttachmentRecord>>(emptyList()) }
     var attachmentBusy by remember { mutableStateOf(false) }
@@ -146,17 +152,16 @@ internal fun DocumentsHubRoute(
         bannerBusy = true
         scope.launch {
             try {
-                val asset = context.contentResolver.openInputStream(uri)?.use { input ->
-                    documentService.importIdentityBanner(input)
-                } ?: error("تعذر قراءة الصورة المختارة.")
-                val verifiedBytes = documentService.readIdentityBanner(asset)
-                issuerBanner = asset
-                bannerPreviewBytes = verifiedBytes
-                showMessage("تم تجهيز صورة رأس المستند.")
+                val candidate = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        DocumentBannerCropper.readCandidate(input)
+                    } ?: error("تعذر قراءة الصورة المختارة.")
+                }
+                pendingBannerSource = candidate
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                showMessage(error.message?.takeIf { it.isNotBlank() } ?: "تعذر حفظ صورة رأس المستند.")
+                showMessage(error.message?.takeIf { it.isNotBlank() } ?: "تعذر قراءة صورة رأس المستند.")
             } finally {
                 bannerBusy = false
             }
@@ -202,33 +207,53 @@ internal fun DocumentsHubRoute(
             .collect { attachments = it }
     }
 
-    fun issue(account: AccountOverview, type: DocumentType) {
-        if (busyKey != null) return
+    fun requestIssue(account: AccountOverview, type: DocumentType) {
+        if (busyKey != null || pendingIssue != null) return
         val normalizedName = issuerName.trim()
         if (normalizedName.isEmpty()) {
             showMessage("اكتب اسم مُصدر المستند أولًا.")
             return
         }
-        val key = "${type.name}:${account.ledger.header.id.value}"
+        if (issuerBanner != null && bannerPreviewBytes == null) {
+            showMessage("تحقق من صورة رأس الهوية أو اخترها من جديد قبل الإصدار.")
+            return
+        }
+        val id = identityId ?: UUID.randomUUID().toString().also { identityId = it }
+        pendingIssue = PendingDocumentIssue(
+            account = account,
+            type = type,
+            identityId = id,
+            issuerName = normalizedName,
+            activityName = activityName.trim().ifEmpty { null },
+            phone = phone.trim().ifEmpty { null },
+            footer = footer.trim().ifEmpty { null },
+            banner = issuerBanner,
+            bannerPreviewBytes = bannerPreviewBytes,
+        )
+    }
+
+    fun confirmIssue(preview: PendingDocumentIssue) {
+        if (busyKey != null) return
+        val key = "${preview.type.name}:${preview.account.ledger.header.id.value}"
         busyKey = key
+        pendingIssue = null
         readyDocument = null
         scope.launch {
             try {
                 val now = Instant.now()
                 val zone = ZoneId.systemDefault()
-                val id = identityId ?: UUID.randomUUID().toString().also { identityId = it }
-                val document = when (type) {
+                val document = when (preview.type) {
                     DocumentType.DEBT_RECEIPT -> documentService.issueDebtReceipt(
                         PrepareDebtReceiptCommand(
                             commandId = UUID.randomUUID().toString(),
                             documentId = UUID.randomUUID().toString(),
-                            identityId = id,
-                            debtId = account.ledger.header.id,
-                            issuerDisplayName = normalizedName,
-                            issuerActivityName = activityName.trim().ifEmpty { null },
-                            issuerPhone = phone.trim().ifEmpty { null },
-                            footerText = footer.trim().ifEmpty { null },
-                            issuerBanner = issuerBanner,
+                            identityId = preview.identityId,
+                            debtId = preview.account.ledger.header.id,
+                            issuerDisplayName = preview.issuerName,
+                            issuerActivityName = preview.activityName,
+                            issuerPhone = preview.phone,
+                            footerText = preview.footer,
+                            issuerBanner = preview.banner,
                             issuedAt = now,
                             issueZoneId = zone,
                         ),
@@ -237,13 +262,13 @@ internal fun DocumentsHubRoute(
                         PrepareAccountStatementCommand(
                             commandId = UUID.randomUUID().toString(),
                             documentId = UUID.randomUUID().toString(),
-                            identityId = id,
-                            debtId = account.ledger.header.id,
-                            issuerDisplayName = normalizedName,
-                            issuerActivityName = activityName.trim().ifEmpty { null },
-                            issuerPhone = phone.trim().ifEmpty { null },
-                            footerText = footer.trim().ifEmpty { null },
-                            issuerBanner = issuerBanner,
+                            identityId = preview.identityId,
+                            debtId = preview.account.ledger.header.id,
+                            issuerDisplayName = preview.issuerName,
+                            issuerActivityName = preview.activityName,
+                            issuerPhone = preview.phone,
+                            footerText = preview.footer,
+                            issuerBanner = preview.banner,
                             issuedAt = now,
                             issueZoneId = zone,
                         ),
@@ -251,7 +276,7 @@ internal fun DocumentsHubRoute(
                     DocumentType.PAYMENT_RECEIPT -> error("Payment receipts are issued from payments.")
                 }
                 readyDocument = document
-                showMessage("تم تجهيز ${type.arabicLabel()} ${document.documentNumber}.")
+                showMessage("تم تجهيز ${preview.type.arabicLabel()} ${document.documentNumber}.")
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -279,12 +304,12 @@ internal fun DocumentsHubRoute(
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-item("header") {
-    DocumentsHubHeader(
-        isAccountScoped = initialDebtId != null,
-        onBack = onBack,
-    )
-}
+            item("header") {
+                DocumentsHubHeader(
+                    isAccountScoped = initialDebtId != null,
+                    onBack = onBack,
+                )
+            }
 
             if (initialDebtId != null) {
                 item("attachments") {
@@ -361,6 +386,7 @@ item("header") {
                                     .onFailure { showMessage("تعذر فتح معرض الصور على هذا الجهاز.") }
                             },
                             onRemove = {
+                                pendingBannerSource = null
                                 issuerBanner = null
                                 bannerPreviewBytes = null
                                 showMessage("لن تظهر صورة رأس في المستندات الجديدة.")
@@ -411,20 +437,20 @@ item("header") {
                         ) {
                             Text("${document.type.arabicLabel()} جاهز", fontWeight = FontWeight.Bold)
                             Text(ltrIsolate(document.documentNumber))
-DocumentDualActionButtons(
-    testTagPrefix = "ready-document",
-    primaryLabel = "فتح PDF",
-    secondaryLabel = "مشاركة",
-    primaryFilled = true,
-    onPrimary = {
-        runCatching { ReceiptFileAccess.open(context, document) }
-            .onFailure { showMessage("تعذر فتح ملف PDF.") }
-    },
-    onSecondary = {
-        runCatching { ReceiptFileAccess.share(context, document) }
-            .onFailure { showMessage("تعذرت مشاركة ملف PDF.") }
-    },
-)
+                            DocumentDualActionButtons(
+                                testTagPrefix = "ready-document",
+                                primaryLabel = "فتح PDF",
+                                secondaryLabel = "مشاركة",
+                                primaryFilled = true,
+                                onPrimary = {
+                                    runCatching { ReceiptFileAccess.open(context, document) }
+                                        .onFailure { showMessage("تعذر فتح ملف PDF.") }
+                                },
+                                onSecondary = {
+                                    runCatching { ReceiptFileAccess.share(context, document) }
+                                        .onFailure { showMessage("تعذرت مشاركة ملف PDF.") }
+                                },
+                            )
                         }
                     }
                 }
@@ -461,15 +487,58 @@ DocumentDualActionButtons(
                             testTagPrefix = "account-documents-${account.ledger.header.id.value}",
                             primaryLabel = if (busyKey == debtKey) "جاري الإصدار…" else "إيصال دين",
                             secondaryLabel = if (busyKey == statementKey) "جاري التصدير…" else "كشف حساب PDF",
-                            enabled = busyKey == null && identityLoaded,
+                            enabled = busyKey == null && pendingIssue == null && identityLoaded,
                             primaryFilled = true,
-                            onPrimary = { issue(account, DocumentType.DEBT_RECEIPT) },
-                            onSecondary = { issue(account, DocumentType.ACCOUNT_STATEMENT) },
+                            onPrimary = { requestIssue(account, DocumentType.DEBT_RECEIPT) },
+                            onSecondary = { requestIssue(account, DocumentType.ACCOUNT_STATEMENT) },
                         )
                     }
                 }
             }
         }
+    }
+
+    pendingBannerSource?.let { sourceBytes ->
+        DocumentBannerCropDialog(
+            sourceBytes = sourceBytes,
+            busy = bannerBusy,
+            onDismiss = { if (!bannerBusy) pendingBannerSource = null },
+            onConfirm = { focusX, focusY ->
+                if (!bannerBusy) {
+                    bannerBusy = true
+                    scope.launch {
+                        try {
+                            val croppedBytes = withContext(Dispatchers.Default) {
+                                DocumentBannerCropper.cropToHeader(sourceBytes, focusX, focusY)
+                            }
+                            val asset = ByteArrayInputStream(croppedBytes).use { input ->
+                                documentService.importIdentityBanner(input)
+                            }
+                            val verifiedBytes = documentService.readIdentityBanner(asset)
+                            issuerBanner = asset
+                            bannerPreviewBytes = verifiedBytes
+                            pendingBannerSource = null
+                            showMessage("تم حفظ وضبط صورة رأس المستند.")
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            showMessage(error.message?.takeIf { it.isNotBlank() } ?: "تعذر تجهيز صورة رأس المستند.")
+                        } finally {
+                            bannerBusy = false
+                        }
+                    }
+                }
+            },
+        )
+    }
+
+    pendingIssue?.let { preview ->
+        DocumentIssuePreviewDialog(
+            preview = preview,
+            busy = busyKey != null,
+            onDismiss = { if (busyKey == null) pendingIssue = null },
+            onConfirm = { confirmIssue(preview) },
+        )
     }
 }
 
@@ -640,14 +709,14 @@ private fun AttachmentRow(
             },
             style = MaterialTheme.typography.bodySmall,
         )
-DocumentDualActionButtons(
-    testTagPrefix = "attachment-${attachment.id}",
-    primaryLabel = "فتح",
-    secondaryLabel = "مشاركة",
-    enabled = attachment.integrity == AttachmentIntegrity.OK,
-    onPrimary = onOpen,
-    onSecondary = onShare,
-)
+        DocumentDualActionButtons(
+            testTagPrefix = "attachment-${attachment.id}",
+            primaryLabel = "فتح",
+            secondaryLabel = "مشاركة",
+            enabled = attachment.integrity == AttachmentIntegrity.OK,
+            onPrimary = onOpen,
+            onSecondary = onShare,
+        )
     }
 }
 

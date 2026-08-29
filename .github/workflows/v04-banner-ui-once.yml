@@ -1,0 +1,73 @@
+name: V0.4 banner UI one-shot
+
+on:
+  push:
+    branches:
+      - agent/ui-ux-hardening-v0.4
+    paths:
+      - .github/workflows/v04-banner-ui-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/ui-ux-hardening-v0.4
+          fetch-depth: 0
+      - name: Apply compact banner UI
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('app/src/main/java/com/wasl/app/DocumentsHubScreen.kt')
+          s = p.read_text()
+
+          def once(old, new):
+              global s
+              if s.count(old) != 1:
+                  raise SystemExit(f'Expected one match, got {s.count(old)}: {old[:100]!r}')
+              s = s.replace(old, new, 1)
+
+          once(
+              'import com.wasl.app.document.AttachmentFileAccess\n',
+              'import com.wasl.app.document.AttachmentFileAccess\nimport com.wasl.app.document.DocumentBannerAsset\n',
+          )
+          once(
+              '    var identityLoaded by remember { mutableStateOf(false) }\n',
+              '    var identityLoaded by remember { mutableStateOf(false) }\n    var issuerBanner by remember { mutableStateOf<DocumentBannerAsset?>(null) }\n    var bannerPreviewBytes by remember { mutableStateOf<ByteArray?>(null) }\n    var bannerBusy by remember { mutableStateOf(false) }\n',
+          )
+
+          banner_picker = '''    val bannerPicker = rememberLauncherForActivityResult(\n        ActivityResultContracts.OpenDocument(),\n    ) { uri: Uri? ->\n        if (uri == null || bannerBusy) return@rememberLauncherForActivityResult\n        bannerBusy = true\n        scope.launch {\n            try {\n                val asset = context.contentResolver.openInputStream(uri)?.use { input ->\n                    documentService.importIdentityBanner(input)\n                } ?: error("تعذر قراءة الصورة المختارة.")\n                val verifiedBytes = documentService.readIdentityBanner(asset)\n                issuerBanner = asset\n                bannerPreviewBytes = verifiedBytes\n                showMessage("تم تجهيز صورة رأس المستند.")\n            } catch (error: CancellationException) {\n                throw error\n            } catch (error: Exception) {\n                showMessage(error.message?.takeIf { it.isNotBlank() } ?: "تعذر حفظ صورة رأس المستند.")\n            } finally {\n                bannerBusy = false\n            }\n        }\n    }\n\n'''
+          once('    LaunchedEffect(repository) {\n', banner_picker + '    LaunchedEffect(repository) {\n')
+
+          old_identity = '''    LaunchedEffect(documentService) {\n        runCatching { documentService.getDefaultIdentity() }\n            .onSuccess { identity ->\n                identity?.let {\n                    identityId = it.id\n                    issuerName = it.displayName\n                    activityName = it.activityName.orEmpty()\n                    phone = it.phone.orEmpty()\n                    footer = it.footerText.orEmpty()\n                }\n            }\n        identityLoaded = true\n    }'''
+          new_identity = '''    LaunchedEffect(documentService) {\n        try {\n            documentService.getDefaultIdentity()?.let { identity ->\n                identityId = identity.id\n                issuerName = identity.displayName\n                activityName = identity.activityName.orEmpty()\n                phone = identity.phone.orEmpty()\n                footer = identity.footerText.orEmpty()\n                issuerBanner = identity.banner\n                bannerPreviewBytes = identity.banner?.let { banner ->\n                    runCatching { documentService.readIdentityBanner(banner) }.getOrNull()\n                }\n                if (identity.banner != null && bannerPreviewBytes == null) {\n                    showMessage("تعذر التحقق من صورة رأس الهوية. اختر الصورة من جديد قبل التصدير.")\n                }\n            }\n        } catch (error: CancellationException) {\n            throw error\n        } catch (error: Exception) {\n            showMessage("تعذر تحميل هوية المستند المحفوظة.")\n        } finally {\n            identityLoaded = true\n        }\n    }'''
+          once(old_identity, new_identity)
+
+          issue_line = '                            footerText = footer.trim().ifEmpty { null },\n'
+          if s.count(issue_line) != 2:
+              raise SystemExit(f'Expected two issuer footer lines, got {s.count(issue_line)}')
+          s = s.replace(issue_line, issue_line + '                            issuerBanner = issuerBanner,\n', 2)
+
+          once(
+              '                        if (!identityLoaded) CircularProgressIndicator()\n                        OutlinedTextField(\n',
+              '''                        if (!identityLoaded) CircularProgressIndicator()\n                        DocumentIdentityBannerControls(\n                            previewBytes = bannerPreviewBytes,\n                            hasBanner = issuerBanner != null,\n                            busy = bannerBusy,\n                            onPick = {\n                                runCatching { bannerPicker.launch(arrayOf("image/*")) }\n                                    .onFailure { showMessage("تعذر فتح معرض الصور على هذا الجهاز.") }\n                            },\n                            onRemove = {\n                                issuerBanner = null\n                                bannerPreviewBytes = null\n                                showMessage("لن تظهر صورة رأس في المستندات الجديدة.")\n                            },\n                        )\n                        OutlinedTextField(\n''',
+          )
+
+          old_actions = '''                        Button(\n                            modifier = Modifier.fillMaxWidth().testTag("issue-debt-receipt-${account.ledger.header.id.value}"),\n                            enabled = busyKey == null && identityLoaded,\n                            onClick = { issue(account, DocumentType.DEBT_RECEIPT) },\n                        ) {\n                            if (busyKey == debtKey) CircularProgressIndicator() else Text("إصدار إيصال دين")\n                        }\n                        OutlinedButton(\n                            modifier = Modifier.fillMaxWidth().testTag("issue-account-statement-${account.ledger.header.id.value}"),\n                            enabled = busyKey == null && identityLoaded,\n                            onClick = { issue(account, DocumentType.ACCOUNT_STATEMENT) },\n                        ) {\n                            if (busyKey == statementKey) CircularProgressIndicator() else Text("تصدير كل المعاملات PDF")\n                        }\n                        Text(\n                            "كشف الحساب يحفظ Snapshot ثابتًا للحساب ويشمل أصل الدين، صافي المسدد، المتبقي، وكل دفعة أو عملية عكس مسجلة حتى وقت التصدير.",\n                            style = MaterialTheme.typography.bodySmall,\n                            color = MaterialTheme.colorScheme.onSurfaceVariant,\n                        )'''
+          new_actions = '''                        DocumentDualActionButtons(\n                            testTagPrefix = "account-documents-${account.ledger.header.id.value}",\n                            primaryLabel = if (busyKey == debtKey) "جاري الإصدار…" else "إيصال دين",\n                            secondaryLabel = if (busyKey == statementKey) "جاري التصدير…" else "كشف حساب PDF",\n                            enabled = busyKey == null && identityLoaded,\n                            primaryFilled = true,\n                            onPrimary = { issue(account, DocumentType.DEBT_RECEIPT) },\n                            onSecondary = { issue(account, DocumentType.ACCOUNT_STATEMENT) },\n                        )'''
+          once(old_actions, new_actions)
+
+          p.write_text(s)
+      - name: Remove one-shot workflow
+        run: rm .github/workflows/v04-banner-ui-once.yml
+      - name: Commit UI change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/wasl/app/DocumentsHubScreen.kt .github/workflows/v04-banner-ui-once.yml
+          git commit -m "feat(documents): add compact banner picker and preview"
+          git push origin HEAD:agent/ui-ux-hardening-v0.4

@@ -44,6 +44,18 @@ class LauncherResourceInstrumentedTest {
     }
 
     @Test
+    fun themedLauncherIconsExposeMonochromeLayerOnAndroid13Plus() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val launcher = context.getDrawable(R.mipmap.ic_launcher) as AdaptiveIconDrawable
+        val round = context.getDrawable(R.mipmap.ic_launcher_round) as AdaptiveIconDrawable
+
+        assertNotNull(launcher.monochrome)
+        assertNotNull(round.monochrome)
+    }
+
+    @Test
     fun launcherForegroundAndLegacyResourcesArePackaged() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
 

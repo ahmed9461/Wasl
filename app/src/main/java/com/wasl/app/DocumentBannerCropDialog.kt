@@ -1,6 +1,5 @@
 package com.wasl.app
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -40,7 +39,7 @@ internal fun DocumentBannerCropDialog(
     onConfirm: (focusX: Float, focusY: Float) -> Unit,
 ) {
     val preview = remember(sourceBytes) {
-        BitmapFactory.decodeByteArray(sourceBytes, 0, sourceBytes.size)?.asImageBitmap()
+        DocumentBannerCropper.decodePreview(sourceBytes)?.asImageBitmap()
     }
     var focusX by remember(sourceBytes) { mutableFloatStateOf(0.5f) }
     var focusY by remember(sourceBytes) { mutableFloatStateOf(0.5f) }

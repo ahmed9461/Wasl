@@ -26,9 +26,9 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
@@ -147,40 +147,18 @@ internal fun AccountDetailsScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                        Text(
-                            text = account?.person?.displayName ?: "تفاصيل الحساب",
-                            maxLines = 1,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        if (account != null) {
-                            Text(
-                                text = "تفاصيل الحساب وسجل العمليات",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                            )
-                        }
-                    }
+                    Text(
+                        text = account?.person?.displayName ?: "تفاصيل الحساب",
+                        maxLines = 1,
+                        fontWeight = FontWeight.Bold,
+                    )
                 },
                 navigationIcon = {
                     TextButton(onClick = onBack) {
-                        Text("رجوع")
+                        Text("‹", style = MaterialTheme.typography.headlineSmall)
                     }
                 },
             )
-        },
-        floatingActionButton = {
-            if (account != null && !account.ledger.balance.isZero) {
-                ExtendedFloatingActionButton(
-                    onClick = onOpenPayment,
-                    modifier = Modifier.testTag("record-payment"),
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                ) {
-                    Text("تسجيل دفعة", fontWeight = FontWeight.Bold)
-                }
-            }
         },
     ) { scaffoldPadding ->
         when {
@@ -224,6 +202,7 @@ internal fun AccountDetailsScreen(
                     retryingReceiptId = state.retryingReceiptId,
                     receiptRecoveryErrorDocumentId = state.receiptRecoveryErrorDocumentId,
                     onOpenDueSchedule = onOpenDueSchedule,
+                    onOpenPayment = onOpenPayment,
                     paymentPromises = state.paymentPromises,
                     paymentPromiseLoadError = state.paymentPromiseLoadError,
                     onOpenPaymentPromise = onOpenPaymentPromise,
@@ -347,6 +326,7 @@ private fun AccountDetailsContent(
     retryingReceiptId: String?,
     receiptRecoveryErrorDocumentId: String?,
     onOpenDueSchedule: () -> Unit,
+    onOpenPayment: () -> Unit,
     paymentPromises: List<PaymentPromiseRecord>,
     paymentPromiseLoadError: String?,
     onOpenPaymentPromise: () -> Unit,
@@ -374,7 +354,7 @@ private fun AccountDetailsContent(
             start = 20.dp,
             top = 16.dp,
             end = 20.dp,
-            bottom = 112.dp,
+            bottom = 32.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -385,7 +365,7 @@ private fun AccountDetailsContent(
         }
 
         item("summary") {
-            AccountSummaryCard(account, onOpenDueSchedule)
+            AccountSummaryCard(account, onOpenPayment, onOpenDueSchedule, onOpenPaymentPromise)
         }
 
         if (account.ledger.header.direction == DebtDirection.PAYABLE) {
@@ -478,58 +458,56 @@ private fun AccountDetailsContent(
 @Composable
 private fun AccountSummaryCard(
     account: AccountOverview,
+    onOpenPayment: () -> Unit,
     onOpenDueSchedule: () -> Unit,
+    onOpenPaymentPromise: () -> Unit,
 ) {
     val openPersonTimeline = LocalOpenPersonTimeline.current
     val ledger = account.ledger
     val receivable = ledger.header.direction == DebtDirection.RECEIVABLE
-    val heroContainer = if (receivable) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        MaterialTheme.colorScheme.secondaryContainer
-    }
-    val heroContent = if (receivable) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSecondaryContainer
-    }
+    val originalMinor = ledger.header.originalAmount.minorUnits.coerceAtLeast(0L)
+    val paidMinor = ledger.paidAmount.minorUnits.coerceAtLeast(0L)
+    val progress = if (originalMinor == 0L) 0f else (paidMinor.toDouble() / originalMinor.toDouble()).coerceIn(0.0, 1.0).toFloat()
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = heroContainer),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            AccountHeroBadges(
-                receivable = receivable,
-                state = ledger.state,
-            )
+            AccountHeroBadges(receivable = receivable, state = ledger.state)
 
-            ledger.header.description?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = heroContent,
-                )
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "المتبقي",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = heroContent,
-                )
-                Text(
-                    text = formatMoney(ledger.balance),
-                    modifier = Modifier.testTag("account-remaining"),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = heroContent,
-                    textAlign = TextAlign.Start,
-                )
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.primaryContainer,
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(
+                        text = "المتبقي",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    Text(
+                        text = formatMoney(ledger.balance),
+                        modifier = Modifier.testTag("account-remaining"),
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    ledger.header.description?.takeIf { it.isNotBlank() }?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                }
             }
 
             AccountFinancialMetrics(
@@ -537,20 +515,46 @@ private fun AccountSummaryCard(
                 paidAmount = ledger.paidAmount,
             )
 
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("تقدم السداد", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = "${(progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                )
+            }
+
+            AccountPrimaryActions(
+                canRecordPayment = !ledger.balance.isZero,
+                onOpenPayment = onOpenPayment,
+                onOpenDueSchedule = onOpenDueSchedule,
+                onOpenPaymentPromise = onOpenPaymentPromise,
+            )
+
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.66f),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
             ) {
                 Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(9.dp),
+                    modifier = Modifier.padding(13.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    MetadataRow("العملة", ledger.header.originalAmount.currency.value)
                     MetadataRow("تاريخ الإنشاء", formatInstant(ledger.header.openedAt))
-                    MetadataRow(
-                        "تاريخ الاستحقاق",
-                        ledger.header.dueDate?.let(::formatDate) ?: "غير محدد",
-                    )
+                    MetadataRow("تاريخ الاستحقاق", ledger.header.dueDate?.let(::formatDate) ?: "غير محدد")
                     account.dueReminder?.let { reminder ->
                         MetadataRow("موعد المتابعة الأساسي", formatInstant(reminder.triggerAt))
                         MetadataRow(
@@ -566,45 +570,74 @@ private fun AccountSummaryCard(
                     }
                     account.strongAlarm
                         ?.takeIf { it.status != ReminderStatus.CANCELLED }
-                        ?.let { alarm ->
-                            MetadataRow("المنبه القوي", formatInstant(alarm.triggerAt))
-                        }
-                    account.closedAt?.let { closedAt ->
-                        MetadataRow("تاريخ الإغلاق", formatInstant(closedAt))
-                    }
+                        ?.let { MetadataRow("المنبه الدقيق", formatInstant(it.triggerAt)) }
+                    account.closedAt?.let { MetadataRow("تاريخ الإغلاق", formatInstant(it)) }
                 }
             }
 
-            OutlinedButton(
+            TextButton(
                 onClick = { openPersonTimeline(account.person.id) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("open-person-timeline"),
+                modifier = Modifier.fillMaxWidth().testTag("open-person-timeline"),
             ) {
-                Text("صفحة الشخص والسجل الموحد")
-            }
-
-            if (!ledger.balance.isZero) {
-                TextButton(
-                    onClick = onOpenDueSchedule,
-                    modifier = Modifier
-                        .align(Alignment.End)
-                        .testTag("edit-due-schedule"),
-                ) {
-                    Text(
-                        if (ledger.header.dueDate == null) {
-                            "إضافة موعد ومتابعة"
-                        } else {
-                            "تعديل الموعد والمتابعة"
-                        },
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
+                Text("سجل الشخص الكامل")
             }
         }
     }
 }
 
+@Composable
+private fun AccountPrimaryActions(
+    canRecordPayment: Boolean,
+    onOpenPayment: () -> Unit,
+    onOpenDueSchedule: () -> Unit,
+    onOpenPaymentPromise: () -> Unit,
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier.fillMaxWidth().testTag("account-primary-actions-stacked"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = onOpenPayment,
+                    enabled = canRecordPayment,
+                    modifier = Modifier.fillMaxWidth().testTag("record-payment"),
+                ) { Text("تسجيل دفعة") }
+                OutlinedButton(
+                    onClick = onOpenDueSchedule,
+                    enabled = canRecordPayment,
+                    modifier = Modifier.fillMaxWidth().testTag("edit-due-schedule"),
+                ) { Text("الموعد") }
+                OutlinedButton(
+                    onClick = onOpenPaymentPromise,
+                    enabled = canRecordPayment,
+                    modifier = Modifier.fillMaxWidth().testTag("account-add-payment-promise"),
+                ) { Text("وعد سداد") }
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth().testTag("account-primary-actions-inline"),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = onOpenPayment,
+                    enabled = canRecordPayment,
+                    modifier = Modifier.weight(1f).testTag("record-payment"),
+                ) { Text("دفعة") }
+                OutlinedButton(
+                    onClick = onOpenDueSchedule,
+                    enabled = canRecordPayment,
+                    modifier = Modifier.weight(1f).testTag("edit-due-schedule"),
+                ) { Text("الموعد") }
+                OutlinedButton(
+                    onClick = onOpenPaymentPromise,
+                    enabled = canRecordPayment,
+                    modifier = Modifier.weight(1f).testTag("account-add-payment-promise"),
+                ) { Text("وعد") }
+            }
+        }
+    }
+}
 
 @Composable
 internal fun AccountTimelineHeading() {
@@ -646,7 +679,7 @@ private fun AccountTimelineHeadingCopy(modifier: Modifier = Modifier) {
             fontWeight = FontWeight.Bold,
         )
         Text(
-            text = "الأصل محفوظ، وكل دفعة أو عكس يظهر كسجل مستقل.",
+            text = "كل دفعة أو تصحيح محفوظ كسجل مستقل.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -660,7 +693,7 @@ private fun AccountTimelineVerifiedBadge() {
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
         Text(
-            text = "سجل موثق",
+            text = "موثق",
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -1,6 +1,5 @@
 package com.wasl.app
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -52,7 +51,7 @@ internal fun DocumentIssuePreviewDialog(
 ) {
     val bannerBitmap = remember(preview.bannerPreviewBytes) {
         preview.bannerPreviewBytes?.let { bytes ->
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+            DocumentBannerCropper.decodePreview(bytes)?.asImageBitmap()
         }
     }
 

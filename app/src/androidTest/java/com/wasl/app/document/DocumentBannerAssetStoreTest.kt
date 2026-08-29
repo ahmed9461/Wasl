@@ -5,7 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import java.io.ByteArrayInputStream
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFailsWith
+import org.junit.Assert.fail
 import org.junit.Test
 
 class DocumentBannerAssetStoreTest {
@@ -24,8 +24,11 @@ class DocumentBannerAssetStoreTest {
     @Test
     fun import_rejectsNonImageBytes() {
         val store = AndroidDocumentBannerAssetStore(context)
-        assertFailsWith<IllegalArgumentException> {
-  store.importImage(ByteArrayInputStream("not an image".toByteArray()))
+        try {
+            store.importImage(ByteArrayInputStream("not an image".toByteArray()))
+            fail("Expected invalid image bytes to be rejected.")
+        } catch (_: IllegalArgumentException) {
+            // Expected.
         }
     }
 

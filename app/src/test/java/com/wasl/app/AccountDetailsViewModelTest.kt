@@ -589,6 +589,10 @@ private class RecordingPaymentReceiptService : PaymentReceiptService {
         updatedAt = Instant.parse("2026-08-13T00:00:00Z"),
     )
 
+    override suspend fun importIdentityBanner(
+        content: java.io.InputStream,
+    ): com.wasl.app.document.DocumentBannerAsset = error("Not used in AccountDetailsViewModel tests.")
+
     override suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord {
         issueCalls += command
         return documents.getOrPut(command.documentId) { command.toReadyDocument() }

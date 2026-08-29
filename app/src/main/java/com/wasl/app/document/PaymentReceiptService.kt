@@ -29,7 +29,8 @@ interface PaymentReceiptService {
 
     suspend fun importIdentityBanner(content: InputStream): DocumentBannerAsset
 
-    suspend fun readIdentityBanner(asset: DocumentBannerAsset): ByteArray
+    suspend fun readIdentityBanner(asset: DocumentBannerAsset): ByteArray =
+        error("Document banner read is unavailable.")
 
     suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord
 

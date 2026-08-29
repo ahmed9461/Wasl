@@ -1,6 +1,6 @@
 # سياق مشروع وَصل
 
-آخر تحديث: 2026-08-28
+آخر تحديث: 2026-08-29
 
 ## الهوية
 
@@ -9,7 +9,7 @@
 - المستودع: `ahmed9461/Wasl`
 - Application ID: `com.wasl.app`
 - الإصدار المرشح: `0.1.0` (`versionCode = 1`)
-- فرع الإنهاء المجمع: `agent/final-polish-doc-sync`
+- فرع الواجهة المرشح: `agent/ui-redesign-v0.3-corrective`
 
 ## الهدف
 
@@ -19,11 +19,23 @@
 
 ## المرحلة الحالية
 
-المراحل الوظيفية والتلميع الرئيسي مكتملة، والمصدر في **Release Candidate**. آخر integration head يحمل تغييرات المنتج قبل مزامنة الوثائق هو `5794e9a74914c8af3a3ecf750664f2f6083eaf66`.
+المراحل الوظيفية الأساسية مكتملة، وCorrective UI v0.3 اجتازت بوابة القبول الكاملة على الرأس `acb5dea0fd54897afcc56e55ee52afc99bcb0392`.
 
-دفعة Document Templates / Room v11 اجتازت Android CI #1017 — run `33203634720` بالكامل قبل الدمج، بما يشمل Unit/Lint/Debug، Room v11، Emulator integration والمهاجرات وBackup/Repository وPDF evidence.
+Android CI **#1097** — run `33228386198` نجح بالكامل، بما يشمل Unit/Lint/Debug APK، Room v11، Emulator integration/migrations/repository/backup، اختبارات Android على المحاكي، وفحص Payment/Debt/Account Statement PDF artifacts.
 
-أحدث رأس على فرع الإنهاء يجب أن يجتاز GitHub Actions قبل النقل إلى `main`.
+الخطوة الداخلية التالية هي دمج فرع الواجهة إلى `main` ثم اعتماد CI على merge commit نفسه قبل تسليم APK التجريبي النهائي.
+
+## الهوية والواجهة الحالية
+
+- لوحة بصرية موحدة داكنة/فيروزية/ذهبية مبنية على التصميم المعتمد.
+- أيقونة «وصل» جديدة مع adaptive/round launcher support.
+- الرئيسية تعرض ملخص العملات والحسابات وإجراءين مستقلين: إضافة حساب والإدخال الذكي.
+- إضافة الحساب تدفق مختصر ومباشر مع إبقاء الاستحقاق/التذكير/المنبه ضمن الخيارات الإضافية.
+- «اليوم» مبنية بملخص واضح وصياغة عربية طبيعية.
+- الأقساط تعرض إجمالي/مسدد/متبقٍ وفلاتر وتقدم الخطة.
+- تفاصيل الحساب تعرض الرصيد والتقدم والإجراءات والمتابعة داخل الشاشة.
+- الإعدادات موحدة بصريًا وتدعم تلقائي/داكن/فاتح والأمان والتذكيرات والنسخ الاحتياطي.
+- RTL/Bidi/adaptive/large-font hardening محفوظة.
 
 ## الوظائف الحالية
 
@@ -41,7 +53,6 @@
 - Attachments vault + SHA-256 + FileProvider.
 - Backup/Restore مشفر مع staging/FK/path/hash/invariant validation وrollback.
 - App Lock / `FLAG_SECURE` / notification privacy.
-- RTL/Bidi/adaptive/large-font hardening.
 - Local-first ولا صلاحية `INTERNET` في الإصدار الحالي.
 
 ## قاعدة البيانات
@@ -97,4 +108,4 @@
 
 ## المتبقي خارج المصدر
 
-بعد نجاح Android CI على الرأس المجمع لا تبقى مرحلة وظيفية داخل الكود. النشر العام يتطلب مفتاح توقيع فعلي خارج Git وتشغيل Signed Release ثم استكمال متطلبات منصة التوزيع، ومنها وسيلة تواصل رسمية إذا كانت مطلوبة.
+بعد دمج Corrective UI v0.3 ونجاح Android CI على `main` لا تبقى مرحلة وظيفية مفتوحة داخل الكود لهذه الجولة. النشر العام يتطلب مفتاح توقيع فعلي خارج Git وتشغيل Signed Release ثم استكمال متطلبات منصة التوزيع، ومنها وسيلة تواصل رسمية إذا كانت مطلوبة.

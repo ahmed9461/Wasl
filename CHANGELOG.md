@@ -13,7 +13,21 @@
 - ضغط الإعدادات إلى مجموعات متناسقة مع نفس الهوية البصرية مع الحفاظ على تلقائي/داكن/فاتح والأمان والنسخ الاحتياطي.
 - استبدال الأيقونة السابقة بأيقونة «وصل» الذهبية ذات الخلفية الداكنة واللمسة الفيروزية، مع دعم adaptive/round launchers.
 - المحافظة على RTL، الخطوط الكبيرة، الاختبارات التكيفية، وجميع ثوابت Ledger وسلامة البيانات المالية.
-- تثبيت جولة التصحيح بتعريف Typography صريح، واستدعاءات Material 3 سليمة، واستعادة حالة DatePicker للأقساط قبل بوابة CI النهائية.
+- تثبيت جولة التصحيح بتعريف Typography صريح، واستدعاءات Material 3 سليمة، واستعادة حالة DatePicker للأقساط.
+- تثبيت معرفات UI مستقرة للاختبارات بدل الاعتماد على النصوص المرئية، وتحديث تدفقات الاختبار لتطابق إضافة الحساب المباشرة الجديدة.
+
+### بوابة القبول النهائية للواجهة
+
+Android CI **#1097** — run `33228386198` — head `acb5dea0fd54897afcc56e55ee52afc99bcb0392`:
+
+- Unit tests / Lint / Debug APK ✅
+- Room Schema v11 generated/verified ✅
+- Emulator instrumentation / migrations / repository / backup ✅
+- جميع اختبارات Android على المحاكي ✅
+- Payment Receipt PDF inspection ✅
+- Debt Receipt PDF inspection ✅
+- Account Statement PDF inspection ✅
+- instrumentation وPDF evidence artifacts ✅
 
 ## 0.1.0 — Release Candidate
 
@@ -93,6 +107,10 @@
 
 ## Verification
 
+### Corrective UI v0.3 pre-merge gate
+
+Android CI **#1097** — run `33228386198` — head `acb5dea0fd54897afcc56e55ee52afc99bcb0392` نجح بالكامل كما هو موضح أعلاه.
+
 ### Document Templates / Room v11 pre-merge gate
 
 Android CI #1017 — run `33203634720` — head `fdbb28b2aca59f7d0542eaa785d72502d695a431`:
@@ -112,4 +130,4 @@ Android CI #967 — run `33137676461` — head `e09efee71cea4b1734afe50a025c2a32
 
 ## حالة الإصدار
 
-مصدر المنتج أصبح في مرحلة Release Candidate. الحكم النهائي للمصدر هو Android CI المرتبط بأحدث رأس مجمع بعد مزامنة الوثائق. النشر الفعلي يبقى منفصلًا ويتطلب مفتاح توقيع خارجي وأسرار Release غير محفوظة في Git.
+المصدر بعد Corrective UI v0.3 في مرحلة Release Candidate. بوابة الكود والواجهة الحالية نجحت على CI #1097. بعد دمج فرع الواجهة في `main` يجب اعتماد Android CI الناتج من merge نفسه قبل تسليم APK التجريبي النهائي. النشر العام الموقّع يبقى منفصلًا ويتطلب مفتاح توقيع خارجي وأسرار Release غير محفوظة في Git.

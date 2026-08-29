@@ -35,7 +35,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -505,6 +504,7 @@ private fun WaslHomeScreen(
     onSuccessShown: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
+    val openNaturalEntry = LocalOpenNaturalEntry.current
     LaunchedEffect(state.successMessage) {
         val message = state.successMessage ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(message)
@@ -516,116 +516,74 @@ private fun WaslHomeScreen(
         contentWindowInsets = WindowInsets.safeDrawing,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            WaslTopLevelNavigation(
-                selected = WaslTopLevelDestination.HOME,
-                onOpenHome = onOpenHome,
-                onOpenToday = onOpenToday,
-                onOpenSearch = onOpenSearch,
-            )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                modifier = Modifier.testTag("home-add-entry"),
-                onClick = onOpenCreate,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ) {
-                Text("إضافة حساب", fontWeight = FontWeight.Bold)
+            Column {
+                Surface(color = MaterialTheme.colorScheme.background, tonalElevation = 0.dp) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Button(
+                            onClick = onCreateIndividual,
+                            modifier = Modifier.weight(1f).testTag("home-add-entry"),
+                            shape = MaterialTheme.shapes.medium,
+                        ) { Text("＋ إضافة حساب", fontWeight = FontWeight.Bold) }
+                        OutlinedButton(
+                            onClick = { openNaturalEntry?.invoke() },
+                            enabled = openNaturalEntry != null,
+                            modifier = Modifier.weight(1f).testTag("home-natural-entry"),
+                            shape = MaterialTheme.shapes.medium,
+                        ) { Text("إدخال ذكي") }
+                    }
+                }
+                WaslTopLevelNavigation(
+                    selected = WaslTopLevelDestination.HOME,
+                    onOpenHome = onOpenHome,
+                    onOpenToday = onOpenToday,
+                    onOpenSearch = onOpenSearch,
+                )
             }
         },
     ) { scaffoldPadding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(scaffoldPadding),
-            contentPadding = PaddingValues(
-                start = 20.dp,
-                top = 22.dp,
-                end = 20.dp,
-                bottom = 112.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxSize().padding(scaffoldPadding),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            item("home-header") {
-                HomeHeroCard(accountCount = state.accounts.size)
-            }
-
+            item("home-header") { HomeHeroCard(accountCount = state.accounts.size) }
             if (state.isLoading) {
                 item("home-loading") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator()
-                    }
+                    Box(Modifier.fillMaxWidth().padding(28.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 }
             } else {
                 item("home-overview-heading") {
                     HomeSectionHeader(
-                        title = "ملخصك المالي",
-                        subtitle = "نظرة سريعة على الحقوق والالتزامات حسب العملة.",
+                        title = "إجمالي الحسابات",
+                        subtitle = "كل عملة مستقلة؛ لا يتم خلط الأرصدة.",
                         tagPrefix = "home-overview",
                     )
                 }
-                item("home-receivable-summary") {
-                    SummaryCard(
-                        title = "لي عند الناس",
-                        subtitle = "حقوقك المفتوحة",
-                        values = summaryRows(state.balanceSummary.receivableByCurrency),
-                        receivable = true,
-                    )
-                }
-                item("home-payable-summary") {
-                    SummaryCard(
-                        title = "عليّ للناس",
-                        subtitle = "التزاماتك المفتوحة",
-                        values = summaryRows(state.balanceSummary.payableByCurrency),
-                        receivable = false,
-                    )
-                }
-
-                state.loadError?.let { error ->
-                    item("home-error") { StatusCard(message = error, isError = true) }
-                }
-
+                item("home-currency-overview") { HomeCurrencyOverview(state) }
+                state.loadError?.let { error -> item("home-error") { StatusCard(error, true) } }
                 if (state.accounts.isEmpty() && state.loadError == null) {
-                    item("home-empty") {
-                        StatusCard(
-                            message = "لا توجد حسابات بعد. أضف شخصًا ودينًا، وسيبقى محفوظًا بعد إغلاق التطبيق.",
-                            isError = false,
-                        )
-                    }
+                    item("home-empty") { StatusCard("أضف أول حساب لتبدأ متابعة الحقوق والالتزامات.", false) }
                 } else {
                     item("home-accounts-heading") {
                         HomeSectionHeader(
                             title = "الحسابات",
-                            subtitle = "${state.accounts.size} حساب محفوظ",
+                            subtitle = if (state.accounts.size == 1) "حساب واحد" else "${state.accounts.size} حسابات",
                             count = state.accounts.size,
                             tagPrefix = "home-accounts",
                         )
                     }
-                    items(
-                        items = state.accounts,
-                        key = { it.ledger.header.id.value },
-                    ) { account ->
-                        AccountCard(
-                            account = account,
-                            onClick = { onOpenAccount(account.ledger.header.id) },
-                        )
+                    items(state.accounts, key = { it.ledger.header.id.value }) { account ->
+                        AccountCard(account) { onOpenAccount(account.ledger.header.id) }
                     }
+                }
+                item("home-group-expense") {
+                    TextButton(onClick = onCreateGroupExpense, modifier = Modifier.fillMaxWidth()) { Text("عملية جماعية") }
                 }
             }
         }
-    }
-
-    if (state.isCreateTypePickerOpen) {
-        CreateEntryTypeDialog(
-            onDismiss = onDismissCreateTypePicker,
-            onCreateIndividual = onCreateIndividual,
-            onCreateGroupExpense = onCreateGroupExpense,
-        )
     }
 
     if (state.isGroupExpenseDialogOpen) {
@@ -687,6 +645,57 @@ private fun WaslHomeScreen(
 }
 
 @Composable
+private fun HomeCurrencyOverview(state: HomeUiState) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (shouldStackDenseRows(maxWidth)) {
+            Column(
+                modifier = Modifier.fillMaxWidth().testTag("home-currency-overview-stacked"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                supportedCurrencies.forEach { currency ->
+                    CurrencyBalanceTile(
+                        currency,
+                        state.balanceSummary.receivableByCurrency[currency] ?: Money.zero(currency),
+                        state.balanceSummary.payableByCurrency[currency] ?: Money.zero(currency),
+                        Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth().testTag("home-currency-overview-inline"),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                supportedCurrencies.forEach { currency ->
+                    CurrencyBalanceTile(
+                        currency,
+                        state.balanceSummary.receivableByCurrency[currency] ?: Money.zero(currency),
+                        state.balanceSummary.payableByCurrency[currency] ?: Money.zero(currency),
+                        Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CurrencyBalanceTile(currency: CurrencyCode, receivable: Money, payable: Money, modifier: Modifier = Modifier) {
+    Card(modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(currency.value, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Text(formatMoney(receivable), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary, maxLines = 1)
+            Text("لي", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!payable.isZero) {
+                Text("عليّ ${formatMoney(payable)}", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary, maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
 @OptIn(ExperimentalMaterial3Api::class)
 private fun CreateDebtDialog(
     form: CreateDebtForm,
@@ -716,483 +725,221 @@ private fun CreateDebtDialog(
     onSave: () -> Unit,
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
+    var advancedOpen by remember(form.dueDate, form.remindOnDueDate, form.strongAlarmEnabled) {
+        mutableStateOf(form.dueDate != null || form.remindOnDueDate || form.strongAlarmEnabled)
+    }
     val onStrongAlarmTimeChange = LocalStrongAlarmTimeChange.current
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("دين جديد")
-                Text(
-                    text = "سجّل حقًا لك أو التزامًا عليك بدون تعقيد.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Normal,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("إضافة حساب جديد", fontWeight = FontWeight.Bold)
+                Text("البيانات الأساسية أولًا، وخيارات الاستحقاق عند الحاجة.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text("الشخص", fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = form.personMode == DebtPersonMode.NEW,
-                        onClick = { onPersonModeChange(DebtPersonMode.NEW) },
-                        label = { Text("شخص جديد") },
-                        enabled = !isSaving,
-                        modifier = Modifier.testTag("create-person-mode-new"),
-                    )
-                    FilterChip(
-                        selected = form.personMode == DebtPersonMode.EXISTING,
-                        onClick = { onPersonModeChange(DebtPersonMode.EXISTING) },
-                        label = { Text("شخص موجود") },
-                        enabled = !isSaving,
-                        modifier = Modifier.testTag("create-person-mode-existing"),
-                    )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(form.direction == DebtDirection.RECEIVABLE, { onDirectionChange(DebtDirection.RECEIVABLE) },
+                        { Text("لي عنده") }, enabled = !isSaving, modifier = Modifier.weight(1f))
+                    FilterChip(form.direction == DebtDirection.PAYABLE, { onDirectionChange(DebtDirection.PAYABLE) },
+                        { Text("عليّ له") }, enabled = !isSaving, modifier = Modifier.weight(1f))
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(form.personMode == DebtPersonMode.NEW, { onPersonModeChange(DebtPersonMode.NEW) },
+                        { Text("شخص جديد") }, enabled = !isSaving,
+                        modifier = Modifier.weight(1f).testTag("create-person-mode-new"))
+                    FilterChip(form.personMode == DebtPersonMode.EXISTING, { onPersonModeChange(DebtPersonMode.EXISTING) },
+                        { Text("شخص محفوظ") }, enabled = !isSaving,
+                        modifier = Modifier.weight(1f).testTag("create-person-mode-existing"))
                 }
 
                 if (form.personMode == DebtPersonMode.NEW) {
-                    OutlinedTextField(
-                        value = form.personName,
-                        onValueChange = onPersonNameChange,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("create-person-name"),
-                        label = { Text("اسم الشخص") },
-                        singleLine = true,
-                        enabled = !isSaving,
-                        shape = MaterialTheme.shapes.medium,
-                    )
+                    OutlinedTextField(form.personName, onPersonNameChange,
+                        Modifier.fillMaxWidth().testTag("create-person-name"),
+                        label = { Text("الاسم") }, placeholder = { Text("مثال: أحمد") },
+                        singleLine = true, enabled = !isSaving)
                 } else {
                     form.selectedPerson?.let { selected ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("selected-existing-person"),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            ),
-                        ) {
-                            Text(
-                                text = "الشخص المحدد: ${selected.displayName}",
-                                modifier = Modifier.padding(12.dp),
-                                fontWeight = FontWeight.SemiBold,
-                            )
+                        Surface(Modifier.fillMaxWidth().testTag("selected-existing-person"),
+                            shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) {
+                            Text(selected.displayName, Modifier.padding(11.dp), fontWeight = FontWeight.Bold)
                         }
                     }
-                    OutlinedTextField(
-                        value = peopleQuery,
-                        onValueChange = onPeopleQueryChange,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("existing-person-query"),
-                        label = { Text("ابحث باسم الشخص") },
-                        singleLine = true,
-                        enabled = !isSaving,
-                        shape = MaterialTheme.shapes.medium,
-                    )
+                    OutlinedTextField(peopleQuery, onPeopleQueryChange,
+                        Modifier.fillMaxWidth().testTag("existing-person-query"),
+                        label = { Text("ابحث عن شخص") }, singleLine = true, enabled = !isSaving)
                     when {
-                        isPeopleLoading -> Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        isPeopleLoading -> Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(Modifier.size(22.dp))
                         }
-
-                        peopleLoadError != null -> Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Text(
-                                peopleLoadError,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            TextButton(
-                                onClick = onRetryPeople,
-                                enabled = !isSaving,
-                                modifier = Modifier.testTag("retry-existing-people"),
-                            ) {
-                                Text("إعادة المحاولة")
-                            }
+                        peopleLoadError != null -> Column {
+                            Text(peopleLoadError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                            TextButton(onClick = onRetryPeople, modifier = Modifier.testTag("retry-existing-people")) { Text("إعادة المحاولة") }
                         }
-
                         selectablePeople.isEmpty() -> Text(
-                            text = if (peopleQuery.isBlank()) {
-                                "لا يوجد شخص محفوظ بعد. اختر «شخص جديد» أولًا."
-                            } else {
-                                "لا يوجد شخص مطابق لهذا الاسم."
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-
+                            if (peopleQuery.isBlank()) "لا يوجد أشخاص محفوظون." else "لا توجد نتيجة مطابقة.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         else -> {
                             selectablePeople.forEach { person ->
-                                OutlinedButton(
-                                    onClick = { onSelectPerson(person.id) },
-                                    enabled = !isSaving,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("existing-person-${person.id.value}"),
-                                ) {
+                                OutlinedButton(onClick = { onSelectPerson(person.id) }, enabled = !isSaving,
+                                    modifier = Modifier.fillMaxWidth().testTag("existing-person-${person.id.value}")) {
                                     Text(person.displayName)
                                 }
                             }
-                            if (hasMorePeople) {
-                                Text(
-                                    "توجد نتائج إضافية؛ اكتب جزءًا أدق من الاسم.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
+                            if (hasMorePeople) Text("اكتب اسمًا أدق لعرض نتائج أقل.", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
 
-                Text("تاريخ الاستحقاق", fontWeight = FontWeight.SemiBold)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedButton(
-                        onClick = { showDatePicker = true },
-                        enabled = !isSaving,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("create-due-date"),
-                    ) {
-                        Text(
-                            form.dueDate?.format(dueDateFormatter)
-                                ?: "اختيار تاريخ — اختياري",
-                        )
+                OutlinedTextField(form.amount, onAmountChange,
+                    Modifier.fillMaxWidth().testTag("create-debt-amount"),
+                    label = { Text("المبلغ") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true, enabled = !isSaving)
+
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    supportedCurrencies.forEach { currency ->
+                        FilterChip(form.currency == currency, { onCurrencyChange(currency) }, { Text(currency.value) },
+                            enabled = !isSaving, modifier = Modifier.weight(1f))
+                    }
+                }
+
+                OutlinedTextField(form.description, onDescriptionChange, Modifier.fillMaxWidth(),
+                    label = { Text("ملاحظات — اختياري") }, minLines = 1, maxLines = 2, enabled = !isSaving)
+
+                OutlinedButton(onClick = { advancedOpen = !advancedOpen },
+                    modifier = Modifier.fillMaxWidth().testTag("create-advanced-options"), enabled = !isSaving) {
+                    Text(if (advancedOpen) "إخفاء خيارات الاستحقاق" else "خيارات إضافية · الاستحقاق والتذكير")
+                }
+
+                if (advancedOpen) {
+                    OutlinedButton(onClick = { showDatePicker = true }, enabled = !isSaving,
+                        modifier = Modifier.fillMaxWidth().testTag("create-due-date")) {
+                        Text(form.dueDate?.format(dueDateFormatter) ?: "تاريخ الاستحقاق — اختياري")
                     }
                     if (form.dueDate != null) {
-                        TextButton(
-                            onClick = { onDueDateChange(null) },
-                            enabled = !isSaving,
-                        ) {
-                            Text("إزالة")
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("تذكير بالاستحقاق", fontWeight = FontWeight.SemiBold)
+                                Text("متابعة تلقائية حتى السداد", style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(form.remindOnDueDate, onReminderChange, enabled = !isSaving,
+                                modifier = Modifier.testTag("create-due-reminder"))
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("منبه دقيق", fontWeight = FontWeight.SemiBold)
+                                Text("اختياري في يوم الاستحقاق", style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(form.strongAlarmEnabled, onStrongAlarmChange, enabled = !isSaving,
+                                modifier = Modifier.testTag("create-strong-alarm"))
+                        }
+                        if (form.strongAlarmEnabled) {
+                            StrongAlarmTimeSelector(form.strongAlarmTime, !isSaving, onStrongAlarmTimeChange,
+                                Modifier.fillMaxWidth(), "create-strong-alarm-time")
+                        }
+                        if (form.remindOnDueDate && !notificationPermissionGranted) {
+                            Text("اسمح بإشعارات وَصل حتى تظهر التذكيرات.", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error)
+                        }
+                        if (form.strongAlarmEnabled && !exactAlarmAccessGranted) {
+                            TextButton(onClick = onRequestExactAlarmAccess,
+                                modifier = Modifier.testTag("create-request-exact-alarm-access")) { Text("السماح بالمنبه الدقيق") }
                         }
                     }
                 }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("متابعة ذكية للاستحقاق", fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "قبل الموعد بيوم، يوم الموعد، بعد يومين، ثم أسبوعيًا حتى السداد.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = form.remindOnDueDate,
-                        onCheckedChange = onReminderChange,
-                        enabled = !isSaving && form.dueDate != null,
-                        modifier = Modifier.testTag("create-due-reminder"),
-                    )
-                }
-                if (form.remindOnDueDate && !notificationPermissionGranted) {
-                    Text(
-                        "ستُحفظ المتابعة، لكن لن يظهر الإشعار حتى تسمح بإشعارات وَصل.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-                HorizontalDivider()
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("منبه قوي إضافي", fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "منبه دقيق يوم الاستحقاق في الوقت الذي تختاره، مع إبقاء المتابعة الذكية كبديل.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = form.strongAlarmEnabled,
-                        onCheckedChange = onStrongAlarmChange,
-                        enabled = !isSaving && form.dueDate != null,
-                        modifier = Modifier.testTag("create-strong-alarm"),
-                    )
-                }
-                if (form.strongAlarmEnabled) {
-                    StrongAlarmTimeSelector(
-                        time = form.strongAlarmTime,
-                        enabled = !isSaving,
-                        onTimeChange = onStrongAlarmTimeChange,
-                        modifier = Modifier.fillMaxWidth(),
-                        testTag = "create-strong-alarm-time",
-                    )
-                }
-                if (form.strongAlarmEnabled && !exactAlarmAccessGranted) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            "Android يحتاج إذن «المنبهات والتذكيرات» لتشغيل المنبه القوي بدقة. المتابعة الذكية ستبقى فعالة.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.testTag("create-exact-alarm-permission-warning"),
-                        )
-                        TextButton(
-                            onClick = onRequestExactAlarmAccess,
-                            enabled = !isSaving,
-                            modifier = Modifier.testTag("create-request-exact-alarm-access"),
-                        ) {
-                            Text("السماح بالمنبه الدقيق")
-                        }
-                    }
-                }
-
-                Text("اتجاه الدين", fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = form.direction == DebtDirection.RECEIVABLE,
-                        onClick = { onDirectionChange(DebtDirection.RECEIVABLE) },
-                        label = { Text("لي عنده") },
-                        enabled = !isSaving,
-                    )
-                    FilterChip(
-                        selected = form.direction == DebtDirection.PAYABLE,
-                        onClick = { onDirectionChange(DebtDirection.PAYABLE) },
-                        label = { Text("عليّ له") },
-                        enabled = !isSaving,
-                    )
-                }
-
-                OutlinedTextField(
-                    value = form.amount,
-                    onValueChange = onAmountChange,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("create-debt-amount"),
-                    label = { Text("المبلغ") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    enabled = !isSaving,
-                    shape = MaterialTheme.shapes.medium,
-                )
-
-                Text("العملة", fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    supportedCurrencies.forEach { currency ->
-                        FilterChip(
-                            selected = form.currency == currency,
-                            onClick = { onCurrencyChange(currency) },
-                            label = { Text(currency.value) },
-                            enabled = !isSaving,
-                        )
-                    }
-                }
-
-                OutlinedTextField(
-                    value = form.description,
-                    onValueChange = onDescriptionChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("البيان — اختياري") },
-                    minLines = 2,
-                    maxLines = 3,
-                    enabled = !isSaving,
-                    shape = MaterialTheme.shapes.medium,
-                )
 
                 error?.let {
-                    Surface(
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.errorContainer,
-                    ) {
-                        Text(
-                            text = it,
-                            modifier = Modifier.padding(12.dp),
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                    Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.errorContainer) {
+                        Text(it, Modifier.padding(10.dp), color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
         },
         confirmButton = {
-            Button(
-                onClick = onSave,
-                enabled = !isSaving,
-                modifier = Modifier.testTag("create-debt-save"),
-            ) {
+            Button(onClick = onSave, enabled = !isSaving, modifier = Modifier.testTag("create-debt-save")) {
                 if (isSaving) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                    )
-                    Spacer(modifier = Modifier.size(8.dp))
+                    CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.size(7.dp))
                 }
-                Text(if (isSaving) "جارٍ الحفظ" else "حفظ")
+                Text(if (isSaving) "جارٍ الحفظ" else "حفظ الحساب")
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isSaving) {
-                Text("إلغاء")
-            }
-        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isSaving) { Text("إلغاء") } },
     )
 
     if (showDatePicker) {
-        val initialSelection = form.dueDate
-            ?.atStartOfDay(ZoneOffset.UTC)
-            ?.toInstant()
-            ?.toEpochMilli()
-        val pickerState = androidx.compose.material3.rememberDatePickerState(
-            initialSelectedDateMillis = initialSelection,
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        pickerState.selectedDateMillis?.let { selected ->
-                            onDueDateChange(
-                                Instant.ofEpochMilli(selected)
-                                    .atZone(ZoneOffset.UTC)
-                                    .toLocalDate(),
-                            )
-                        }
-                        showDatePicker = false
-                    },
-                    enabled = pickerState.selectedDateMillis != null,
-                ) {
-                    Text("اختيار")
+        val initialSelection = form.dueDate?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli()
+        val pickerState = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = initialSelection)
+        DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = {
+            TextButton(onClick = {
+                pickerState.selectedDateMillis?.let { selected ->
+                    onDueDateChange(Instant.ofEpochMilli(selected).atZone(ZoneOffset.UTC).toLocalDate())
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text("إلغاء")
-                }
-            },
-        ) {
+                showDatePicker = false
+            }, enabled = pickerState.selectedDateMillis != null) { Text("اختيار") }
+        }, dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("إلغاء") } }) {
             DatePicker(state = pickerState)
         }
     }
 }
 
 @Composable
-internal fun AccountCard(
-    account: AccountOverview,
-    onClick: () -> Unit,
-) {
+internal fun AccountCard(account: AccountOverview, onClick: () -> Unit) {
     val header = account.ledger.header
     val receivable = header.direction == DebtDirection.RECEIVABLE
     val tagPrefix = "account-${header.id.value}"
-    Card(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag(tagPrefix),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag(tagPrefix),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
                 if (shouldStackDenseRows(maxWidth)) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("$tagPrefix-header-stacked"),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        AccountIdentityRow(
-                            account = account,
-                            receivable = receivable,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        AccountDirectionBadge(receivable = receivable)
+                    Column(Modifier.fillMaxWidth().testTag("$tagPrefix-header-stacked"), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        AccountIdentityRow(account, receivable, Modifier.fillMaxWidth())
+                        AccountDirectionBadge(receivable)
                     }
                 } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("$tagPrefix-header-inline"),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        AccountIdentityRow(
-                            account = account,
-                            receivable = receivable,
-                            modifier = Modifier.weight(1f),
-                        )
-                        AccountDirectionBadge(receivable = receivable)
+                    Row(Modifier.fillMaxWidth().testTag("$tagPrefix-header-inline"),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        AccountIdentityRow(account, receivable, Modifier.weight(1f))
+                        AccountDirectionBadge(receivable)
                     }
                 }
             }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
                 if (shouldStackDenseRows(maxWidth)) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("$tagPrefix-balance-stacked"),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        AccountRemainingBalance(account = account)
-                        AccountStateBadge(state = account.ledger.state)
+                    Column(Modifier.fillMaxWidth().testTag("$tagPrefix-balance-stacked"), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        AccountRemainingBalance(account)
+                        AccountStateBadge(account.ledger.state)
                     }
                 } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("$tagPrefix-balance-inline"),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Bottom,
-                    ) {
-                        AccountRemainingBalance(account = account)
-                        AccountStateBadge(state = account.ledger.state)
+                    Row(Modifier.fillMaxWidth().testTag("$tagPrefix-balance-inline"),
+                        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
+                        AccountRemainingBalance(account)
+                        AccountStateBadge(account.ledger.state)
                     }
                 }
             }
-
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val dueText = header.dueDate?.let { "الاستحقاق ${it.format(dueDateFormatter)}" } ?: "بدون تاريخ استحقاق"
                 if (shouldStackDenseRows(maxWidth)) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("$tagPrefix-original-stacked"),
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
-                    ) {
-                        AccountOriginalAmount(header.originalAmount)
+                    Column(Modifier.fillMaxWidth().testTag("$tagPrefix-original-stacked"), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(dueText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("الأصل ${formatMoney(header.originalAmount)}", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("$tagPrefix-original-inline"),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            text = "الأصل",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            text = formatMoney(header.originalAmount),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
+                    Row(Modifier.fillMaxWidth().testTag("$tagPrefix-original-inline"), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(dueText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("الأصل ${formatMoney(header.originalAmount)}", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

@@ -1,0 +1,381 @@
+name: Apply v0.4 banner core
+
+on:
+  push:
+    branches:
+      - agent/ui-ux-hardening-v0.4
+    paths:
+      - .github/workflows/v04-banner-core-apply.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/ui-ux-hardening-v0.4
+          fetch-depth: 0
+      - name: Apply banner core safely
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def read(path):
+              return Path(path).read_text()
+
+          def write(path, text):
+              Path(path).write_text(text)
+
+          def replace_once(path, old, new):
+              text = read(path)
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one match, got {count}: {old[:80]!r}")
+              write(path, text.replace(old, new, 1))
+
+          def regex_sub_once(path, pattern, repl):
+              text = read(path)
+              updated, count = re.subn(pattern, repl, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f"{path}: regex expected one match, got {count}: {pattern}")
+              write(path, updated)
+
+          # Command models: banner is explicit command data so replay/idempotency can verify it.
+          models = 'app/src/main/java/com/wasl/app/data/RepositoryModels.kt'
+          for cls in ('PrepareDebtReceiptCommand', 'PreparePaymentReceiptCommand', 'PrepareAccountStatementCommand'):
+              pattern = rf'(data class {cls}\(.*?    val footerText: String\? = null,\n)(    val issuedAt: Instant,)'
+              regex_sub_once(models, pattern, r'\1    val issuerBanner: DocumentBannerAsset? = null,\n\2')
+
+          # DAO must persist banner metadata on updates, not only on inserts.
+          dao = 'app/src/main/java/com/wasl/app/data/local/dao/DocumentIdentityDao.kt'
+          replace_once(
+              dao,
+              '            footer_text = :footerText,\n            is_default = 1,',
+              '            footer_text = :footerText,\n            banner_relative_path = :bannerRelativePath,\n            banner_sha256 = :bannerSha256,\n            is_default = 1,',
+          )
+          replace_once(
+              dao,
+              '        footerText: String?,\n        updatedAt: Long,',
+              '        footerText: String?,\n        bannerRelativePath: String?,\n        bannerSha256: String?,\n        updatedAt: Long,',
+          )
+
+          # Payment receipt repository: freeze + persist + replay-check banner.
+          repo = 'app/src/main/java/com/wasl/app/data/local/RoomWaslRepository.kt'
+          replace_once(
+              repo,
+              '            footerText = command.footerText.normalizedOptional(),\n        )\n        saveDefaultIdentity(command, normalizedIdentity)',
+              '            footerText = command.footerText.normalizedOptional(),\n            banner = command.issuerBanner,\n        )\n        saveDefaultIdentity(command, normalizedIdentity)',
+          )
+          replace_once(
+              repo,
+              '                    footerText = snapshot.footerText,\n                    isDefault = true,',
+              '                    footerText = snapshot.footerText,\n                    bannerRelativePath = snapshot.banner?.relativePath,\n                    bannerSha256 = snapshot.banner?.sha256,\n                    isDefault = true,',
+          )
+          replace_once(
+              repo,
+              '                    footerText = snapshot.footerText,\n                    updatedAt = command.issuedAt.toEpochMilli(),',
+              '                    footerText = snapshot.footerText,\n                    bannerRelativePath = snapshot.banner?.relativePath,\n                    bannerSha256 = snapshot.banner?.sha256,\n                    updatedAt = command.issuedAt.toEpochMilli(),',
+          )
+          replace_once(
+              repo,
+              '                footerText = command.footerText.normalizedOptional(),\n            )\n        if (!matches)',
+              '                footerText = command.footerText.normalizedOptional(),\n                banner = command.issuerBanner,\n            )\n        if (!matches)',
+          )
+
+          # Account document store follows the same identity snapshot contract.
+          account_store = 'app/src/main/java/com/wasl/app/data/local/RoomAccountDocumentStore.kt'
+          replace_once(
+              account_store,
+              '                    footerText = snapshot.footerText,\n                    isDefault = true,',
+              '                    footerText = snapshot.footerText,\n                    bannerRelativePath = snapshot.banner?.relativePath,\n                    bannerSha256 = snapshot.banner?.sha256,\n                    isDefault = true,',
+          )
+          replace_once(
+              account_store,
+              '                    footerText = snapshot.footerText,\n                    updatedAt = issuedAt.toEpochMilli(),',
+              '                    footerText = snapshot.footerText,\n                    bannerRelativePath = snapshot.banner?.relativePath,\n                    bannerSha256 = snapshot.banner?.sha256,\n                    updatedAt = issuedAt.toEpochMilli(),',
+          )
+          text = read(account_store)
+          old = '        footerText = footerText.normalizedOptional(),\n    )'
+          if text.count(old) != 2:
+              raise SystemExit(f'{account_store}: expected two identity snapshot helpers, got {text.count(old)}')
+          write(account_store, text.replace(old, '        footerText = footerText.normalizedOptional(),\n        banner = issuerBanner,\n    )'))
+
+          # Private immutable banner vault + strict read verification.
+          asset_store = Path('app/src/main/java/com/wasl/app/document/DocumentBannerAssetStore.kt')
+          if asset_store.exists():
+              raise SystemExit(f'{asset_store}: file unexpectedly already exists')
+          asset_store.write_text(r'''package com.wasl.app.document
+
+import android.content.Context
+import android.graphics.BitmapFactory
+import java.io.File
+import java.io.InputStream
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.util.UUID
+
+interface DocumentBannerAssetStore {
+    fun importImage(content: InputStream): DocumentBannerAsset
+    fun readVerified(asset: DocumentBannerAsset): ByteArray
+}
+
+object UnavailableDocumentBannerAssetStore : DocumentBannerAssetStore {
+    override fun importImage(content: InputStream): DocumentBannerAsset =
+        error("Document banner asset store is unavailable.")
+
+    override fun readVerified(asset: DocumentBannerAsset): ByteArray =
+        error("Document banner asset store is unavailable.")
+}
+
+class AndroidDocumentBannerAssetStore(context: Context) : DocumentBannerAssetStore {
+    private val filesDir = context.applicationContext.filesDir.canonicalFile
+    private val root = File(filesDir, DIRECTORY).apply { mkdirs() }.canonicalFile
+
+    override fun importImage(content: InputStream): DocumentBannerAsset {
+        val bytes = content.readBounded(MAX_BANNER_BYTES)
+        require(bytes.isNotEmpty()) { "صورة رأس المستند فارغة." }
+        require(BitmapFactory.decodeByteArray(bytes, 0, bytes.size) != null) {
+            "الملف المختار ليس صورة صالحة." 
+        }
+        val hash = DocumentBannerAsset.sha256(bytes)
+        val asset = DocumentBannerAsset(
+            relativePath = "$DIRECTORY/$hash.img",
+            sha256 = hash,
+        )
+        val target = resolve(asset.relativePath)
+        if (target.exists()) {
+            require(target.isFile && asset.matches(target.readBytes())) {
+                "ملف صورة الرأس المحفوظ لا يجتاز فحص السلامة."
+            }
+            return asset
+        }
+
+        val temporary = File(root, ".$hash.${UUID.randomUUID()}.tmp")
+        try {
+            temporary.outputStream().buffered().use { it.write(bytes) }
+            require(asset.matches(temporary.readBytes())) { "تعذر التحقق من صورة الرأس قبل الحفظ." }
+            moveAtomically(temporary, target)
+        } finally {
+            if (temporary.exists()) temporary.delete()
+        }
+        return asset
+    }
+
+    override fun readVerified(asset: DocumentBannerAsset): ByteArray {
+        val target = resolve(asset.relativePath)
+        require(target.isFile) { "صورة رأس المستند غير موجودة." }
+        require(target.length() in 1..MAX_BANNER_BYTES.toLong()) { "حجم صورة رأس المستند غير صالح." }
+        val bytes = target.readBytes()
+        require(asset.matches(bytes)) { "فشل فحص سلامة صورة رأس المستند." }
+        require(BitmapFactory.decodeByteArray(bytes, 0, bytes.size) != null) {
+            "صورة رأس المستند المخزنة غير قابلة للقراءة."
+        }
+        return bytes
+    }
+
+    private fun resolve(relativePath: String): File {
+        require(relativePath.startsWith("$DIRECTORY/")) { "مسار صورة الرأس خارج الخزنة المسموحة." }
+        require(relativePath.count { it == '/' } == 1) { "مسار صورة الرأس غير صالح." }
+        val fileName = relativePath.substringAfter('/')
+        require(fileName.matches(Regex("[0-9a-f]{64}\\.img"))) { "اسم ملف صورة الرأس غير صالح." }
+        val target = File(root, fileName).canonicalFile
+        require(target.parentFile == root) { "مسار صورة الرأس غير آمن." }
+        return target
+    }
+
+    private fun InputStream.readBounded(maxBytes: Int): ByteArray {
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        val output = java.io.ByteArrayOutputStream()
+        var total = 0
+        while (true) {
+            val read = read(buffer)
+            if (read < 0) break
+            total += read
+            require(total <= maxBytes) { "صورة رأس المستند أكبر من الحد المسموح." }
+            output.write(buffer, 0, read)
+        }
+        return output.toByteArray()
+    }
+
+    private fun moveAtomically(source: File, target: File) {
+        try {
+            Files.move(
+                source.toPath(),
+                target.toPath(),
+                StandardCopyOption.ATOMIC_MOVE,
+            )
+        } catch (_: AtomicMoveNotSupportedException) {
+            Files.move(source.toPath(), target.toPath())
+        }
+    }
+
+    companion object {
+        const val DIRECTORY = "document-banners"
+        const val MAX_BANNER_BYTES = 8 * 1024 * 1024
+    }
+}
+''')
+
+          # Services own the real banner vault; renderers use it to fail closed on tampering.
+          service = 'app/src/main/java/com/wasl/app/document/PaymentReceiptService.kt'
+          replace_once(service, 'import java.io.File\n', 'import java.io.File\nimport java.io.InputStream\n')
+          replace_once(
+              service,
+              '    suspend fun getDefaultTemplate(): DocumentTemplateRecord? = null\n\n    suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord',
+              '    suspend fun getDefaultTemplate(): DocumentTemplateRecord? = null\n\n    suspend fun importIdentityBanner(content: InputStream): DocumentBannerAsset\n\n    suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord',
+          )
+          replace_once(
+              service,
+              '    override suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord =\n        error("Payment receipt service is unavailable.")',
+              '    override suspend fun importIdentityBanner(content: InputStream): DocumentBannerAsset =\n        error("Document banner service is unavailable.")\n\n    override suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord =\n        error("Payment receipt service is unavailable.")',
+          )
+          replace_once(
+              service,
+              '    private val store: PaymentReceiptStore,\n    private val renderer: PaymentReceiptPdfRenderer = AndroidPaymentReceiptPdfRenderer(),\n    private val accountDocumentService: AccountDocumentService = UnavailableAccountDocumentService,\n    private val clock: Clock = Clock.systemUTC(),\n) : PaymentReceiptService {\n    private val filesDir = context.applicationContext.filesDir',
+              '    private val store: PaymentReceiptStore,\n    renderer: PaymentReceiptPdfRenderer? = null,\n    private val accountDocumentService: AccountDocumentService = UnavailableAccountDocumentService,\n    private val clock: Clock = Clock.systemUTC(),\n    private val bannerStore: DocumentBannerAssetStore = AndroidDocumentBannerAssetStore(context.applicationContext),\n) : PaymentReceiptService {\n    private val filesDir = context.applicationContext.filesDir\n    private val renderer: PaymentReceiptPdfRenderer =\n        renderer ?: AndroidPaymentReceiptPdfRenderer(bannerStore)',
+          )
+          replace_once(
+              service,
+              '    override suspend fun getDefaultTemplate(): DocumentTemplateRecord? =\n        store.getDefaultDocumentTemplate()\n\n    override suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord {',
+              '    override suspend fun getDefaultTemplate(): DocumentTemplateRecord? =\n        store.getDefaultDocumentTemplate()\n\n    override suspend fun importIdentityBanner(content: InputStream): DocumentBannerAsset =\n        withContext(Dispatchers.IO) { bannerStore.importImage(content) }\n\n    override suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord {',
+          )
+
+          account_service = 'app/src/main/java/com/wasl/app/document/AccountDocumentService.kt'
+          replace_once(
+              account_service,
+              '    private val store: AccountDocumentStore,\n    private val renderer: AccountDocumentPdfRenderer = AndroidAccountDocumentPdfRenderer(),\n    private val clock: Clock = Clock.systemUTC(),\n) : AccountDocumentService {\n    private val filesDir = context.applicationContext.filesDir',
+              '    private val store: AccountDocumentStore,\n    renderer: AccountDocumentPdfRenderer? = null,\n    private val clock: Clock = Clock.systemUTC(),\n    private val bannerStore: DocumentBannerAssetStore = AndroidDocumentBannerAssetStore(context.applicationContext),\n) : AccountDocumentService {\n    private val filesDir = context.applicationContext.filesDir\n    private val renderer: AccountDocumentPdfRenderer =\n        renderer ?: AndroidAccountDocumentPdfRenderer(bannerStore)',
+          )
+
+          # Payment renderer: verify bytes then draw a fit-centered header image on page one.
+          payment_renderer = 'app/src/main/java/com/wasl/app/document/PaymentReceiptPdfRenderer.kt'
+          replace_once(payment_renderer, 'import android.graphics.Canvas\n', 'import android.graphics.Bitmap\nimport android.graphics.BitmapFactory\nimport android.graphics.Canvas\n')
+          replace_once(payment_renderer, 'import android.graphics.Typeface\n', 'import android.graphics.Typeface\nimport android.graphics.RectF\n')
+          replace_once(
+              payment_renderer,
+              'class AndroidPaymentReceiptPdfRenderer : PaymentReceiptPdfRenderer {\n    override fun render(snapshot: PaymentReceiptSnapshot, output: OutputStream): Int {\n        val document = PdfDocument()\n        return try {\n            val writer = ReceiptPageWriter(document, snapshot)',
+              'class AndroidPaymentReceiptPdfRenderer(\n    private val bannerStore: DocumentBannerAssetStore = UnavailableDocumentBannerAssetStore,\n) : PaymentReceiptPdfRenderer {\n    override fun render(snapshot: PaymentReceiptSnapshot, output: OutputStream): Int {\n        val bannerBitmap = snapshot.identity.banner?.let { asset ->\n            val bytes = bannerStore.readVerified(asset)\n            requireNotNull(BitmapFactory.decodeByteArray(bytes, 0, bytes.size)) {\n                "Document banner could not be decoded."\n            }\n        }\n        val document = PdfDocument()\n        return try {\n            val writer = ReceiptPageWriter(document, snapshot, bannerBitmap)',
+          )
+          replace_once(
+              payment_renderer,
+              '        private val document: PdfDocument,\n        private val snapshot: PaymentReceiptSnapshot,\n    ) {',
+              '        private val document: PdfDocument,\n        private val snapshot: PaymentReceiptSnapshot,\n        private val bannerBitmap: Bitmap?,\n    ) {',
+          )
+          regex_sub_once(
+              payment_renderer,
+              r'            drawLayout\(\n                text = if \(pageCount == 1\) "وَصل" else "وَصل — تابع",.*?            y = 134f\n',
+              '''            if (pageCount == 1 && bannerBitmap != null) {\n                drawBanner(bannerBitmap)\n                drawLayout(\n                    text = "إيصال سداد",\n                    x = MARGIN,\n                    top = 128f,\n                    width = CONTENT_WIDTH,\n                    paint = title,\n                    direction = TextDirectionHeuristics.FIRSTSTRONG_RTL,\n                )\n                canvas?.drawLine(\n                    MARGIN, 166f, PAGE_WIDTH - MARGIN, 166f,\n                    Paint(Paint.ANTI_ALIAS_FLAG).apply { color = COLOR_PRIMARY; strokeWidth = 2f },\n                )\n                y = 186f\n            } else {\n                drawLayout(\n                    text = if (pageCount == 1) "وَصل" else "وَصل — تابع",\n                    x = MARGIN,\n                    top = 42f,\n                    width = CONTENT_WIDTH,\n                    paint = brand,\n                    direction = TextDirectionHeuristics.FIRSTSTRONG_RTL,\n                )\n                if (pageCount == 1) {\n                    drawLayout(\n                        text = "إيصال سداد",\n                        x = MARGIN,\n                        top = 72f,\n                        width = CONTENT_WIDTH,\n                        paint = title,\n                        direction = TextDirectionHeuristics.FIRSTSTRONG_RTL,\n                    )\n                }\n                canvas?.drawLine(\n                    MARGIN, 112f, PAGE_WIDTH - MARGIN, 112f,\n                    Paint(Paint.ANTI_ALIAS_FLAG).apply { color = COLOR_PRIMARY; strokeWidth = 2f },\n                )\n                y = 134f\n            }\n''',
+          )
+          insert_anchor = '        private fun finishPage() {'
+          text = read(payment_renderer)
+          if text.count(insert_anchor) != 1:
+              raise SystemExit('payment renderer finishPage anchor mismatch')
+          helper = '''        private fun drawBanner(bitmap: Bitmap) {\n            val maxWidth = CONTENT_WIDTH.toFloat()\n            val maxHeight = 82f\n            val scale = minOf(maxWidth / bitmap.width.toFloat(), maxHeight / bitmap.height.toFloat())\n            val width = bitmap.width * scale\n            val height = bitmap.height * scale\n            val left = MARGIN + (maxWidth - width) / 2f\n            val top = 28f + (maxHeight - height) / 2f\n            canvas?.drawBitmap(\n                bitmap,\n                null,\n                RectF(left, top, left + width, top + height),\n                Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG),\n            )\n        }\n\n'''
+          write(payment_renderer, text.replace(insert_anchor, helper + insert_anchor, 1))
+
+          # Account renderer: same fail-closed banner rendering contract.
+          account_renderer = 'app/src/main/java/com/wasl/app/document/AccountDocumentPdfRenderer.kt'
+          replace_once(account_renderer, 'import android.graphics.Canvas\n', 'import android.graphics.Bitmap\nimport android.graphics.BitmapFactory\nimport android.graphics.Canvas\n')
+          replace_once(account_renderer, 'import android.graphics.Typeface\n', 'import android.graphics.Typeface\nimport android.graphics.RectF\n')
+          replace_once(
+              account_renderer,
+              'class AndroidAccountDocumentPdfRenderer : AccountDocumentPdfRenderer {\n    override fun render(snapshot: DocumentSnapshot, output: OutputStream): Int {',
+              'class AndroidAccountDocumentPdfRenderer(\n    private val bannerStore: DocumentBannerAssetStore = UnavailableDocumentBannerAssetStore,\n) : AccountDocumentPdfRenderer {\n    override fun render(snapshot: DocumentSnapshot, output: OutputStream): Int {',
+          )
+          replace_once(
+              account_renderer,
+              '        val document = PdfDocument()\n        return try {\n            val writer = Writer(document, snapshot)',
+              '        val bannerBitmap = snapshot.identity.banner?.let { asset ->\n            val bytes = bannerStore.readVerified(asset)\n            requireNotNull(BitmapFactory.decodeByteArray(bytes, 0, bytes.size)) {\n                "Document banner could not be decoded."\n            }\n        }\n        val document = PdfDocument()\n        return try {\n            val writer = Writer(document, snapshot, bannerBitmap)',
+          )
+          replace_once(
+              account_renderer,
+              '        private val document: PdfDocument,\n        private val snapshot: DocumentSnapshot,\n    ) {',
+              '        private val document: PdfDocument,\n        private val snapshot: DocumentSnapshot,\n        private val bannerBitmap: Bitmap?,\n    ) {',
+          )
+          regex_sub_once(
+              account_renderer,
+              r'            drawText\(\n                if \(pageCount == 1\) "وَصل" else "وَصل — تابع",.*?            y = 132f\n',
+              '''            if (pageCount == 1 && bannerBitmap != null) {\n                drawBanner(bannerBitmap)\n                if (documentTitle != null) {\n                    drawText(documentTitle, MARGIN, 128f, CONTENT_WIDTH, title, false)\n                }\n                canvas?.drawLine(\n                    MARGIN, 166f, PAGE_WIDTH - MARGIN, 166f,\n                    Paint(Paint.ANTI_ALIAS_FLAG).apply { color = COLOR_PRIMARY; strokeWidth = 2f },\n                )\n                y = 186f\n            } else {\n                drawText(\n                    if (pageCount == 1) "وَصل" else "وَصل — تابع",\n                    MARGIN, 40f, CONTENT_WIDTH, brand, false,\n                )\n                if (pageCount == 1 && documentTitle != null) {\n                    drawText(documentTitle, MARGIN, 70f, CONTENT_WIDTH, title, false)\n                }\n                canvas?.drawLine(\n                    MARGIN, 110f, PAGE_WIDTH - MARGIN, 110f,\n                    Paint(Paint.ANTI_ALIAS_FLAG).apply { color = COLOR_PRIMARY; strokeWidth = 2f },\n                )\n                y = 132f\n            }\n''',
+          )
+          text = read(account_renderer)
+          anchor = '        private fun finishPage() {'
+          if text.count(anchor) != 1:
+              raise SystemExit('account renderer finishPage anchor mismatch')
+          helper = '''        private fun drawBanner(bitmap: Bitmap) {\n            val maxWidth = CONTENT_WIDTH.toFloat()\n            val maxHeight = 82f\n            val scale = minOf(maxWidth / bitmap.width.toFloat(), maxHeight / bitmap.height.toFloat())\n            val width = bitmap.width * scale\n            val height = bitmap.height * scale\n            val left = MARGIN + (maxWidth - width) / 2f\n            val top = 28f + (maxHeight - height) / 2f\n            canvas?.drawBitmap(\n                bitmap, null, RectF(left, top, left + width, top + height),\n                Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG),\n            )\n        }\n\n'''
+          write(account_renderer, text.replace(anchor, helper + anchor, 1))
+
+          # Payment receipt dialog preserves the default identity banner when issuing a receipt.
+          vm = 'app/src/main/java/com/wasl/app/AccountDetailsViewModel.kt'
+          replace_once(vm, 'import com.wasl.app.document.PaymentReceiptService\n', 'import com.wasl.app.document.DocumentBannerAsset\nimport com.wasl.app.document.PaymentReceiptService\n')
+          replace_once(
+              vm,
+              '    val footerText: String = "",\n)',
+              '    val footerText: String = "",\n    val banner: DocumentBannerAsset? = null,\n)',
+          )
+          replace_once(
+              vm,
+              '                                    phone = it.phone.orEmpty(),\n                                    footerText = it.footerText.orEmpty(),',
+              '                                    phone = it.phone.orEmpty(),\n                                    footerText = it.footerText.orEmpty(),\n                                    banner = it.banner,',
+          )
+          replace_once(
+              vm,
+              '                footerText = state.receiptIdentityForm.footerText.trim().ifEmpty { null },\n                issuedAt = issuedAt,',
+              '                footerText = state.receiptIdentityForm.footerText.trim().ifEmpty { null },\n                issuerBanner = state.receiptIdentityForm.banner,\n                issuedAt = issuedAt,',
+          )
+
+          # A focused unit test for the vault itself.
+          test_path = Path('app/src/test/java/com/wasl/app/document/DocumentBannerAssetStoreTest.kt')
+          test_path.parent.mkdir(parents=True, exist_ok=True)
+          if test_path.exists():
+              raise SystemExit('DocumentBannerAssetStoreTest already exists')
+          test_path.write_text(r'''package com.wasl.app.document
+
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import java.io.ByteArrayInputStream
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFailsWith
+import org.junit.Test
+
+class DocumentBannerAssetStoreTest {
+    private val context: Context = ApplicationProvider.getApplicationContext()
+
+    @Test
+    fun importThenRead_roundTripsVerifiedImage() {
+        val store = AndroidDocumentBannerAssetStore(context)
+        val bytes = onePixelPng()
+        val asset = store.importImage(ByteArrayInputStream(bytes))
+
+        assertEquals(DocumentBannerAsset.sha256(bytes), asset.sha256)
+        assertArrayEquals(bytes, store.readVerified(asset))
+    }
+
+    @Test
+    fun import_rejectsNonImageBytes() {
+        val store = AndroidDocumentBannerAssetStore(context)
+        assertFailsWith<IllegalArgumentException> {
+            store.importImage(ByteArrayInputStream("not an image".toByteArray()))
+        }
+    }
+
+    private fun onePixelPng(): ByteArray = java.util.Base64.getDecoder().decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlZf1cAAAAASUVORK5CYII=",
+    )
+}
+''')
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/v04-banner-core-apply.yml
+          git add app/src/main/java app/src/test/java
+          git diff --cached --check
+          git commit -m "feat(documents): render immutable identity banners"
+          git push origin HEAD:agent/ui-ux-hardening-v0.4

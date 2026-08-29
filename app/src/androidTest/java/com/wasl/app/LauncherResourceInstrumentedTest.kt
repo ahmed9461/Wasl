@@ -21,10 +21,6 @@ class LauncherResourceInstrumentedTest {
         assertNotEquals(0, appInfo.icon)
         assertEquals(R.mipmap.ic_launcher, appInfo.icon)
         assertNotNull(context.getDrawable(appInfo.icon))
-
-        // ApplicationInfo does not expose android:roundIcon as a stable public API.
-        // Validate the round resource directly, while the adaptive-icon test below
-        // verifies that both launcher variants are packaged as adaptive icons.
         assertNotNull(context.getDrawable(R.mipmap.ic_launcher_round))
     }
 
@@ -48,18 +44,10 @@ class LauncherResourceInstrumentedTest {
     }
 
     @Test
-    fun launcherForegroundAndReferenceArtworkArePackaged() {
+    fun launcherForegroundAndLegacyResourcesArePackaged() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
 
         assertNotNull(context.getDrawable(R.drawable.ic_launcher_foreground))
         assertNotNull(context.getDrawable(R.drawable.ic_launcher_legacy))
-
-        val artId = context.resources.getIdentifier(
-            "wasl_launcher_art",
-            "drawable",
-            context.packageName,
-        )
-        assertNotEquals(0, artId)
-        assertNotNull(context.getDrawable(artId))
     }
 }

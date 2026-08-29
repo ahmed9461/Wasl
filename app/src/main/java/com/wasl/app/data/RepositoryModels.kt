@@ -1,5 +1,6 @@
 package com.wasl.app.data
 
+import com.wasl.app.document.DocumentBannerAsset
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtId
 import com.wasl.domain.DebtLedger
@@ -62,6 +63,7 @@ data class DocumentIdentityRecord(
     val activityName: String? = null,
     val phone: String? = null,
     val footerText: String? = null,
+    val banner: DocumentBannerAsset? = null,
     val isDefault: Boolean,
     val createdAt: Instant,
     val updatedAt: Instant,
@@ -77,6 +79,7 @@ data class DocumentIdentitySnapshot(
     val activityName: String? = null,
     val phone: String? = null,
     val footerText: String? = null,
+    val banner: DocumentBannerAsset? = null,
 ) {
     init {
         require(displayName.isNotBlank()) { "Document identity name cannot be blank." }

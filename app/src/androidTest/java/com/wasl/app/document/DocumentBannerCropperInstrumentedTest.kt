@@ -50,6 +50,26 @@ class DocumentBannerCropperInstrumentedTest {
     }
 
     @Test
+    fun previewDecodeDownsamplesLargeCandidateBeforeComposeUsesIt() {
+        val source = Bitmap.createBitmap(3200, 800, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(Color.CYAN)
+        }
+        val sourceBytes = ByteArrayOutputStream().use { output ->
+            check(source.compress(Bitmap.CompressFormat.PNG, 100, output))
+            output.toByteArray()
+        }
+        source.recycle()
+
+        val preview = requireNotNull(DocumentBannerCropper.decodePreview(sourceBytes))
+        try {
+            assertTrue(maxOf(preview.width, preview.height) <= 1600)
+            assertTrue(preview.width > 0 && preview.height > 0)
+        } finally {
+            preview.recycle()
+        }
+    }
+
+    @Test
     fun tinyImageStillProducesAReadableBannerInsteadOfZeroSizedCrop() {
         val source = Bitmap.createBitmap(1, 16, Bitmap.Config.ARGB_8888).apply {
             eraseColor(Color.GREEN)

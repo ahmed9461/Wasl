@@ -2,38 +2,82 @@
 
 آخر مزامنة: 2026-08-29.
 
-## واجهة احترافية — Corrective UI v0.3
+## غير منشور — UI/UX Hardening v0.4
 
-- اعتماد اللوحة المرئية التي وافق عليها المالك كمرجع تصميم ملزم بدل التحسينات العامة السابقة.
-- إعادة بناء الرئيسية بهوية داكنة مدمجة، ملخص عملات مستقل، حسابات مختصرة، وزرين منفصلين لإضافة الحساب والإدخال الذكي.
-- إعادة بناء إضافة الحساب كتدفق قصير وعملي؛ الاستحقاق والتذكير والمنبه ضمن خيارات إضافية بدل نموذج طولي مزدحم.
-- إعادة بناء «اليوم» بملخص صغير وصياغات عربية صحيحة وإزالة النص غير الطبيعي «اليوم لديك N أمور».
-- إعادة بناء الأقساط بملخص إجمالي/مسدد/متبقٍ وفلاتر وبطاقات تقدم مدمجة.
-- إعادة بناء تفاصيل الحساب برصيد بارز، تقدم السداد، إجراءات داخلية، وبيانات متابعة مختصرة بدل زر عائم.
-- ضغط الإعدادات إلى مجموعات متناسقة مع نفس الهوية البصرية مع الحفاظ على تلقائي/داكن/فاتح والأمان والنسخ الاحتياطي.
-- استبدال الأيقونة السابقة بأيقونة «وصل» الذهبية ذات الخلفية الداكنة واللمسة الفيروزية، مع دعم adaptive/round launchers.
-- المحافظة على RTL، الخطوط الكبيرة، الاختبارات التكيفية، وجميع ثوابت Ledger وسلامة البيانات المالية.
-- تثبيت جولة التصحيح بتعريف Typography صريح، واستدعاءات Material 3 سليمة، واستعادة حالة DatePicker للأقساط.
-- تثبيت معرفات UI مستقرة للاختبارات بدل الاعتماد على النصوص المرئية، وتحديث تدفقات الاختبار لتطابق إضافة الحساب المباشرة الجديدة.
+### تجربة الاستخدام
 
-### بوابة القبول النهائية للواجهة
+- الرئيسية تخفي العملات التي لا يوجد لها رصيد مفتوح بدل عرض بطاقات صفرية ثابتة.
+- بطاقات الحساب أصبحت compact وأزيل الـplaceholder الكبير بحرف واحد.
+- تحسين التخطيطات الأفقية/adaptive على الهاتف القياسي مع fallback للشاشات الضيقة والخط الكبير.
+- ضغط واجهة Group Expense للاتجاه والعملات والمشاركين.
+- نقل إجراء تصدير PDF في تفاصيل الحساب إلى المنطقة العلوية اليسرى ضمن Safe Area.
+- تجميع إجراءات Payment Promise المعلقة داخل Action Bar منظمة، بدون كتابة دفعة مالية تلقائية عند تغيير حالة الوعد.
+- ربط Documents Hub بالـAttachment Store الحقيقي.
+- إزالة نصوص SHA-256 وصلاحيات/تفاصيل التخزين التقنية من UX اليومي.
 
-Android CI **#1097** — run `33228386198` — head `acb5dea0fd54897afcc56e55ee52afc99bcb0392`:
+### المرفقات وFile Picker
+
+- تحصين OpenDocument ضد cancel و`uri == null` وفشل metadata/stream/provider.
+- إضافة regression instrumentation لاختيار PNG وPDF، إلغاء المنتقي، URI غير قابل للقراءة، ومسارات integrity.
+- الإبقاء على فتح/مشاركة الملفات مشروطين بسلامة الملف داخل app-private vault.
+
+### هوية المستندات وصورة الرأس
+
+- رفع Room Schema من v11 إلى **v12** مع Migration `11→12` وإضافة `banner_relative_path` و`banner_sha256` إلى `document_identities`.
+- إضافة `DocumentBannerAsset` وapp-private content-addressed vault مع path/hash/image/size validation.
+- إضافة snapshot codec/mapper مع fail-closed validation.
+- تثبيت البانر المختار داخل immutable snapshots الخاصة بـPayment/Debt/Account Statement مع backward compatibility.
+- تحديث PDF renderers للتحقق من الأصل التاريخي ورسم البانر على الصفحة الأولى دون fallback صامت عند فشل integrity.
+- تحديث Encrypted Backup/Restore ليحفظ أصل البانر ومرجعه مع regression tests للاستعادة.
+- إضافة واجهة لاختيار/معاينة/تغيير/إزالة صورة رأس هوية المستند.
+- إضافة **crop/reposition حقيقي** بنسبة رأس PDF مع focus أفقي ورأسي قبل اعتماد الصورة.
+- دعم الصور الصغيرة جدًا ومنع crop بأبعاد صفر.
+- تحديد final crop حتى 1800px عرضًا، ومعاينة UI بـsampled decode حتى 1600px لتقليل استهلاك الذاكرة.
+- إضافة **Preview قبل الإصدار** لإيصال الدين وكشف الحساب؛ لا يتم إنشاء المستند حتى explicit confirmation.
+- إضافة اختبارات ratio/focus/downsampling/tiny image/snapshot/PDF tamper/backup restore.
+
+### Launcher وCI
+
+- تثبيت legacy/adaptive/round launcher resources وإضافة Android 13+ monochrome coverage.
+- تعديل CI بحيث تعمل فروع PR عبر `pull_request` فقط بدل push+PR المكرر، مع concurrency namespace معزولة عن التشغيلات القديمة.
+
+### التحقق
+
+Functional-code gate:
+
+Android CI **#1248** — run `33274101583` — head `9d0622f26ab6760d68362adf279da4e7e2ca69c7` ✅
 
 - Unit tests / Lint / Debug APK ✅
-- Room Schema v11 generated/verified ✅
-- Emulator instrumentation / migrations / repository / backup ✅
-- جميع اختبارات Android على المحاكي ✅
+- Room Schema v12 generated/verified ✅
+- **149/149 instrumentation tests**، 0 failures، 0 errors، 0 skipped ✅
 - Payment Receipt PDF inspection ✅
 - Debt Receipt PDF inspection ✅
 - Account Statement PDF inspection ✅
-- instrumentation وPDF evidence artifacts ✅
+- debug APK / Room schema / instrumentation reports / PDF evidence artifacts ✅
+
+مزامنة الوثائق الحالية هي آخر تغيير مخطط على الفرع قبل القبول البصري. يجب أن ينجح CI الخاص برأس الوثائق أيضًا. لا تُغلق v0.4 ولا تُدمج قبل القبول البصري/العملي المحدد في `docs/UI_UX_HARDENING_V0.4_EXECUTION_PLAN.md` وclean-install verification للأيقونة.
+
+## واجهة احترافية — Corrective UI v0.3
+
+- اعتماد اللوحة المرئية المرجعية كمرجع تصميم ملزم.
+- إعادة بناء الرئيسية بهوية داكنة مدمجة، ملخص عملات مستقل، حسابات مختصرة، وزرين منفصلين لإضافة الحساب والإدخال الذكي.
+- إعادة بناء إضافة الحساب كتدفق قصير وعملي؛ الاستحقاق والتذكير والمنبه ضمن خيارات إضافية.
+- إعادة بناء «اليوم» بملخص صغير وصياغات عربية محسنة.
+- إعادة بناء الأقساط بملخص إجمالي/مسدد/متبقٍ وفلاتر وبطاقات تقدم مدمجة.
+- إعادة بناء تفاصيل الحساب برصيد بارز، تقدم السداد، إجراءات داخلية، وبيانات متابعة مختصرة.
+- ضغط الإعدادات إلى مجموعات متناسقة مع تلقائي/داكن/فاتح والأمان والنسخ الاحتياطي.
+- استبدال الأيقونة السابقة بأيقونة «وصل» الذهبية ذات الخلفية الداكنة واللمسة الفيروزية، مع adaptive/round resources.
+- المحافظة على RTL والخطوط الكبيرة وثوابت Ledger وسلامة البيانات المالية.
+
+### بوابة v0.3 المدمجة
+
+Corrective UI v0.3 دُمجت إلى `main` عند `15f982b9a3804861f96b454431c96ed4f8c19c04`، وAndroid CI #1100 — run `33229515030` على merge commit نجح بالكامل ✅.
 
 ## 0.1.0 — Release Candidate
 
 ### الأساس المالي
 
-- تطبيق Android أصلي بـKotlin/Compose/Material 3/Navigation 3.
+- Android أصلي بـKotlin/Compose/Material 3/Navigation 3.
 - `core:domain` مستقل وMoney بminor units من `Long`.
 - Ledger append-only مع Payment / Payment Reversal وidempotency/replay.
 - أشخاص وحسابات متعددة، RECEIVABLE/PAYABLE، وYER/SAR/USD دون خلط العملات.
@@ -73,10 +117,8 @@ Android CI **#1097** — run `33228386198` — head `acb5dea0fd54897afcc56e55ee5
 
 - `PAYMENT_RECEIPT`, `DEBT_RECEIPT`, `ACCOUNT_STATEMENT` من immutable snapshots.
 - numbering + page count + SHA-256 + integrity checks.
-- Room Schema v11 تضيف `document_templates`.
-- قوالب MINIMAL / BUSINESS / CLASSIC / COMPACT / MODERN.
-- القالب المختار يثبت داخل snapshot؛ المستندات القديمة تحتفظ بتوافقها ولا تتغير بسبب إعدادات لاحقة.
-- Payment/Debt/Account Statement PDF evidence ضمن CI.
+- Document Templates: MINIMAL / BUSINESS / CLASSIC / COMPACT / MODERN.
+- القالب والهوية/البانر المختاران يثبتان تاريخيًا داخل snapshots في v0.4.
 
 ### المرفقات والنسخ والأمان
 
@@ -89,45 +131,20 @@ Android CI **#1097** — run `33228386198` — head `acb5dea0fd54897afcc56e55ee5
 
 ### قاعدة البيانات
 
-- exported Room schemas ملتزمة من v1 إلى v11.
+- exported Room schemas `1 → 11` في baseline المدمج؛ v0.4 تضيف v12.
 - migrations صريحة دون destructive migration.
 - v8: payment claims.
 - v9: attachments.
 - v10: group expenses + shares.
 - v11: document templates.
+- v12: document identity banner metadata.
 
 ### Release engineering
 
 - `versionName = 0.1.0`, `versionCode = 1`.
-- إضافة `PRIVACY_POLICY.md`.
-- إضافة `docs/RELEASE_CHECKLIST.md`.
-- إضافة Signed Release GitHub Actions workflow.
-- signing configuration تقرأ الأسرار من environment فقط؛ لا keystore/passwords في Git.
-- release workflow يتحقق من APK عبر `apksigner` ويولد SHA-256.
-
-## Verification
-
-### Corrective UI v0.3 pre-merge gate
-
-Android CI **#1097** — run `33228386198` — head `acb5dea0fd54897afcc56e55ee52afc99bcb0392` نجح بالكامل كما هو موضح أعلاه.
-
-### Document Templates / Room v11 pre-merge gate
-
-Android CI #1017 — run `33203634720` — head `fdbb28b2aca59f7d0542eaa785d72502d695a431`:
-
-- Unit/Lint/Debug APK ✅
-- Room Schema v11 generated/verified ✅
-- Emulator integration/migration/repository/backup ✅
-- Payment/Debt/Account Statement PDF evidence ✅
-
-### Functional baseline
-
-Android CI #967 — run `33137676461` — head `e09efee71cea4b1734afe50a025c2a3218ec2dd5`:
-
-- 123/123 instrumentation، 0 failures/errors/skips ✅
-- Group Expense / Voice / Natural Entry / legacy PaymentFlow regressions ✅
-- Room v10 + PDF evidence ✅
+- `PRIVACY_POLICY.md` و`docs/RELEASE_CHECKLIST.md` موجودان.
+- Signed Release workflow يستخدم secrets خارج Git، يتحقق بـ`apksigner` ويولد SHA-256.
 
 ## حالة الإصدار
 
-المصدر بعد Corrective UI v0.3 في مرحلة Release Candidate. بوابة الكود والواجهة الحالية نجحت على CI #1097. بعد دمج فرع الواجهة في `main` يجب اعتماد Android CI الناتج من merge نفسه قبل تسليم APK التجريبي النهائي. النشر العام الموقّع يبقى منفصلًا ويتطلب مفتاح توقيع خارجي وأسرار Release غير محفوظة في Git.
+`main` يحمل Corrective UI v0.3 المدمجة. v0.4 ما زالت على PR #13 Draft. بعد نجاح CI النهائي لمزامنة الوثائق يبقى القبول البصري وclean-install للأيقونة، ثم الدمج وإعادة CI على `main`. النشر العام الموقّع مرحلة منفصلة ويتطلب مفتاح توقيع وأسرار Release خارج Git.

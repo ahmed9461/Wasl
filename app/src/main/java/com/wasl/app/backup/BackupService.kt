@@ -4,9 +4,11 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
+import android.graphics.BitmapFactory
 import androidx.room.Room
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.wasl.app.data.local.WaslDatabase
+import com.wasl.app.document.AndroidDocumentBannerAssetStore
 import com.wasl.app.document.ReceiptFileAccess
 import com.wasl.app.document.sha256Hex
 import java.io.ByteArrayInputStream
@@ -74,11 +76,13 @@ class AndroidBackupService(
         val snapshot = exportSnapshot(database.openHelper.writableDatabase)
         val documents = exportReadyDocuments(snapshot.readyDocuments)
         val attachments = exportAttachments(snapshot.attachments)
+        val banners = exportBanners(snapshot.banners)
         val payload = BackupPayload(
             schemaVersion = SCHEMA_VERSION,
             tables = snapshot.tables,
             documentFiles = documents,
             attachmentFiles = attachments,
+            bannerFiles = banners,
         )
         val createdAt = Instant.now(clock)
         val bytes = BackupEnvelope.seal(payload, createdAt, password)
@@ -86,7 +90,7 @@ class AndroidBackupService(
             bytes = bytes,
             createdAt = createdAt,
             rowCount = snapshot.tables.sumOf { it.rows.size },
-            documentCount = documents.size + attachments.size,
+            documentCount = documents.size + attachments.size + banners.size,
             schemaVersion = SCHEMA_VERSION,
         )
     }
@@ -106,14 +110,16 @@ class AndroidBackupService(
         val stagedRoot = File(filesDir, ".wasl-restore-${UUID.randomUUID()}")
         val stagedDocuments = File(stagedRoot, DOCUMENTS_DIRECTORY)
         val stagedAttachments = File(stagedRoot, ATTACHMENTS_DIRECTORY)
-        check(stagedDocuments.mkdirs() && stagedAttachments.mkdirs()) {
+        val stagedBanners = File(stagedRoot, BANNERS_DIRECTORY)
+        check(stagedDocuments.mkdirs() && stagedAttachments.mkdirs() && stagedBanners.mkdirs()) {
             "تعذر تجهيز مساحة الاستعادة الآمنة."
         }
         try {
             stageAndValidateDocuments(payload.documentFiles, stagedDocuments)
             stageAndValidateAttachments(payload.attachmentFiles, stagedAttachments)
+            stageAndValidateBanners(payload.bannerFiles, stagedBanners)
             validateInTemporaryDatabase(payload)
-            replaceFilesAndDatabase(payload, stagedDocuments, stagedAttachments)
+            replaceFilesAndDatabase(payload, stagedDocuments, stagedAttachments, stagedBanners)
         } finally {
             stagedRoot.deleteRecursively()
         }
@@ -122,7 +128,7 @@ class AndroidBackupService(
             createdAt = opened.createdAt,
             restoredAt = Instant.now(clock),
             rowCount = payload.tables.sumOf { it.rows.size },
-            documentCount = payload.documentFiles.size + payload.attachmentFiles.size,
+            documentCount = payload.documentFiles.size + payload.attachmentFiles.size + payload.bannerFiles.size,
             schemaVersion = payload.schemaVersion,
         )
     }
@@ -131,6 +137,7 @@ class AndroidBackupService(
         val dumps = mutableListOf<TableDump>()
         val readyDocuments = mutableListOf<VaultFileRef>()
         val attachments = mutableListOf<VaultFileRef>()
+        val banners = mutableListOf<VaultFileRef>()
         db.beginTransaction()
         try {
             TABLES.forEach { table ->
@@ -143,6 +150,8 @@ class AndroidBackupService(
                     val documentHashIndex = if (table == "issued_documents") columns.indexOf("pdf_sha256") else -1
                     val attachmentPathIndex = if (table == "attachments") columns.indexOf("relative_path") else -1
                     val attachmentHashIndex = if (table == "attachments") columns.indexOf("sha256") else -1
+                    val bannerPathIndex = if (table == "document_identities") columns.indexOf("banner_relative_path") else -1
+                    val bannerHashIndex = if (table == "document_identities") columns.indexOf("banner_sha256") else -1
                     while (cursor.moveToNext()) {
                         val row = columns.indices.map { index -> cursor.backupCell(index) }
                         rows += row
@@ -166,6 +175,17 @@ class AndroidBackupService(
                             }
                             attachments += VaultFileRef(relativePath, sha256)
                         }
+                        if (table == "document_identities") {
+                            val relativePath = if (cursor.isNull(bannerPathIndex)) null else cursor.getString(bannerPathIndex)
+                            val sha256 = if (cursor.isNull(bannerHashIndex)) null else cursor.getString(bannerHashIndex)
+                            require((relativePath == null) == (sha256 == null)) {
+                                "هوية مستند تحتوي مرجع بانر غير مكتمل."
+                            }
+                            if (relativePath != null && sha256 != null) {
+                                validateBannerReference(relativePath, sha256)
+                                banners += VaultFileRef(relativePath, sha256)
+                            }
+                        }
                     }
                     dumps += TableDump(table, columns, rows)
                 }
@@ -174,7 +194,7 @@ class AndroidBackupService(
         } finally {
             db.endTransaction()
         }
-        return SnapshotExport(dumps, readyDocuments, attachments)
+        return SnapshotExport(dumps, readyDocuments, attachments, banners)
     }
 
     private fun exportReadyDocuments(references: List<VaultFileRef>): List<BackupDocumentFile> =
@@ -187,6 +207,17 @@ class AndroidBackupService(
         references.distinctBy { it.relativePath }.map { reference ->
             val file = resolveLiveAttachment(reference.relativePath)
             exportVaultFile(reference, file, MAX_ATTACHMENT_BYTES)
+        }
+
+    private fun exportBanners(references: List<VaultFileRef>): List<BackupDocumentFile> =
+        references.distinctBy { it.relativePath }.map { reference ->
+            validateBannerReference(reference.relativePath, reference.sha256)
+            val file = resolveLiveBanner(reference.relativePath)
+            val exported = exportVaultFile(reference, file, MAX_BANNER_BYTES)
+            require(BitmapFactory.decodeFile(file.absolutePath) != null) {
+                "صورة رأس مستند محفوظة غير قابلة للقراءة."
+            }
+            exported
         }
 
     private fun exportVaultFile(
@@ -233,6 +264,11 @@ class AndroidBackupService(
             records = attachmentRefsFrom(payload),
             files = payload.attachmentFiles,
             label = "المرفقات",
+        )
+        validateVaultFileSet(
+            records = bannerRefsFrom(payload),
+            files = payload.bannerFiles,
+            label = "صور رأس المستند",
         )
     }
 
@@ -292,6 +328,27 @@ class AndroidBackupService(
         }
     }
 
+    private fun bannerRefsFrom(payload: BackupPayload): Map<String, String> {
+        val table = payload.tables.single { it.name == "document_identities" }
+        val pathIndex = table.columns.indexOf("banner_relative_path")
+        val hashIndex = table.columns.indexOf("banner_sha256")
+        require(pathIndex >= 0 && hashIndex >= 0) { "جدول هويات المستند لا يحتوي حقول البانر المطلوبة." }
+        return buildMap {
+            table.rows.forEach { row ->
+                val path = row[pathIndex].asText()
+                val hash = row[hashIndex].asText()
+                require((path == null) == (hash == null)) { "مرجع بانر الهوية غير مكتمل." }
+                if (path != null && hash != null) {
+                    validateBannerReference(path, hash)
+                    val previous = put(path, hash)
+                    require(previous == null || previous.equals(hash, ignoreCase = true)) {
+                        "مسار بانر واحد مرتبط ببصمات مختلفة."
+                    }
+                }
+            }
+        }
+    }
+
     private fun stageAndValidateDocuments(
         files: List<BackupDocumentFile>,
         stagedDocuments: File,
@@ -309,6 +366,20 @@ class AndroidBackupService(
         files.forEach { attachment ->
             val safeTarget = resolveStagedAttachment(stagedAttachments, attachment.relativePath)
             stageFile(attachment, safeTarget, MAX_ATTACHMENT_BYTES, "المرفق")
+        }
+    }
+
+    private fun stageAndValidateBanners(
+        files: List<BackupDocumentFile>,
+        stagedBanners: File,
+    ) {
+        files.forEach { banner ->
+            validateBannerReference(banner.relativePath, banner.sha256)
+            val safeTarget = resolveStagedBanner(stagedBanners, banner.relativePath)
+            stageFile(banner, safeTarget, MAX_BANNER_BYTES, "صورة رأس المستند")
+            require(BitmapFactory.decodeFile(safeTarget.absolutePath) != null) {
+                "صورة رأس المستند داخل النسخة غير قابلة للقراءة."
+            }
         }
     }
 
@@ -347,6 +418,14 @@ class AndroidBackupService(
         return target
     }
 
+    private fun resolveStagedBanner(stagedBanners: File, relativePath: String): File {
+        val fileName = validateSingleChildPath(relativePath, BANNERS_DIRECTORY, "صورة رأس المستند")
+        require(fileName.matches(BANNER_FILE_REGEX)) { "اسم ملف صورة رأس المستند غير صالح." }
+        val target = File(stagedBanners, fileName).canonicalFile
+        require(target.parentFile == stagedBanners.canonicalFile) { "مسار صورة رأس المستند غير آمن." }
+        return target
+    }
+
     private fun validateSingleChildPath(relativePath: String, directory: String, label: String): String {
         require(relativePath.isNotBlank() && !File(relativePath).isAbsolute) { "مسار $label غير آمن." }
         val normalized = relativePath.replace('\\', '/')
@@ -366,6 +445,24 @@ class AndroidBackupService(
         return file
     }
 
+    private fun resolveLiveBanner(relativePath: String): File {
+        val fileName = validateSingleChildPath(relativePath, BANNERS_DIRECTORY, "صورة رأس المستند")
+        require(fileName.matches(BANNER_FILE_REGEX)) { "اسم ملف صورة رأس المستند غير صالح." }
+        val root = File(filesDir, BANNERS_DIRECTORY).canonicalFile
+        val file = File(root, fileName).canonicalFile
+        require(file.parentFile == root) { "مسار صورة رأس المستند غير آمن." }
+        return file
+    }
+
+    private fun validateBannerReference(relativePath: String, sha256: String) {
+        require(SHA256_REGEX.matches(sha256)) { "بصمة صورة رأس المستند غير صالحة." }
+        val fileName = validateSingleChildPath(relativePath, BANNERS_DIRECTORY, "صورة رأس المستند")
+        require(fileName.matches(BANNER_FILE_REGEX)) { "اسم ملف صورة رأس المستند غير صالح." }
+        require(fileName.substringBeforeLast('.').equals(sha256, ignoreCase = true)) {
+            "مسار صورة رأس المستند لا يطابق بصمتها."
+        }
+    }
+
     private fun validateInTemporaryDatabase(payload: BackupPayload) {
         val validationDb = Room.inMemoryDatabaseBuilder(
             appContext,
@@ -382,15 +479,20 @@ class AndroidBackupService(
         payload: BackupPayload,
         stagedDocuments: File,
         stagedAttachments: File,
+        stagedBanners: File,
     ) {
         val liveDocuments = File(filesDir, DOCUMENTS_DIRECTORY)
         val liveAttachments = File(filesDir, ATTACHMENTS_DIRECTORY)
+        val liveBanners = File(filesDir, BANNERS_DIRECTORY)
         val rollbackDocuments = File(filesDir, ".wasl-documents-rollback-${UUID.randomUUID()}")
         val rollbackAttachments = File(filesDir, ".wasl-attachments-rollback-${UUID.randomUUID()}")
+        val rollbackBanners = File(filesDir, ".wasl-banners-rollback-${UUID.randomUUID()}")
         var documentsMoved = false
         var attachmentsMoved = false
+        var bannersMoved = false
         var newDocumentsMoved = false
         var newAttachmentsMoved = false
+        var newBannersMoved = false
         try {
             if (liveDocuments.exists()) {
                 moveDirectory(liveDocuments, rollbackDocuments)
@@ -400,28 +502,40 @@ class AndroidBackupService(
                 moveDirectory(liveAttachments, rollbackAttachments)
                 attachmentsMoved = true
             }
+            if (liveBanners.exists()) {
+                moveDirectory(liveBanners, rollbackBanners)
+                bannersMoved = true
+            }
             moveDirectory(stagedDocuments, liveDocuments)
             newDocumentsMoved = true
             moveDirectory(stagedAttachments, liveAttachments)
             newAttachmentsMoved = true
+            moveDirectory(stagedBanners, liveBanners)
+            newBannersMoved = true
 
             replaceDatabaseContents(database.openHelper.writableDatabase, payload)
 
             if (documentsMoved) rollbackDocuments.deleteRecursively()
             if (attachmentsMoved) rollbackAttachments.deleteRecursively()
+            if (bannersMoved) rollbackBanners.deleteRecursively()
         } catch (error: Exception) {
             if (newDocumentsMoved && liveDocuments.exists()) liveDocuments.deleteRecursively()
             if (newAttachmentsMoved && liveAttachments.exists()) liveAttachments.deleteRecursively()
+            if (newBannersMoved && liveBanners.exists()) liveBanners.deleteRecursively()
             if (documentsMoved && rollbackDocuments.exists()) {
                 runCatching { moveDirectory(rollbackDocuments, liveDocuments) }
             }
             if (attachmentsMoved && rollbackAttachments.exists()) {
                 runCatching { moveDirectory(rollbackAttachments, liveAttachments) }
             }
+            if (bannersMoved && rollbackBanners.exists()) {
+                runCatching { moveDirectory(rollbackBanners, liveBanners) }
+            }
             throw error
         } finally {
             rollbackDocuments.deleteRecursively()
             rollbackAttachments.deleteRecursively()
+            rollbackBanners.deleteRecursively()
         }
     }
 
@@ -569,6 +683,18 @@ class AndroidBackupService(
         require(
             singleLong(
                 db,
+                "SELECT COUNT(*) FROM document_identities WHERE (banner_relative_path IS NULL) != (banner_sha256 IS NULL)",
+            ) == 0L,
+        ) { "النسخة تحتوي مرجع بانر هوية غير مكتمل." }
+        require(
+            singleLong(
+                db,
+                "SELECT COUNT(*) FROM document_identities WHERE banner_relative_path IS NOT NULL AND banner_relative_path NOT LIKE 'document-banners/%.img'",
+            ) == 0L,
+        ) { "النسخة تحتوي مسار بانر هوية غير صالح." }
+        require(
+            singleLong(
+                db,
                 "SELECT COUNT(*) FROM ledger_entries WHERE amount_minor IS NOT NULL AND amount_minor <= 0",
             ) == 0L,
         ) { "النسخة تحتوي مبلغ حركة مالية غير صالح." }
@@ -658,6 +784,7 @@ class AndroidBackupService(
         val tables: List<TableDump>,
         val readyDocuments: List<VaultFileRef>,
         val attachments: List<VaultFileRef>,
+        val banners: List<VaultFileRef>,
     )
 
     private data class VaultFileRef(
@@ -666,15 +793,18 @@ class AndroidBackupService(
     )
 
     private companion object {
-        const val SCHEMA_VERSION = 11
+        const val SCHEMA_VERSION = 12
         const val MIN_PASSWORD_LENGTH = 8
         const val READY_STATUS = "READY"
         const val DOCUMENTS_DIRECTORY = "documents"
         const val ATTACHMENTS_DIRECTORY = "attachments"
+        const val BANNERS_DIRECTORY = AndroidDocumentBannerAssetStore.DIRECTORY
         const val MAX_ROWS = 1_000_000
         const val MAX_DOCUMENT_BYTES = 64 * 1024 * 1024
         const val MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+        const val MAX_BANNER_BYTES = AndroidDocumentBannerAssetStore.MAX_BANNER_BYTES
         val SHA256_REGEX = Regex("^[0-9a-fA-F]{64}$")
+        val BANNER_FILE_REGEX = Regex("[0-9a-f]{64}\\.img")
 
         val TABLES = listOf(
             "persons",
@@ -722,6 +852,7 @@ internal data class BackupPayload(
     val tables: List<TableDump>,
     val documentFiles: List<BackupDocumentFile>,
     val attachmentFiles: List<BackupDocumentFile> = emptyList(),
+    val bannerFiles: List<BackupDocumentFile> = emptyList(),
 )
 
 @Serializable

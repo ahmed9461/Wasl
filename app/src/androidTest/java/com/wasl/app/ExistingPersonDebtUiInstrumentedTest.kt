@@ -91,7 +91,7 @@ class ExistingPersonDebtUiInstrumentedTest {
         composeRule.onNodeWithTag("search-input").performTextInput("أحمد")
         accounts.forEach { account ->
             val resultTag = "search-result-${account.ledger.header.id.value}"
-            scrollToTag(resultTag)
+            waitAndScrollToTag(resultTag)
             composeRule.onNodeWithTag(resultTag).assertIsDisplayed()
         }
     }
@@ -106,6 +106,15 @@ class ExistingPersonDebtUiInstrumentedTest {
 
     private fun scrollToTag(tag: String) {
         composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(tag))
+    }
+
+    private fun waitAndScrollToTag(tag: String) {
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            runCatching {
+                composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(tag))
+                composeRule.onNodeWithTag(tag).fetchSemanticsNode()
+            }.isSuccess
+        }
     }
 
     private fun waitForTag(tag: String) {

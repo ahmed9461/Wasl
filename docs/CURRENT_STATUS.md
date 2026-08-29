@@ -2,153 +2,125 @@
 
 آخر مراجعة: 2026-08-29
 
-هذا الملف يلخص الحالة الحية. عند التعارض يكون مصدر الحقيقة بالترتيب: الكود على الرأس الحالي، Room exported schema، GitHub Actions للرأس نفسه، ثم هذا الملف وبقية الوثائق.
+هذا الملف يلخص الحالة الحية. عند التعارض يكون مصدر الحقيقة بالترتيب: الكود على الرأس الحالي → Room exported schema → GitHub Actions للرأس نفسه → هذا الملف → بقية الوثائق.
 
 ## المرشح الحالي
 
 - المستودع: `ahmed9461/Wasl`.
-- فرع الواجهة المرشح للدمج: `agent/ui-redesign-v0.3-corrective`.
-- آخر رأس اجتاز بوابة Corrective UI الكاملة: `acb5dea0fd54897afcc56e55ee52afc99bcb0392`.
-- الإصدار المرشح: `0.1.0`، `versionCode = 1`.
-- Room Database: **Schema v11**.
-- exported schemas ملتزمة: `1.json → 11.json`.
+- `main`: يحتوي Corrective UI v0.3 بعد دمج PR #12.
+- merge commit المرجعي على `main`: `15f982b9a3804861f96b454431c96ed4f8c19c04`.
+- Android CI #1100 — run `33229515030` على merge commit في `main` نجح بالكامل.
+- الجولة المفتوحة: **UI/UX Hardening v0.4**.
+- الفرع: `agent/ui-ux-hardening-v0.4`.
+- PR: #13 — Draft حتى اكتمال القبول البصري والدمج.
+- آخر functional-code checkpoint قبل مزامنة الوثائق: `9d0622f26ab6760d68362adf279da4e7e2ca69c7`.
+- Android CI #1248 — run `33274101583` على هذا checkpoint نجح بالكامل ✅.
+- instrumentation على المحاكي: **149 اختبارًا، 0 failures، 0 errors، 0 skipped**.
+- Room على فرع v0.4: **Schema v12** مع exported schemas `1.json → 12.json`.
+- الإصدار المرشح ما زال `0.1.0`، `versionCode = 1`.
 - لا `fallbackToDestructiveMigration` في Production.
-- الحالة: **Release Candidate / signing pending** حتى اكتمال الدمج وCI على `main` ثم توفير أسرار التوقيع الخارجية للنشر العام.
 
-## بوابات التحقق
+## المرجع التنفيذي لجولة v0.4
 
-### Corrective UI v0.3
+`docs/UI_UX_HARDENING_V0.4_EXECUTION_PLAN.md`
 
-Android CI **#1097** — run `33228386198` — head `acb5dea0fd54897afcc56e55ee52afc99bcb0392` نجح بالكامل:
+نجاح CI لا يغلق الجولة وحده؛ القبول البصري/العملي اليدوي في الخطة ما زال إلزاميًا قبل الدمج.
 
-- Unit tests / Lint / Debug APK ✅
-- توليد وفحص Room Schema v11 ✅
-- Emulator instrumentation / migration / repository / backup tests ✅
-- جميع اختبارات Android على المحاكي ✅
-- فحص Payment Receipt PDF ✅
-- فحص Debt Receipt PDF ✅
-- فحص Account Statement PDF ✅
-- رفع instrumentation وPDF evidence ✅
+## المنجز في UI/UX Hardening v0.4
 
-هذه هي بوابة القبول المرجعية للواجهة الجديدة قبل الدمج. بعد merge يجب اعتماد CI الخاص برأس `main` الناتج نفسه قبل تسليم APK النهائي لهذه الجولة.
+### كثافة الواجهة والتكيف
 
-### Document Templates / Schema v11 baseline
+- Home يخفي العملات ذات الرصيد المفتوح صفر.
+- بطاقات الحساب compact بدون Avatar/placeholder ضخم.
+- تخطيطات الهاتف القياسي أكثر أفقية وكثافة مع adaptive fallback للشاشات الضيقة والخط الكبير.
+- Group Expense يستخدم اتجاه/عملة ومشاركين بتخطيط compact/responsive.
+- إجراء PDF السريع في Account Details موجود أعلى اليسار داخل Safe Area.
+- Payment Promise actions مجمعة داخل Action Bar منظمة، وتغيير حالة الوعد لا يكتب دفعة مالية أو يغيّر أصل الدين/الاستحقاق.
+- Documents Hub مربوط بالـAttachment Store الحقيقي.
+- النصوص اليومية لا تعرض SHA-256 أو تفاصيل التخزين التقنية للمستخدم.
 
-Android CI **#1017** — run `33203634720` — head `fdbb28b2aca59f7d0542eaa785d72502d695a431` نجح بالكامل قبل دمج Document Templates v11.
+### File Picker والمرفقات
 
-## الواجهة الحالية
+- مسار Activity Result / OpenDocument محمي من الإلغاء و`uri == null` وفشل القراءة.
+- regression instrumentation يغطي: cancel، PNG سليمة، PDF سليم، URI غير قابل للقراءة، وفشل integrity.
+- المرفقات تُحفظ داخل الخزنة الخاصة بالتطبيق وتفتح/تشارك فقط بعد اجتياز فحص السلامة.
 
-- هوية بصرية موحدة داكنة/فيروزية/ذهبية مستندة إلى التصميم المعتمد.
-- أيقونة تطبيق جديدة مع adaptive/round launchers.
-- الرئيسية تعرض ملخصات العملات والحسابات وإجراءين منفصلين: إضافة حساب والإدخال الذكي.
-- تدفق إضافة الحساب أصبح مباشرًا ومختصرًا مع نقل الخيارات الأقل استخدامًا إلى إعدادات إضافية.
-- شاشة «اليوم» أعيد تنظيمها بملخص واضح وصياغات عربية طبيعية.
-- شاشة الأقساط تعرض إجمالي/مسدد/متبقٍ وفلاتر وتقدم الخطة.
-- تفاصيل الحساب تعرض الرصيد والتقدم والإجراءات والمتابعة داخل نفس التدفق بدل الأزرار العائمة.
-- الإعدادات موحدة مع بقية التطبيق وتدعم تلقائي/داكن/فاتح، الأمان، التذكيرات، والنسخ الاحتياطي.
-- التنقل والرجوع يعتمدان معرفات UI مستقرة في الاختبارات بدل النصوص المرئية.
-- RTL، Bidi، large-font وadaptive behavior محفوظة.
+### Room v12 + Document Banner
 
-## الوظائف المكتملة
+- Migration `11→12` تضيف `document_identities.banner_relative_path` و`banner_sha256` كحقول اختيارية.
+- `DocumentBannerAsset` + app-private content-addressed vault مع path/hash/image/size validation.
+- `DocumentBannerSnapshotCodec` وmapper يحفظان مرجعًا immutable ويعملان fail-closed.
+- Payment/Debt/Account Statement snapshots تجمد البانر المختار تاريخيًا مع backward compatibility.
+- PDF renderers تتحقق من البانر التاريخي قبل الرسم على الصفحة الأولى، والعبث يفشل مغلقًا.
+- Encrypted Backup/Restore يحفظ أصل البانر ومرجعه ويستعيدهما مع التحقق.
+- UI تدعم اختيار/معاينة/تغيير/إزالة البانر.
+- بعد الاختيار، يظهر قص/تموضع فعلي ضمن نسبة رأس PDF مع تحكم أفقي ورأسي قبل الحفظ.
+- القص النهائي يخرج صورة رأس بجودة محدودة عمليًا حتى 1800px عرضًا؛ معاينة Compose تستخدم decode مصغرًا حتى 1600px لتقليل الذاكرة.
+- إصدار إيصال الدين/كشف الحساب يمر عبر **Preview قبل الإصدار** ولا يكتب المستند حتى التأكيد الصريح.
+- اختبارات البانر تغطي ratio/focus، الصور الصغيرة جدًا، downsampling، snapshot التاريخي، PDF الفعلي، tamper failure، وbackup/restore.
 
-### المالية
+### Launcher
 
-- أشخاص وحسابات متعددة للشخص.
-- RECEIVABLE / PAYABLE.
-- YER / SAR / USD دون netting مضلل بين العملات.
-- Money بminor units من `Long` فقط.
-- Ledger append-only؛ التصحيح بـPayment Reversal وليس حذف التاريخ.
-- دفعات جزئية ونهائية، idempotency وreplay.
+- موارد legacy/adaptive/round موجودة ومربوطة بالهوية الحالية.
+- Android 13+ monochrome resource مغطى باختبار instrumentation.
+- الاختبار الآلي يثبت packaging/resources؛ شكل الأيقونة الفعلي بعد clean install على Launcher ما زال بوابة بصرية يدوية.
 
-### المتابعة
+## بوابة التحقق الحالية
 
-- Due date + audit.
-- Today.
-- WorkManager scheduling/recovery.
-- Exact Alarm اختياري.
-- General Reminders.
-- Payment Promises.
-- Installment Plans/Revisions.
-- Payment Claims «طالبني».
+Android CI #1248 — run `33274101583` — head `9d0622f26ab6760d68362adf279da4e7e2ca69c7` ✅
 
-### البحث والعرض
+- `:core:domain:test` ✅
+- `:app:testDebugUnitTest` ✅
+- `:app:lintDebug` ✅
+- `:app:assembleDebug` ✅
+- Room Schema v12 generated/verified ✅
+- `connectedDebugAndroidTest`: **149 tests / 0 failures / 0 errors / 0 skipped** ✅
+- Payment Receipt PDF inspection ✅
+- Debt Receipt PDF inspection ✅
+- Account Statement PDF inspection ✅
+- artifacts: `Wasl-debug`, `Wasl-room-schema`, `Wasl-room-instrumentation-results`, `Wasl-payment-receipt-evidence`, `Wasl-account-document-evidence` ✅
 
-- Basic/Advanced Search.
-- Person Timeline.
-- Objective Statistics.
-- Documents Hub.
-- Account Details timeline.
-- رسائل سداد جاهزة للنسخ/المشاركة فقط.
-- RTL first-class وBidi isolation وadaptive/large-font hardening للشاشات الرئيسية.
+مزامنة الوثائق الحالية تغيّر الرأس فقط دون تغيير الكود؛ لذلك يجب أن ينجح Android CI النهائي على commit الوثائق أيضًا قبل القبول اليدوي.
 
-### Natural Entry / Voice
+## قاعدة البيانات الحالية على v0.4
 
-- `Parser → Preview → explicit Confirmation → Save`.
-- Voice Dictation يغذي نفس مسار Natural Entry.
-- recognized / empty / cancelled / unavailable / launch failure مغطاة.
-- لا كتابة مالية من الصوت أو الإشعار قبل التأكيد الصريح.
+- Room Schema: **v12**.
+- exported schemas: `1.json → 12.json`.
+- v8: `payment_claims`.
+- v9: `attachments`.
+- v10: `group_expenses` + `group_expense_shares`.
+- v11: `document_templates`.
+- v12: banner metadata داخل `document_identities`.
 
-### Group Expense
+## المتبقي لإغلاق v0.4
 
-- العملية الجماعية الأصلية سياق تاريخي وليست Ledger موازيًا.
-- كل share تنشئ Debt عاديًا.
-- 2+ مشاركين فريدين، unequal shares، عملة واتجاه موحدان، exact total.
-- atomic create + replay/idempotency + conflict detection + rollback.
-- Preview/Confirmation إلزاميان.
+1. نجاح CI النهائي على commit مزامنة الوثائق.
+2. تثبيت APK debug من رأس PR النهائي وإجراء مراجعة بصرية يدوية: Home، multi-currency، Add Account، Group Expense، Account Details، Promise states، Documents/Attachments، banner crop/preview/PDF، Dark/Light/Auto، RTL، Large Font.
+3. clean install على Android حديث والتحقق بصريًا من أيقونة Launcher المرجعية، بما يشمل round/themed/monochrome حيث ينطبق.
+4. إبقاء PR #13 Draft حتى اعتماد القبول البصري؛ ثم تحويله Ready ودمجه إلى `main`.
+5. تشغيل Android CI على merge commit في `main`، ثم استخراج APK الاختبار النهائي من artifact الخاص بـ`main` فقط وحساب SHA-256.
 
-### المستندات وRoom v11
+## النشر العام
 
-- `PAYMENT_RECEIPT`, `DEBT_RECEIPT`, `ACCOUNT_STATEMENT` من immutable snapshots.
-- Document Templates محفوظة في `document_templates` منذ v11.
-- أنماط القوالب الحالية: MINIMAL / BUSINESS / CLASSIC / COMPACT / MODERN.
-- القالب المختار يثبت داخل snapshot للمستند؛ تعديل الإعدادات لاحقًا لا يعيد تفسير مستند قديم.
-- `11.json` مولد من Room ومثبت في Git، وليس ملفًا مكتوبًا يدويًا.
-- SHA-256 وpage count وفحوص سلامة قبل فتح/مشاركة PDF.
+Signed Release منفصل عن إغلاق v0.4 ويحتاج أسرار التوقيع الخارجية عند الاستعداد للنشر:
 
-### الملفات والأمان
+- `WASL_KEYSTORE_BASE64`
+- `WASL_KEYSTORE_PASSWORD`
+- `WASL_KEY_ALIAS`
+- `WASL_KEY_PASSWORD`
 
-- Attachments/evidence vault داخل مساحة التطبيق مع metadata وSHA-256 ومسارات مقيدة.
-- FileProvider غير exported للمشاركة الصريحة.
-- Backup/Restore مشفر مع staging + schema/path/hash/FK/invariant validation + rollback.
-- App Lock عبر BiometricPrompt / Device Credential.
-- `FLAG_SECURE` وسياسة خصوصية للإشعارات الحساسة.
-- التطبيق الحالي Local-first ولا يطلب صلاحية `INTERNET`.
-
-## قاعدة البيانات الحالية
-
-Schema **v11** يضيف `document_templates` فوق v10، ليصبح عدد جداول Room المنطقية **15**.
-
-سلسلة migrations محفوظة صراحة حتى `10→11`، وكل ترقية جديدة يجب أن تأتي مع exported schema واختبارات migration وBackup/Restore update عند الحاجة.
-
-## الإصدار
-
-- `versionName = 0.1.0`.
-- مسار Signed Release موجود في `.github/workflows/release.yml`.
-- توقيع Release يقرأ فقط متغيرات/Secrets خارج Git:
-  - `WASL_KEYSTORE_BASE64`
-  - `WASL_KEYSTORE_PASSWORD`
-  - `WASL_KEY_ALIAS`
-  - `WASL_KEY_PASSWORD`
-- Workflow الإصدار يبني APK موقعًا، يتحقق منه بـ`apksigner`، ويولد SHA-256.
-- لا يوصف التطبيق بأنه **Published** قبل توفير مفتاح التوقيع الخارجي وتشغيل بوابة Signed Release بنجاح.
-
-راجع `PRIVACY_POLICY.md` و`docs/RELEASE_CHECKLIST.md` قبل التوزيع العام.
-
-## المتبقي خارج كود المنتج
-
-1. دمج Corrective UI v0.3 إلى `main` بعد نجاح بوابة الفرع.
-2. نجاح Android CI على merge commit في `main` واستخراج APK التجريبي النهائي منه.
-3. للنشر العام فقط: توفير أسرار التوقيع الفعلية وتشغيل Signed Release واستكمال بيانات منصة التوزيع.
+لا signing keys أو passwords داخل Git، ولا يوصف التطبيق بأنه Published قبل Signed Release فعلي.
 
 ## ثوابت لا تكسر
 
-- لا حذف Ledger history.
-- لا Float/Double للأموال.
-- لا خلط عملات في إجمالي واحد.
-- Promise/Claim/Reminder/Installment ليست Ledger.
-- Notification/Natural/Voice لا تنفذ commit ماليًا مباشرًا.
-- PDF يعتمد snapshot ثابتًا.
-- لا فتح READY PDF/Attachment عند فقد الملف أو فشل SHA-256.
-- لا Restore يتجاوز schema/path/hash/FK/invariant validation.
-- لا Migration بلا exported schema + tests.
-- لا signing keys أو passwords داخل Git.
+1. Ledger append-only؛ التصحيح بالعكس لا بحذف التاريخ.
+2. لا Float/Double للأموال.
+3. لا cross-currency netting.
+4. Promise/Claim/Reminder/Installment ليست Ledger.
+5. Notification/Natural/Voice لا تنفذ financial commit قبل Preview/Confirmation.
+6. Group Expense لا تنشئ Ledger موازيًا.
+7. المستند READY مبني على immutable snapshot.
+8. لا فتح PDF/Attachment عند فقد الملف أو فشل SHA-256.
+9. Restore يفحص schema/path/hash/FK/invariants قبل الاستبدال.
+10. لا Migration بلا exported schema + tests.
+11. لا signing keys أو passwords داخل Git.

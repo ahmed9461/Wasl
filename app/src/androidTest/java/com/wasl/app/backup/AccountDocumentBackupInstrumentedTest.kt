@@ -128,13 +128,14 @@ class AccountDocumentBackupInstrumentedTest {
         assertTrue(originalFile.isFile)
         assertEquals(issued.pdfSha256, originalFile.sha256Hex())
 
+        val schemaVersion = database.openHelper.readableDatabase.version
         val password = "account-document-backup-123".toCharArray()
         val backup = try {
             backupService.create(password)
         } finally {
             password.fill('\u0000')
         }
-        assertEquals(11, backup.schemaVersion)
+        assertEquals(schemaVersion, backup.schemaVersion)
         assertEquals(1, backup.documentCount)
 
         originalFile.writeText("corrupted after backup")

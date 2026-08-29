@@ -10,7 +10,7 @@ internal val WaslMaxContentWidth = 760.dp
 internal fun shouldStackDenseRows(
     availableWidth: Dp,
     fontScale: Float,
-): Boolean = availableWidth < 420.dp || fontScale >= 1.3f
+): Boolean = availableWidth < 340.dp || fontScale >= 1.3f
 
 @Composable
 internal fun shouldStackDenseRows(availableWidth: Dp): Boolean =

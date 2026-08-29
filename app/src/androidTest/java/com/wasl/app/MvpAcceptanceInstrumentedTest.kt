@@ -196,13 +196,14 @@ class MvpAcceptanceInstrumentedTest {
             database = database,
             clock = Clock.fixed(Instant.parse("2026-08-25T17:00:00Z"), ZoneOffset.UTC),
         )
+        val schemaVersion = database.openHelper.readableDatabase.version
         val password = "mvp-portable-secret".toCharArray()
         val backup = try {
             backupService.create(password)
         } finally {
             password.fill('\u0000')
         }
-        assertEquals(11, backup.schemaVersion)
+        assertEquals(schemaVersion, backup.schemaVersion)
         assertEquals(1, backup.documentCount)
 
         val extraDebtId = DebtId("mvp-extra-debt")

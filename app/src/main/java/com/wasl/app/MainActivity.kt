@@ -190,6 +190,7 @@ class MainActivity : FragmentActivity() {
                             DocumentsHubRoute(
                                 repository = waslApplication.repository,
                                 documentService = waslApplication.paymentReceiptService,
+                                attachmentStore = waslApplication.attachmentStore,
                                 initialDebtId = documentsDebtId,
                                 onBack = {
                                     val returnToSettings = documentsDebtId == null

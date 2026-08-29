@@ -15,11 +15,14 @@ import com.wasl.domain.DebtId
 import com.wasl.domain.LedgerEntryId
 import com.wasl.domain.Money
 import com.wasl.domain.PersonId
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import org.junit.runner.RunWith
 
@@ -46,6 +49,69 @@ class PaymentReceiptPdfInstrumentedTest {
         }
     }
 
+    @Test
+    fun historicalBannerIsRenderedOnFirstPage() {
+        val bannerStore = AndroidDocumentBannerAssetStore(context)
+        val asset = bannerStore.importImage(ByteArrayInputStream(solidBannerPng()))
+        val output = File(context.cacheDir, "wasl-banner-receipt-${System.nanoTime()}.pdf")
+        try {
+            output.outputStream().buffered().use { stream ->
+                AndroidPaymentReceiptPdfRenderer(bannerStore).render(fixedSnapshot(asset), stream)
+            }
+
+            ParcelFileDescriptor.open(output, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+                PdfRenderer(descriptor).use { renderer ->
+                    renderer.openPage(0).use { page ->
+                        val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+                        bitmap.eraseColor(Color.WHITE)
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+                        var bannerPixels = 0
+                        for (y in 20 until minOf(125, bitmap.height)) {
+                            for (x in 20 until bitmap.width - 20) {
+                                val pixel = bitmap.getPixel(x, y)
+                                if (Color.red(pixel) > 200 && Color.blue(pixel) > 200 && Color.green(pixel) < 80) {
+                                    bannerPixels += 1
+                                }
+                            }
+                        }
+                        bitmap.recycle()
+                        assertTrue(bannerPixels > 500, "Expected the historical banner to be visible on page one.")
+                    }
+                }
+            }
+        } finally {
+            output.delete()
+            File(context.filesDir, asset.relativePath).delete()
+        }
+    }
+
+    @Test
+    fun tamperedHistoricalBannerFailsClosedBeforePdfIsWritten() {
+        val bannerStore = AndroidDocumentBannerAssetStore(context)
+        val asset = bannerStore.importImage(ByteArrayInputStream(solidBannerPng()))
+        val bannerFile = File(context.filesDir, asset.relativePath)
+        try {
+            bannerFile.writeBytes("tampered".encodeToByteArray())
+            assertFailsWith<IllegalArgumentException> {
+                ByteArrayOutputStream().use { output ->
+                    AndroidPaymentReceiptPdfRenderer(bannerStore).render(fixedSnapshot(asset), output)
+                }
+            }
+        } finally {
+            bannerFile.delete()
+        }
+    }
+
+    private fun solidBannerPng(): ByteArray {
+        val bitmap = Bitmap.createBitmap(400, 100, Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(Color.MAGENTA)
+        return ByteArrayOutputStream().use { output ->
+            check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
+            bitmap.recycle()
+            output.toByteArray()
+        }
+    }
+
     private fun assertPageContainsInk(renderer: PdfRenderer, pageIndex: Int) {
         renderer.openPage(pageIndex).use { page ->
             val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
@@ -62,7 +128,7 @@ class PaymentReceiptPdfInstrumentedTest {
         }
     }
 
-    private fun fixedSnapshot(): PaymentReceiptSnapshot {
+    private fun fixedSnapshot(banner: DocumentBannerAsset? = null): PaymentReceiptSnapshot {
         val currency = CurrencyCode.USD
         val longArabicNote = List(42) { index ->
             "سطر توثيقي عربي رقم ${index + 1} مع مرجع LTR-${index + 1} لاختبار اتجاه النص وتتابع الصفحات."
@@ -90,6 +156,7 @@ class PaymentReceiptPdfInstrumentedTest {
                 activityName = "تجارة عامة وخدمات تقنية",
                 phone = "+967 777 000 000",
                 footerText = "شكرًا لتعاملكم معنا — Thank you",
+                banner = banner,
             ),
         )
     }

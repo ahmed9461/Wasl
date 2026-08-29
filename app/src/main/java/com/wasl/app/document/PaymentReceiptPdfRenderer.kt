@@ -1,9 +1,12 @@
 package com.wasl.app.document
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.graphics.RectF
 import android.graphics.pdf.PdfDocument
 import android.text.BidiFormatter
 import android.text.Layout
@@ -25,11 +28,19 @@ fun interface PaymentReceiptPdfRenderer {
     fun render(snapshot: PaymentReceiptSnapshot, output: OutputStream): Int
 }
 
-class AndroidPaymentReceiptPdfRenderer : PaymentReceiptPdfRenderer {
+class AndroidPaymentReceiptPdfRenderer(
+    private val bannerStore: DocumentBannerAssetStore = UnavailableDocumentBannerAssetStore,
+) : PaymentReceiptPdfRenderer {
     override fun render(snapshot: PaymentReceiptSnapshot, output: OutputStream): Int {
+        val bannerBitmap = snapshot.identity.banner?.let { asset ->
+            val bytes = bannerStore.readVerified(asset)
+            requireNotNull(BitmapFactory.decodeByteArray(bytes, 0, bytes.size)) {
+                "Document banner could not be decoded."
+            }
+        }
         val document = PdfDocument()
         return try {
-            val writer = ReceiptPageWriter(document, snapshot)
+            val writer = ReceiptPageWriter(document, snapshot, bannerBitmap)
             writer.drawReceipt()
             writer.finish()
             document.writeTo(output)
@@ -42,6 +53,7 @@ class AndroidPaymentReceiptPdfRenderer : PaymentReceiptPdfRenderer {
     private class ReceiptPageWriter(
         private val document: PdfDocument,
         private val snapshot: PaymentReceiptSnapshot,
+        private val bannerBitmap: Bitmap?,
     ) {
         private var page: PdfDocument.Page? = null
         private var canvas: Canvas? = null
@@ -112,35 +124,62 @@ class AndroidPaymentReceiptPdfRenderer : PaymentReceiptPdfRenderer {
                 PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageCount).create(),
             )
             canvas = requireNotNull(page).canvas.apply { drawColor(Color.WHITE) }
-            drawLayout(
-                text = if (pageCount == 1) "وَصل" else "وَصل — تابع",
-                x = MARGIN,
-                top = 42f,
-                width = CONTENT_WIDTH,
-                paint = brand,
-                direction = TextDirectionHeuristics.FIRSTSTRONG_RTL,
-            )
-            if (pageCount == 1) {
+            if (pageCount == 1 && bannerBitmap != null) {
+                drawBanner(bannerBitmap)
                 drawLayout(
                     text = "إيصال سداد",
                     x = MARGIN,
-                    top = 72f,
+                    top = 128f,
                     width = CONTENT_WIDTH,
                     paint = title,
                     direction = TextDirectionHeuristics.FIRSTSTRONG_RTL,
                 )
+                canvas?.drawLine(
+                    MARGIN, 166f, PAGE_WIDTH - MARGIN, 166f,
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply { color = COLOR_PRIMARY; strokeWidth = 2f },
+                )
+                y = 186f
+            } else {
+                drawLayout(
+                    text = if (pageCount == 1) "وَصل" else "وَصل — تابع",
+                    x = MARGIN,
+                    top = 42f,
+                    width = CONTENT_WIDTH,
+                    paint = brand,
+                    direction = TextDirectionHeuristics.FIRSTSTRONG_RTL,
+                )
+                if (pageCount == 1) {
+                    drawLayout(
+                        text = "إيصال سداد",
+                        x = MARGIN,
+                        top = 72f,
+                        width = CONTENT_WIDTH,
+                        paint = title,
+                        direction = TextDirectionHeuristics.FIRSTSTRONG_RTL,
+                    )
+                }
+                canvas?.drawLine(
+                    MARGIN, 112f, PAGE_WIDTH - MARGIN, 112f,
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply { color = COLOR_PRIMARY; strokeWidth = 2f },
+                )
+                y = 134f
             }
-            canvas?.drawLine(
-                MARGIN,
-                112f,
-                PAGE_WIDTH - MARGIN,
-                112f,
-                Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = COLOR_PRIMARY
-                    strokeWidth = 2f
-                },
+        }
+
+        private fun drawBanner(bitmap: Bitmap) {
+            val maxWidth = CONTENT_WIDTH.toFloat()
+            val maxHeight = 82f
+            val scale = minOf(maxWidth / bitmap.width.toFloat(), maxHeight / bitmap.height.toFloat())
+            val width = bitmap.width * scale
+            val height = bitmap.height * scale
+            val left = MARGIN + (maxWidth - width) / 2f
+            val top = 28f + (maxHeight - height) / 2f
+            canvas?.drawBitmap(
+                bitmap,
+                null,
+                RectF(left, top, left + width, top + height),
+                Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG),
             )
-            y = 134f
         }
 
         private fun finishPage() {

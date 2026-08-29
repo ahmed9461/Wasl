@@ -1,9 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/wasl_launcher_background" />
-    <item>
-        <bitmap
-            android:src="@drawable/wasl_launcher_art"
-            android:gravity="fill" />
-    </item>
+    <item android:drawable="@drawable/ic_launcher_foreground" />
 </layer-list>

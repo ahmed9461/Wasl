@@ -10,6 +10,7 @@ import com.wasl.app.data.DocumentSnapshot
 import com.wasl.app.data.DocumentType
 import com.wasl.app.data.StatementEntryType
 import com.wasl.app.data.StatementLedgerEntrySnapshot
+import com.wasl.app.document.DocumentBannerAsset
 import com.wasl.domain.CurrencyCode
 import com.wasl.domain.DebtDirection
 import com.wasl.domain.DebtId
@@ -42,6 +43,14 @@ internal object AccountDocumentSnapshotCodec {
         DocumentType.PAYMENT_RECEIPT -> error("Payment receipts use PaymentReceiptSnapshotCodec.")
     }
 
+    private fun bannerAsset(relativePath: String?, sha256: String?): DocumentBannerAsset? {
+        if (relativePath == null && sha256 == null) return null
+        check(relativePath != null && sha256 != null) {
+            "Document snapshot banner metadata is incomplete."
+        }
+        return DocumentBannerAsset(relativePath = relativePath, sha256 = sha256)
+    }
+
     @Serializable
     private data class DebtReceiptPayload(
         val version: Int,
@@ -64,6 +73,8 @@ internal object AccountDocumentSnapshotCodec {
         val issuerActivityName: String?,
         val issuerPhone: String?,
         val footerText: String?,
+        val issuerBannerRelativePath: String? = null,
+        val issuerBannerSha256: String? = null,
         val templateId: String = DocumentTemplateCatalog.DEFAULT_TEMPLATE_ID,
         val templateDisplayName: String = "عملي",
         val templateStyle: String = DocumentTemplateStyle.BUSINESS.name,
@@ -100,6 +111,7 @@ internal object AccountDocumentSnapshotCodec {
             activityName = issuerActivityName,
             phone = issuerPhone,
             footerText = footerText,
+            banner = bannerAsset(issuerBannerRelativePath, issuerBannerSha256),
         )
 
         private fun template() = DocumentTemplateSnapshot(
@@ -134,6 +146,8 @@ internal object AccountDocumentSnapshotCodec {
                 issuerActivityName = snapshot.identity.activityName,
                 issuerPhone = snapshot.identity.phone,
                 footerText = snapshot.identity.footerText,
+                issuerBannerRelativePath = snapshot.identity.banner?.relativePath,
+                issuerBannerSha256 = snapshot.identity.banner?.sha256,
                 templateId = snapshot.template.id,
                 templateDisplayName = snapshot.template.displayName,
                 templateStyle = snapshot.template.style.name,
@@ -168,6 +182,8 @@ internal object AccountDocumentSnapshotCodec {
         val issuerActivityName: String?,
         val issuerPhone: String?,
         val footerText: String?,
+        val issuerBannerRelativePath: String? = null,
+        val issuerBannerSha256: String? = null,
         val templateId: String = DocumentTemplateCatalog.DEFAULT_TEMPLATE_ID,
         val templateDisplayName: String = "عملي",
         val templateStyle: String = DocumentTemplateStyle.BUSINESS.name,
@@ -200,6 +216,7 @@ internal object AccountDocumentSnapshotCodec {
                     activityName = issuerActivityName,
                     phone = issuerPhone,
                     footerText = footerText,
+                    banner = bannerAsset(issuerBannerRelativePath, issuerBannerSha256),
                 ),
                 template = DocumentTemplateSnapshot(
                     id = templateId,
@@ -236,6 +253,8 @@ internal object AccountDocumentSnapshotCodec {
                 issuerActivityName = snapshot.identity.activityName,
                 issuerPhone = snapshot.identity.phone,
                 footerText = snapshot.identity.footerText,
+                issuerBannerRelativePath = snapshot.identity.banner?.relativePath,
+                issuerBannerSha256 = snapshot.identity.banner?.sha256,
                 templateId = snapshot.template.id,
                 templateDisplayName = snapshot.template.displayName,
                 templateStyle = snapshot.template.style.name,

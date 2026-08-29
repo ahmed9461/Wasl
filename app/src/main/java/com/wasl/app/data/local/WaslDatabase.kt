@@ -54,7 +54,7 @@ import com.wasl.app.data.local.entity.ReminderEntity
         GroupExpenseShareEntity::class,
     ],
     views = [PaymentIssuedDocumentView::class],
-    version = 11,
+    version = 12,
     exportSchema = true,
 )
 abstract class WaslDatabase : RoomDatabase() {
@@ -425,7 +425,6 @@ abstract class WaslDatabase : RoomDatabase() {
             }
         }
 
-
         val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL(
@@ -456,6 +455,13 @@ abstract class WaslDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `document_identities` ADD COLUMN `banner_relative_path` TEXT")
+                db.execSQL("ALTER TABLE `document_identities` ADD COLUMN `banner_sha256` TEXT")
+            }
+        }
+
         val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -467,6 +473,7 @@ abstract class WaslDatabase : RoomDatabase() {
             MIGRATION_8_9,
             MIGRATION_9_10,
             MIGRATION_10_11,
+            MIGRATION_11_12,
         )
 
         private fun createIssuedDocumentIndexes(

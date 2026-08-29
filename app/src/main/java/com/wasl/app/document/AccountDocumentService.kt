@@ -38,10 +38,13 @@ object UnavailableAccountDocumentService : AccountDocumentService {
 class AndroidAccountDocumentService(
     context: Context,
     private val store: AccountDocumentStore,
-    private val renderer: AccountDocumentPdfRenderer = AndroidAccountDocumentPdfRenderer(),
+    renderer: AccountDocumentPdfRenderer? = null,
     private val clock: Clock = Clock.systemUTC(),
+    private val bannerStore: DocumentBannerAssetStore = AndroidDocumentBannerAssetStore(context.applicationContext),
 ) : AccountDocumentService {
     private val filesDir = context.applicationContext.filesDir
+    private val renderer: AccountDocumentPdfRenderer =
+        renderer ?: AndroidAccountDocumentPdfRenderer(bannerStore)
 
     override suspend fun issueDebtReceipt(
         command: PrepareDebtReceiptCommand,

@@ -11,6 +11,7 @@ import com.wasl.app.data.PrepareAccountStatementCommand
 import com.wasl.app.data.PrepareDebtReceiptCommand
 import com.wasl.app.data.PreparePaymentReceiptCommand
 import java.io.File
+import java.io.InputStream
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -25,6 +26,11 @@ interface PaymentReceiptService {
     suspend fun getDocumentTemplates(): List<DocumentTemplateRecord> = emptyList()
 
     suspend fun getDefaultTemplate(): DocumentTemplateRecord? = null
+
+    suspend fun importIdentityBanner(content: InputStream): DocumentBannerAsset
+
+    suspend fun readIdentityBanner(asset: DocumentBannerAsset): ByteArray =
+        error("Document banner read is unavailable.")
 
     suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord
 
@@ -43,6 +49,12 @@ interface PaymentReceiptService {
 
 object UnavailablePaymentReceiptService : PaymentReceiptService {
     override suspend fun getDefaultIdentity(): DocumentIdentityRecord? = null
+
+    override suspend fun importIdentityBanner(content: InputStream): DocumentBannerAsset =
+        error("Document banner service is unavailable.")
+
+    override suspend fun readIdentityBanner(asset: DocumentBannerAsset): ByteArray =
+        error("Document banner service is unavailable.")
 
     override suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord =
         error("Payment receipt service is unavailable.")
@@ -64,11 +76,14 @@ object UnavailablePaymentReceiptService : PaymentReceiptService {
 class AndroidPaymentReceiptService(
     context: Context,
     private val store: PaymentReceiptStore,
-    private val renderer: PaymentReceiptPdfRenderer = AndroidPaymentReceiptPdfRenderer(),
+    renderer: PaymentReceiptPdfRenderer? = null,
     private val accountDocumentService: AccountDocumentService = UnavailableAccountDocumentService,
     private val clock: Clock = Clock.systemUTC(),
+    private val bannerStore: DocumentBannerAssetStore = AndroidDocumentBannerAssetStore(context.applicationContext),
 ) : PaymentReceiptService {
     private val filesDir = context.applicationContext.filesDir
+    private val renderer: PaymentReceiptPdfRenderer =
+        renderer ?: AndroidPaymentReceiptPdfRenderer(bannerStore)
 
     override suspend fun getDefaultIdentity(): DocumentIdentityRecord? =
         store.getDefaultDocumentIdentity()
@@ -78,6 +93,12 @@ class AndroidPaymentReceiptService(
 
     override suspend fun getDefaultTemplate(): DocumentTemplateRecord? =
         store.getDefaultDocumentTemplate()
+
+    override suspend fun importIdentityBanner(content: InputStream): DocumentBannerAsset =
+        withContext(Dispatchers.IO) { bannerStore.importImage(content) }
+
+    override suspend fun readIdentityBanner(asset: DocumentBannerAsset): ByteArray =
+        withContext(Dispatchers.IO) { bannerStore.readVerified(asset) }
 
     override suspend fun issue(command: PreparePaymentReceiptCommand): IssuedDocumentRecord {
         val prepared = store.preparePaymentReceipt(command)

@@ -1,0 +1,30 @@
+name: Apply account details v3 patch
+
+on:
+  push:
+    branches:
+      - agent/ui-redesign-v0.3-corrective
+    paths:
+      - '.github/workflows/account-details-v3-apply.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/ui-redesign-v0.3-corrective
+          fetch-depth: 0
+      - name: Apply account details patch
+        run: python3 .github/scripts/account_details_v3_patch.py
+      - name: Commit result and remove temporary automation
+        run: |
+          git rm .github/workflows/account-details-v3-apply.yml .github/scripts/account_details_v3_patch.py
+          git config user.name "wasl-ui-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add app/src/main/java/com/wasl/app/AccountDetailsScreen.kt
+          git commit -m "feat(ui): rebuild account details to approved design"
+          git push origin HEAD:agent/ui-redesign-v0.3-corrective

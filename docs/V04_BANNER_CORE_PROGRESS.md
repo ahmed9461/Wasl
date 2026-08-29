@@ -11,4 +11,9 @@ Implemented:
 - payment receipt and account-document renderers verify the historical banner asset before drawing it on page one;
 - payment receipt identity state preserves a previously stored banner.
 
-This checkpoint must pass Android CI before UI import/preview/remove and encrypted backup/restore integration are added.
+Gate correction after CI #1171:
+
+- the payment-receipt test fake now implements the banner import contract;
+- the banner vault test runs as Android instrumentation because the vault intentionally depends on an Android `Context` and image decoder.
+
+A clean Android CI run on the current head must pass before UI import/preview/remove and encrypted backup/restore integration are added.

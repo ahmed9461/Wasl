@@ -46,6 +46,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.5.0"
+          cache-disabled: true
 
       - name: Materialize release keystore
         env:
@@ -74,4 +75,4 @@ jobs:
             app/build/outputs/apk/release/app-release.apk
             app/build/outputs/apk/release/SHA256SUMS.txt
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7

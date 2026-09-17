@@ -1,0 +1,24 @@
+name: Temporary source audit
+
+on:
+  push:
+    branches: [repair/launcher-audit-20260917]
+    paths: [.github/workflows/source-audit.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Archive tracked source only
+        run: git archive --format=zip --output=wasl-audit-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasl-audit-source
+          path: wasl-audit-source.zip
+          retention-days: 1
+          if-no-files-found: error

@@ -64,7 +64,13 @@ jobs:
           jq -e '.database.entities[] | select(.tableName == "document_templates")' "$SCHEMA" >/dev/null
           jq -e '.database.entities[] | select(.tableName == "document_templates") | .indices[] | select(.name == "index_document_templates_is_default" and .unique == false)' "$SCHEMA" >/dev/null
           jq -e '.database.entities[] | select(.tableName == "document_templates") | .indices[] | select(.name == "index_document_templates_style" and .unique == false)' "$SCHEMA" >/dev/null
-          git diff --exit-code -- app/schemas/
+          # git diff alone misses a newly generated, untracked schema version.
+          SCHEMA_STATUS="$(git status --porcelain --untracked-files=all -- app/schemas/)"
+          if [ -n "$SCHEMA_STATUS" ]; then
+            printf 'Room schema must be committed and match generated output:\n%s\n' "$SCHEMA_STATUS"
+            git diff -- app/schemas/
+            exit 1
+          fi
 
       - name: Summarize unit test results
         if: always()

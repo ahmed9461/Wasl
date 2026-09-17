@@ -1,0 +1,52 @@
+name: Apply verified Wasl maintenance
+
+on:
+  push:
+    branches: [repair/launcher-audit-20260917]
+    paths: [.github/workflows/apply-maintenance.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wasl-apply-maintenance-20260917
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.repository == 'ahmed9461/Wasl'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Verify and apply the reviewed source patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/repair/launcher-audit-20260917'
+          test "$(git rev-parse HEAD^)" = '5f5ceb56bf688a09eec9dc253bd375dd169e633c'
+          python3 - <<'PY'
+          import base64, gzip, hashlib
+          from pathlib import Path
+          encoded = ''.join(Path(f'.github/wasl-repair-{i:02d}.b64').read_text() for i in range(1, 4))
+          patch = gzip.decompress(base64.b64decode(encoded, validate=True))
+          assert len(patch) == 68365
+          assert hashlib.sha256(patch).hexdigest() == '860b74d162163fd464d95b15bd52e2f1cb08267462d1ad270ce65a2a6e63fa78'
+          Path('/tmp/wasl-reviewed.patch').write_bytes(patch)
+          PY
+          git apply --check /tmp/wasl-reviewed.patch
+          test "$(git hash-object app/src/main/res/drawable-nodpi/wasl_launcher_art.png)" = '545fd28796126c462d697483b42c02b159a3019b'
+          git apply /tmp/wasl-reviewed.patch
+          git rm app/src/main/res/drawable-nodpi/wasl_launcher_art.png
+          git rm .github/wasl-repair-01.b64 .github/wasl-repair-02.b64 .github/wasl-repair-03.b64
+          git add CHANGELOG.md DECISIONS.md HANDOFF.md PROJECT_CONTEXT.md SPEC.md app core/domain docs/CURRENT_STATUS.md docs/MAINTENANCE_2026-09-17.md
+          git diff --cached --check
+          git diff --cached --stat
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: restore Wasl wordmark and reject unsafe amount parsing'
+          git push origin HEAD:refs/heads/repair/launcher-audit-20260917
+          echo "Applied source commit: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          echo 'This workflow applies source only. Android CI remains required before merge.' >> "$GITHUB_STEP_SUMMARY"

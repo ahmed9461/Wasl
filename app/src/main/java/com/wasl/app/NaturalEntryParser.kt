@@ -18,9 +18,15 @@ internal class NaturalEntryParser(
         val direction = parseDirection(normalized)
         val person = parsePerson(normalized, direction)
         val currency = parseCurrency(normalized)
-        val majorAmount = parseMajorAmount(normalized)
-        val amountMinorUnits = if (majorAmount != null && currency != null) {
-            majorToMinor(majorAmount, currency)
+        val amountText = parseAmountText(normalized)
+        val amountMinorUnits = if (amountText != null && currency != null) {
+            try {
+                MoneyInputParser.parse(amountText, currency).minorUnits
+            } catch (_: IllegalArgumentException) {
+                // Invalid precision, grouping or overflow needs user correction,
+                // never a truncated amount or an exception on the UI thread.
+                null
+            }
         } else {
             null
         }
@@ -35,10 +41,15 @@ internal class NaturalEntryParser(
         val missing = buildSet {
             if (person.isNullOrBlank()) add(NaturalDraftField.PERSON)
             if (direction == null) add(NaturalDraftField.DIRECTION)
-            if (majorAmount == null) add(NaturalDraftField.AMOUNT)
+            if (amountText == null || (currency != null && amountMinorUnits == null)) {
+                add(NaturalDraftField.AMOUNT)
+            }
             if (currency == null) add(NaturalDraftField.CURRENCY)
         }
         val warnings = buildList {
+            if (amountText != null && currency != null && amountMinorUnits == null) {
+                add("المبلغ غير صالح لهذه العملة؛ راجع الأرقام والفواصل قبل التأكيد.")
+            }
             if (kind != NaturalEntryKind.DEBT) {
                 add("هذا الإصدار من المحلل المحلي يجهز معاينة الديون فقط؛ لم يتم حفظ أي عملية.")
             }
@@ -92,12 +103,15 @@ internal class NaturalEntryParser(
         else -> null
     }
 
-    private fun parseMajorAmount(text: String): Long? {
-        val digitMatch = Regex("(?<![\\p{L}])([0-9][0-9,]*)").find(text)
-        digitMatch?.groupValues?.getOrNull(1)
-            ?.replace(",", "")
-            ?.toLongOrNull()
-            ?.let { return it }
+    private fun parseAmountText(text: String): String? {
+        // Capture the WHOLE numeric token, including separators/sign/exponent,
+        // so invalid input cannot silently become a smaller valid prefix.
+        // The parser deliberately refuses multiple numeric amounts/dates.
+        val numbers = text.split(' ').filter { token -> token.any { it in '0'..'9' } }
+        if (numbers.isNotEmpty()) {
+            if (numbers.size != 1) return null
+            return numbers.single()
+        }
 
         val unit = mapOf(
             "واحد" to 1L,
@@ -124,14 +138,7 @@ internal class NaturalEntryParser(
         )
         val thousands = Regex("([\\p{L}]+)\\s+(?:الاف|الف)").find(text)
         val word = thousands?.groupValues?.getOrNull(1)?.let(::stripArabicDiacritics)
-        return unit[word]?.times(1_000L)
-    }
-
-    private fun majorToMinor(major: Long, currency: CurrencyCode): Long {
-        val fractionDigits = MoneyInputParser.fractionDigits(currency)
-        var multiplier = 1L
-        repeat(fractionDigits) { multiplier = Math.multiplyExact(multiplier, 10L) }
-        return Math.multiplyExact(major, multiplier)
+        return unit[word]?.times(1_000L)?.toString()
     }
 
     private fun parseEntryDate(text: String, reference: LocalDate): LocalDate? = when {
@@ -174,6 +181,7 @@ internal class NaturalEntryParser(
                 '٧' -> '7'
                 '٨' -> '8'
                 '٩' -> '9'
+                in '\u06F0'..'\u06F9' -> '0' + (char - '\u06F0')
                 else -> char
             }
         }

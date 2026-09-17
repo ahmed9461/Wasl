@@ -5,6 +5,7 @@ import com.wasl.domain.DebtDirection
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -67,5 +68,50 @@ class NaturalEntryParserTest {
         assertFalse(draft.canPreviewAsDebt)
         assertTrue(draft.requiresExplicitConfirmation)
         assertTrue(draft.warnings.isNotEmpty())
+    }
+
+    @Test
+    fun preservesDecimalAndArabicGroupedAmounts() {
+        for (raw in listOf("1,234.50", "١٬٢٣٤٫٥٠", "۱٬۲۳۴٫۵۰", "1234,50")) {
+            val draft = parser.parse("سلفت خالد $raw سعودي اليوم")
+            assertEquals(123_450L, draft.amountMinorUnits, raw)
+            assertTrue(draft.canPreviewAsDebt, raw)
+            assertTrue(draft.requiresExplicitConfirmation)
+        }
+        assertEquals(12550L, parser.parse("سلفت خالد 125.50 سعودي").amountMinorUnits)
+        assertEquals(1234L, parser.parse("سلفت خالد ١٬٢٣٤ يمني").amountMinorUnits)
+    }
+
+    @Test
+    fun invalidAmountsCannotBecomeReadyOrCrashDuringPreview() {
+        for (raw in listOf("9223372036854775807", "9".repeat(200), "1,2.50", "1e3", "1.001", "-50", "0", "١٢٬٣٤")) {
+            val draft = parser.parse("سلفت خالد $raw سعودي اليوم")
+            assertNull(draft.amountMinorUnits, raw)
+            assertTrue(NaturalDraftField.AMOUNT in draft.missingRequiredFields, raw)
+            assertFalse(draft.canPreviewAsDebt, raw)
+            assertTrue(draft.warnings.isNotEmpty(), raw)
+            assertTrue(draft.requiresExplicitConfirmation)
+        }
+    }
+
+    @Test
+    fun refusesAmbiguousNumbersRatherThanChoosingAnAmountOrDate() {
+        for (text in listOf(
+            "سلفت خالد 100 سعودي و200 سعودي",
+            "سلفت خالد 2026-09-17 بمبلغ 100 سعودي",
+            "سلفت خالد 1 234 سعودي",
+        )) {
+            val draft = parser.parse(text)
+            assertNull(draft.amountMinorUnits)
+            assertTrue(NaturalDraftField.AMOUNT in draft.missingRequiredFields)
+            assertFalse(draft.canPreviewAsDebt)
+        }
+    }
+
+    @Test
+    fun unsupportedYemeniFractionIsNotSilentlyTruncated() {
+        val draft = parser.parse("سلفت خالد 125.50 يمني")
+        assertNull(draft.amountMinorUnits)
+        assertFalse(draft.canPreviewAsDebt)
     }
 }

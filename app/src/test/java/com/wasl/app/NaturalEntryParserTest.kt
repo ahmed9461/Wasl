@@ -114,4 +114,48 @@ class NaturalEntryParserTest {
         assertNull(draft.amountMinorUnits)
         assertFalse(draft.canPreviewAsDebt)
     }
+
+    @Test
+    fun mixedWordAmountsCannotBeSilentlyReducedToTheirNumericPrefix() {
+        for (text in listOf(
+            "سلفت خالد 5 آلاف سعودي",
+            "سلفت خالد 5 مليون دولار",
+            "سلفت خالد 100 ونصف سعودي",
+        )) {
+            val draft = parser.parse(text)
+            assertNull(draft.amountMinorUnits, text)
+            assertTrue(NaturalDraftField.AMOUNT in draft.missingRequiredFields, text)
+            assertFalse(draft.canPreviewAsDebt, text)
+        }
+    }
+
+    @Test
+    fun compoundOrMultipleWordAmountsRequireCorrection() {
+        for (text in listOf(
+            "سلفت خالد خمسة آلاف وخمسمئة سعودي",
+            "سلفت خالد خمسة الفين سعودي",
+            "سلفت خالد خمسة آلاف سعودي وعشرة آلاف سعودي",
+        )) {
+            val draft = parser.parse(text)
+            assertNull(draft.amountMinorUnits, text)
+            assertFalse(draft.canPreviewAsDebt, text)
+        }
+    }
+
+    @Test
+    fun currencyMustBeExplicitAndUnambiguousRatherThanPartOfAPersonName() {
+        for (text in listOf(
+            "سلفت sara 100",
+            "سلفت خالد 100 سعودي أو يمني",
+            "سلفت خالد 100 SAR USD",
+        )) {
+            val draft = parser.parse(text)
+            assertNull(draft.currency, text)
+            assertNull(draft.amountMinorUnits, text)
+            assertTrue(NaturalDraftField.CURRENCY in draft.missingRequiredFields, text)
+            assertFalse(draft.canPreviewAsDebt, text)
+        }
+        assertEquals(CurrencyCode.SAR, parser.parse("سلفت sara 100 SAR").currency)
+        assertEquals(10_000L, parser.parse("سلفت sara 100 SAR").amountMinorUnits)
+    }
 }

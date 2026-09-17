@@ -39,6 +39,9 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
+          log-accepted-android-sdk-licenses: false
 
       - name: Install Android API 36
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
@@ -71,7 +74,7 @@ jobs:
       - name: Upload current signed release APK
         uses: actions/upload-artifact@v4
         with:
-          name: Wasl-0.1.0-signed-apk
+          name: Wasl-0.1.1-signed-apk
           path: |
             app/build/outputs/apk/release/app-release.apk
             app/build/outputs/apk/release/SHA256SUMS.txt

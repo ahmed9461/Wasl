@@ -1,6 +1,5 @@
 package com.wasl.domain
 
-import java.math.BigDecimal
 import java.math.RoundingMode
 
 /**
@@ -44,7 +43,15 @@ object MoneyInputParser {
         )
     }
 
+    private const val MAX_INPUT_LENGTH = 64
+    private val plainDigits = Regex("[0-9]+")
+    private val commaGroupedInteger = Regex("[+-]?[0-9]{1,3}(,[0-9]{3})+")
+    private val groupingSeparators = setOf(',', '\u066C', ' ', '_')
+
     private fun normalize(raw: String, fractionDigits: Int): String {
+        // Bound the work before constructing BigDecimal; exponent notation and
+        // arbitrary pasted text are not part of a user-entered money amount.
+        require(raw.length <= MAX_INPUT_LENGTH) { "Amount is outside the supported range." }
         val latinDigits = buildString(raw.length) {
             raw.trim().forEach { character ->
                 append(
@@ -52,25 +59,51 @@ object MoneyInputParser {
                         in '\u0660'..'\u0669' -> '0' + (character - '\u0660')
                         in '\u06F0'..'\u06F9' -> '0' + (character - '\u06F0')
                         '\u066B' -> '.'
-                        '\u066C', ' ', '_' -> return@forEach
+                        '\u00A0', '\u202F' -> ' '
                         else -> character
                     },
                 )
             }
         }
+        require(latinDigits.isNotEmpty()) { "Amount is required." }
 
-        if (',' !in latinDigits) return latinDigits
-        if ('.' in latinDigits) return latinDigits.replace(",", "")
+        val decimalNormalized = when {
+            ',' !in latinDigits || '.' in latinDigits -> latinDigits
+            commaGroupedInteger.matches(latinDigits) -> latinDigits.replace(",", "")
+            latinDigits.count { it == ',' } == 1 && fractionDigits > 0 &&
+                latinDigits.substringAfter(',').let {
+                    it.length in 1..fractionDigits && plainDigits.matches(it)
+                } -> latinDigits.replace(',', '.')
+            else -> throw IllegalArgumentException("Amount separators are ambiguous.")
+        }
+        require(decimalNormalized.count { it == '.' } <= 1) { "Amount must be a valid number." }
+        val parts = decimalNormalized.split('.', limit = 2)
+        val integerPart = parts[0]
+        val sign = integerPart.firstOrNull()?.takeIf { it == '+' || it == '-' }
+        val unsignedInteger = if (sign != null) integerPart.drop(1) else integerPart
+        val separators = unsignedInteger.filter { it in groupingSeparators }.toSet()
+        require(separators.size <= 1) { "Amount separators are ambiguous." }
 
-        val groupedInteger = Regex("[+-]?\\d{1,3}(,\\d{3})+")
-        if (groupedInteger.matches(latinDigits)) return latinDigits.replace(",", "")
-
-        val commaCount = latinDigits.count { it == ',' }
-        val digitsAfterComma = latinDigits.substringAfterLast(',').length
-        return if (commaCount == 1 && fractionDigits > 0 && digitsAfterComma <= fractionDigits) {
-            latinDigits.replace(',', '.')
+        val integerDigits = if (separators.isEmpty()) {
+            require(unsignedInteger.isEmpty() || plainDigits.matches(unsignedInteger)) {
+                "Amount must be a valid number."
+            }
+            unsignedInteger
         } else {
-            throw IllegalArgumentException("Amount separators are ambiguous.")
+            val groups = unsignedInteger.split(separators.single())
+            require(groups.first().length in 1..3 && groups.all { plainDigits.matches(it) } &&
+                groups.drop(1).all { it.length == 3 }) {
+                "Amount grouping is invalid."
+            }
+            groups.joinToString("")
+        }
+        val fraction = parts.getOrNull(1)
+        require(fraction == null || plainDigits.matches(fraction)) { "Amount must be a valid number." }
+        require(integerDigits.isNotEmpty() || fraction != null) { "Amount is required." }
+        return buildString {
+            if (sign != null) append(sign)
+            append(integerDigits.ifEmpty { "0" })
+            if (fraction != null) { append('.'); append(fraction) }
         }
     }
 }

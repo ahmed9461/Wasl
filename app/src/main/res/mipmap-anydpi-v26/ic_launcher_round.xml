@@ -2,6 +2,6 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     tools:ignore="ObsoleteSdkInt,MonochromeLauncherIcon">
-    <background android:drawable="@color/wasl_launcher_background" />
+    <background android:drawable="@drawable/wasl_launcher_background" />
     <foreground android:drawable="@drawable/wasl_launcher_art" />
 </adaptive-icon>

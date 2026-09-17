@@ -32,6 +32,9 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
+          log-accepted-android-sdk-licenses: false
 
       - name: Install Android API 36
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
@@ -44,6 +47,52 @@ jobs:
 
       - name: Run unit tests, lint, and debug build
         run: gradle --no-daemon :core:domain:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+
+      - name: Verify generated Room schema v11
+        run: |
+          SCHEMA="app/schemas/com.wasl.app.data.local.WaslDatabase/11.json"
+          test "$(jq -r '.database.version' "$SCHEMA")" = "11"
+          jq -e '.database.entities[] | select(.tableName == "payment_claims")' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "attachments")' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "attachments") | .indices[] | select(.name == "index_attachments_relative_path" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expenses")' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expenses") | .indices[] | select(.name == "index_group_expenses_command_id" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expense_shares")' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expense_shares") | .indices[] | select(.name == "index_group_expense_shares_group_expense_id_sequence_number" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expense_shares") | .indices[] | select(.name == "index_group_expense_shares_group_expense_id_person_id" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "group_expense_shares") | .indices[] | select(.name == "index_group_expense_shares_debt_id" and .unique == true)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "document_templates")' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "document_templates") | .indices[] | select(.name == "index_document_templates_is_default" and .unique == false)' "$SCHEMA" >/dev/null
+          jq -e '.database.entities[] | select(.tableName == "document_templates") | .indices[] | select(.name == "index_document_templates_style" and .unique == false)' "$SCHEMA" >/dev/null
+          # git diff alone misses a newly generated, untracked schema version.
+          SCHEMA_STATUS="$(git status --porcelain --untracked-files=all -- app/schemas/)"
+          if [ -n "$SCHEMA_STATUS" ]; then
+            printf 'Room schema must be committed and match generated output:\n%s\n' "$SCHEMA_STATUS"
+            git diff -- app/schemas/
+            exit 1
+          fi
+
+      - name: Summarize unit test results
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PYTEST'
+          from pathlib import Path
+          import os
+          import xml.etree.ElementTree as ET
+          files = sorted(Path('.').glob('**/build/test-results/**/TEST-*.xml'))
+          totals = dict(tests=0, failures=0, errors=0, skipped=0)
+          for path in files:
+              root = ET.parse(path).getroot()
+              for key in totals:
+                  totals[key] += int(root.attrib.get(key, 0))
+          message = f"JUnit XML reports: {len(files)}; " + ', '.join(f"{k}={v}" for k, v in totals.items())
+          print(message)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write(message + '\n')
+          if not files or totals['failures'] or totals['errors']:
+              raise SystemExit('Unit test reports are missing or contain failures.')
+          PYTEST
 
       - name: Upload latest main debug APK
         if: success() && github.ref == 'refs/heads/main'
@@ -74,20 +123,3 @@ jobs:
                 ;;
             esac
           done < /tmp/artifacts.tsv
-
-      - name: Verify generated Room schema v11
-        run: |
-          SCHEMA="app/schemas/com.wasl.app.data.local.WaslDatabase/11.json"
-          test "$(jq -r '.database.version' "$SCHEMA")" = "11"
-          jq -e '.database.entities[] | select(.tableName == "payment_claims")' "$SCHEMA" >/dev/null
-          jq -e '.database.entities[] | select(.tableName == "attachments")' "$SCHEMA" >/dev/null
-          jq -e '.database.entities[] | select(.tableName == "attachments") | .indices[] | select(.name == "index_attachments_relative_path" and .unique == true)' "$SCHEMA" >/dev/null
-          jq -e '.database.entities[] | select(.tableName == "group_expenses")' "$SCHEMA" >/dev/null
-          jq -e '.database.entities[] | select(.tableName == "group_expenses") | .indices[] | select(.name == "index_group_expenses_command_id" and .unique == true)' "$SCHEMA" >/dev/null
-          jq -e '.database.entities[] | select(.tableName == "group_expense_shares")' "$SCHEMA" >/dev/null
-          jq -e '.database.entities[] | select(.tableName == "group_expense_shares") | .indices[] | select(.name == "index_group_expense_shares_group_expense_id_sequence_number" and .unique == true)' "$SCHEMA" >/dev/null
-          jq -e '.database.entities[] | select(.tableName == "group_expense_shares") | .indices[] | select(.name == "index_group_expense_shares_group_expense_id_person_id" and .unique == true)' "$SCHEMA" >/dev/null
-          jq -e '.database.entities[] | select(.tableName == "group_expense_shares") | .indices[] | select(.name == "index_group_expense_shares_debt_id" and .unique == true)' "$SCHEMA" >/dev/null
-          jq -e '.database.entities[] | select(.tableName == "document_templates")' "$SCHEMA" >/dev/null
-          jq -e '.database.entities[] | select(.tableName == "document_templates") | .indices[] | select(.name == "index_document_templates_is_default" and .unique == false)' "$SCHEMA" >/dev/null
-          jq -e '.database.entities[] | select(.tableName == "document_templates") | .indices[] | select(.name == "index_document_templates_style" and .unique == false)' "$SCHEMA" >/dev/null

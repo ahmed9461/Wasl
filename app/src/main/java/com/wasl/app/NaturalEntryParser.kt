@@ -18,9 +18,15 @@ internal class NaturalEntryParser(
         val direction = parseDirection(normalized)
         val person = parsePerson(normalized, direction)
         val currency = parseCurrency(normalized)
-        val majorAmount = parseMajorAmount(normalized)
-        val amountMinorUnits = if (majorAmount != null && currency != null) {
-            majorToMinor(majorAmount, currency)
+        val amountText = parseAmountText(normalized)
+        val amountMinorUnits = if (amountText != null && currency != null) {
+            try {
+                MoneyInputParser.parse(amountText, currency).minorUnits
+            } catch (_: IllegalArgumentException) {
+                // Invalid precision, grouping or overflow needs user correction,
+                // never a truncated amount or an exception on the UI thread.
+                null
+            }
         } else {
             null
         }
@@ -35,10 +41,21 @@ internal class NaturalEntryParser(
         val missing = buildSet {
             if (person.isNullOrBlank()) add(NaturalDraftField.PERSON)
             if (direction == null) add(NaturalDraftField.DIRECTION)
-            if (majorAmount == null) add(NaturalDraftField.AMOUNT)
+            if (amountText == null || (currency != null && amountMinorUnits == null)) {
+                add(NaturalDraftField.AMOUNT)
+            }
             if (currency == null) add(NaturalDraftField.CURRENCY)
         }
         val warnings = buildList {
+            if (amountText != null && currency != null && amountMinorUnits == null) {
+                add("المبلغ غير صالح لهذه العملة؛ راجع الأرقام والفواصل قبل التأكيد.")
+            }
+            if (currency != null && amountText == null) {
+                add("تعذر تحديد مبلغ واحد؛ اكتب المبلغ بالأرقام متبوعًا بالعملة، مثل 125.50 سعودي.")
+            }
+            if (currency == null) {
+                add("حدد عملة واحدة صراحة: سعودي أو يمني أو دولار.")
+            }
             if (kind != NaturalEntryKind.DEBT) {
                 add("هذا الإصدار من المحلل المحلي يجهز معاينة الديون فقط؛ لم يتم حفظ أي عملية.")
             }
@@ -85,19 +102,37 @@ internal class NaturalEntryParser(
         }
     }
 
-    private fun parseCurrency(text: String): CurrencyCode? = when {
-        Regex("(?:sar|ريال\\s+سعودي|سعودي)", RegexOption.IGNORE_CASE).containsMatchIn(text) -> CurrencyCode.SAR
-        Regex("(?:yer|ريال\\s+يمني|يمني)", RegexOption.IGNORE_CASE).containsMatchIn(text) -> CurrencyCode.YER
-        Regex("(?:usd|دولار)", RegexOption.IGNORE_CASE).containsMatchIn(text) -> CurrencyCode.USD
-        else -> null
+    private fun parseCurrency(text: String): CurrencyCode? {
+        // A person's name such as Sara must not be interpreted as SAR, and two
+        // different currencies require correction rather than priority guessing.
+        val candidates = listOf(
+            CurrencyCode.SAR to "(?:sar|ريال\\s+سعودي|سعودي)",
+            CurrencyCode.YER to "(?:yer|ريال\\s+يمني|يمني)",
+            CurrencyCode.USD to "(?:usd|دولار)",
+        ).filter { (_, term) ->
+            Regex("(?<![\\p{L}\\p{N}_])$term(?![\\p{L}\\p{N}_])", RegexOption.IGNORE_CASE)
+                .containsMatchIn(text)
+        }
+        return candidates.singleOrNull()?.first
     }
 
-    private fun parseMajorAmount(text: String): Long? {
-        val digitMatch = Regex("(?<![\\p{L}])([0-9][0-9,]*)").find(text)
-        digitMatch?.groupValues?.getOrNull(1)
-            ?.replace(",", "")
-            ?.toLongOrNull()
-            ?.let { return it }
+    private val currencyLabel = "(?:sar|yer|usd|(?:ريال\\s+)?(?:سعودي|يمني)|دولار)"
+    private val currencyAfterAmount = Regex("^\\s+$currencyLabel(?=$|\\s|[،.,؛])")
+
+    private fun parseAmountText(text: String): String? {
+        // Capture the WHOLE numeric token, including separators/sign/exponent,
+        // so invalid input cannot silently become a smaller valid prefix.
+        // The parser deliberately refuses multiple numeric amounts/dates.
+        val numbers = Regex("\\S+").findAll(text)
+            .filter { token -> token.value.any { it in '0'..'9' } }.toList()
+        if (numbers.isNotEmpty()) {
+            val number = numbers.singleOrNull() ?: return null
+            // Require the complete amount immediately before its currency.
+            // "5 آلاف سعودي" must never become 5 SAR; unsupported mixed
+            // word/numeric expressions need an explicit numerical correction.
+            if (!currencyAfterAmount.containsMatchIn(text.substring(number.range.last + 1))) return null
+            return number.value
+        }
 
         val unit = mapOf(
             "واحد" to 1L,
@@ -122,16 +157,11 @@ internal class NaturalEntryParser(
             "عشرة" to 10L,
             "عشر" to 10L,
         )
-        val thousands = Regex("([\\p{L}]+)\\s+(?:الاف|الف)").find(text)
+        val thousands = Regex(
+            "(?:^|\\s)([\\p{L}]+)\\s+(?:الاف|الف)(?=\\s+$currencyLabel(?=$|\\s|[،.,؛]))",
+        ).findAll(text).singleOrNull()
         val word = thousands?.groupValues?.getOrNull(1)?.let(::stripArabicDiacritics)
-        return unit[word]?.times(1_000L)
-    }
-
-    private fun majorToMinor(major: Long, currency: CurrencyCode): Long {
-        val fractionDigits = MoneyInputParser.fractionDigits(currency)
-        var multiplier = 1L
-        repeat(fractionDigits) { multiplier = Math.multiplyExact(multiplier, 10L) }
-        return Math.multiplyExact(major, multiplier)
+        return unit[word]?.times(1_000L)?.toString()
     }
 
     private fun parseEntryDate(text: String, reference: LocalDate): LocalDate? = when {
@@ -174,6 +204,7 @@ internal class NaturalEntryParser(
                 '٧' -> '7'
                 '٨' -> '8'
                 '٩' -> '9'
+                in '\u06F0'..'\u06F9' -> '0' + (char - '\u06F0')
                 else -> char
             }
         }
